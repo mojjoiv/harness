@@ -12,6 +12,8 @@ async function bootstrapSuperadmin() {
   }
 
   const passwordHash = await bcrypt.hash(SUPERADMIN_PASSWORD, 12);
+  const baseSlug = slugify(SUPERADMIN_MERCHANT_NAME) || 'platform-superadmin';
+
   const user = await prisma.user.upsert({
     where: { email: SUPERADMIN_EMAIL },
     update: {
@@ -23,31 +25,36 @@ async function bootstrapSuperadmin() {
       name: SUPERADMIN_NAME,
       passwordHash,
     },
+  });
+
+  const existingMerchantUser = await prisma.merchantUser.findFirst({
+    where: {
+      userId: user.id,
+      role: 'SUPERADMIN',
+    },
     include: {
-      merchantUsers: {
-        where: { role: 'SUPERADMIN' },
-        take: 1,
-      },
+      merchant: true,
     },
   });
 
-  const existingMerchantId = user.merchantUsers[0]?.merchantId;
-  const baseSlug = slugify(SUPERADMIN_MERCHANT_NAME) || 'platform-superadmin';
-  const merchant = existingMerchantId
-    ? await prisma.merchant.update({
-        where: { id: existingMerchantId },
-        data: {
-          name: SUPERADMIN_MERCHANT_NAME,
-        },
-      })
-    : await prisma.merchant.upsert({
-        where: { slug: baseSlug },
-        update: { name: SUPERADMIN_MERCHANT_NAME },
-        create: {
-          name: SUPERADMIN_MERCHANT_NAME,
-          slug: baseSlug,
-        },
-      });
+  const merchant =
+    existingMerchantUser?.merchant ??
+    (await prisma.merchant.findUnique({ where: { slug: baseSlug } })) ??
+    (await prisma.merchant.findFirst({ where: { name: SUPERADMIN_MERCHANT_NAME } })) ??
+    (await prisma.merchant.create({
+      data: {
+        name: SUPERADMIN_MERCHANT_NAME,
+        slug: baseSlug,
+      },
+    }));
+
+  await prisma.merchant.update({
+    where: { id: merchant.id },
+    data: {
+      name: SUPERADMIN_MERCHANT_NAME,
+      slug: baseSlug,
+    },
+  });
 
   await prisma.merchantUser.upsert({
     where: {
