@@ -50,7 +50,7 @@ export default function LoginPage() {
     event.preventDefault();
     const values = {
       email: form.email.trim(),
-      password: form.password.trim(),
+      password: form.password,
     };
     const nextErrors = validate(values);
     setErrors(nextErrors);
@@ -92,7 +92,10 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               value={form.email}
-              onChange={(event) => setForm((current) => ({ ...current, email: event.currentTarget.value }))}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setForm((current) => ({ ...current, email: value }));
+              }}
             />
             {errors.email ? <div className="text-xs text-rose-700">{errors.email}</div> : null}
           </FieldRow>
@@ -101,7 +104,10 @@ export default function LoginPage() {
               type="password"
               autoComplete="current-password"
               value={form.password}
-              onChange={(event) => setForm((current) => ({ ...current, password: event.currentTarget.value }))}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setForm((current) => ({ ...current, password: value }));
+              }}
             />
             {errors.password ? <div className="text-xs text-rose-700">{errors.password}</div> : null}
           </FieldRow>

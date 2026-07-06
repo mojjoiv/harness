@@ -61,7 +61,7 @@ export default function RegisterPage() {
       name: form.name.trim(),
       merchantName: form.merchantName.trim(),
       email: form.email.trim(),
-      password: form.password.trim(),
+      password: form.password,
     };
     const nextErrors = validate(values);
     setErrors(nextErrors);
@@ -103,14 +103,20 @@ export default function RegisterPage() {
               <Input
                 autoComplete="name"
                 value={form.name}
-                onChange={(event) => setForm((current) => ({ ...current, name: event.currentTarget.value }))}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setForm((current) => ({ ...current, name: value }));
+                }}
               />
               {errors.name ? <div className="text-xs text-rose-700">{errors.name}</div> : null}
             </FieldRow>
             <FieldRow label="Merchant name">
               <Input
                 value={form.merchantName}
-                onChange={(event) => setForm((current) => ({ ...current, merchantName: event.currentTarget.value }))}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setForm((current) => ({ ...current, merchantName: value }));
+                }}
               />
               {errors.merchantName ? <div className="text-xs text-rose-700">{errors.merchantName}</div> : null}
             </FieldRow>
@@ -121,7 +127,10 @@ export default function RegisterPage() {
                 type="email"
                 autoComplete="email"
                 value={form.email}
-                onChange={(event) => setForm((current) => ({ ...current, email: event.currentTarget.value }))}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setForm((current) => ({ ...current, email: value }));
+                }}
               />
               {errors.email ? <div className="text-xs text-rose-700">{errors.email}</div> : null}
             </FieldRow>
@@ -130,7 +139,10 @@ export default function RegisterPage() {
                 type="password"
                 autoComplete="new-password"
                 value={form.password}
-                onChange={(event) => setForm((current) => ({ ...current, password: event.currentTarget.value }))}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  setForm((current) => ({ ...current, password: value }));
+                }}
               />
               {errors.password ? <div className="text-xs text-rose-700">{errors.password}</div> : null}
             </FieldRow>
