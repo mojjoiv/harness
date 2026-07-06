@@ -7,7 +7,7 @@ import '@/styles/globals.css';
 
 const font = Plus_Jakarta_Sans({ subsets: ['latin'] });
 
-const publicRoutes = ['/login', '/register'];
+const publicRoutes = ['/login', '/register', '/debug'];
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();

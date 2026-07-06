@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { api } from '@/lib/api';
-import { getToken, setSession } from '@/lib/auth';
+import { ApiError, api } from '@/lib/api';
+import { getToken, setSession, type AuthSession } from '@/lib/auth';
 import { Button, Input, Panel, SectionTitle } from '@/components/ui';
 import { FieldRow } from '@/components/blocks';
 
@@ -12,11 +12,28 @@ type LoginForm = {
   password: string;
 };
 
+function formatError(error: unknown) {
+  if (error instanceof ApiError) {
+    return `${error.message} (status: ${error.status}, code: ${error.code})`;
+  }
+
+  return error instanceof Error ? error.message : 'Login failed. Please check your details and try again.';
+}
+
+function isAuthSession(data: unknown): data is AuthSession {
+  return Boolean(data) && typeof data === 'object' && typeof (data as AuthSession).accessToken === 'string';
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { register, handleSubmit } = useForm<LoginForm>();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginForm>();
+  const showDebug = process.env.NODE_ENV !== 'production' || router.query.debug === '1';
 
   useEffect(() => {
     if (getToken()) {
@@ -28,21 +45,17 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const { data } = await api.post<any>('/auth/login', values);
-      setSession(data);
-      try {
-        const redirected = await router.push('/dashboard');
-        if (!redirected) {
-          await router.replace('/dashboard');
-        }
-      } catch {
-        await router.replace('/dashboard');
+      const { data } = await api.post<unknown>('/auth/login', values);
+      if (!isAuthSession(data)) {
+        throw new ApiError('Login response did not include accessToken', 'INVALID_AUTH_RESPONSE', 500);
       }
+      setSession(data);
+      await router.replace('/dashboard');
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Login request failed', err);
       }
-      setError(err instanceof Error ? err.message : 'Login failed. Please check your details and try again.');
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
@@ -54,15 +67,24 @@ export default function LoginPage() {
         <SectionTitle title="Sign in" description="Access your merchant dashboard." />
         <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <FieldRow label="Email">
-            <Input type="email" autoComplete="email" {...register('email', { required: true })} />
+            <Input type="email" autoComplete="email" {...register('email', { required: 'Email is required' })} />
+            {errors.email ? <div className="text-xs text-rose-700">{errors.email.message}</div> : null}
           </FieldRow>
           <FieldRow label="Password">
-            <Input type="password" autoComplete="current-password" {...register('password', { required: true })} />
+            <Input
+              type="password"
+              autoComplete="current-password"
+              {...register('password', { required: 'Password is required' })}
+            />
+            {errors.password ? <div className="text-xs text-rose-700">{errors.password.message}</div> : null}
           </FieldRow>
           {error ? <div className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Signing in...' : 'Sign in'}
           </Button>
+          {showDebug ? (
+            <div className="text-xs text-muted">API: {process.env.NEXT_PUBLIC_API_URL || 'not configured'}</div>
+          ) : null}
         </form>
         <div className="mt-4 text-sm text-muted">
           No account yet? <Link className="text-brand" href="/register">Register</Link>

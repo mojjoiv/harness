@@ -1,6 +1,7 @@
 import { getToken, clearSession } from './auth';
 
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 export class ApiError extends Error {
   code: string;
@@ -15,6 +16,19 @@ export class ApiError extends Error {
   }
 }
 
+export function getApiUrl() {
+  if (process.env.NODE_ENV === 'production' && !configuredApiUrl) {
+    throw new ApiError('NEXT_PUBLIC_API_URL is not configured', 'API_URL_NOT_CONFIGURED', 500);
+  }
+
+  return (configuredApiUrl || 'http://localhost:3000').replace(/\/+$/, '');
+}
+
+export function buildApiUrl(path: string) {
+  const apiUrl = getApiUrl();
+  return `${apiUrl}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
 export interface WrappedResponse<T> {
   success: boolean;
   data: T;
@@ -22,18 +36,88 @@ export interface WrappedResponse<T> {
   timestamp?: string;
 }
 
-async function parseResponse<T>(response: Response): Promise<{ data: T; meta: Record<string, unknown> }> {
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    const rawMessage = payload?.message || response.statusText || 'Request failed';
-    const message = Array.isArray(rawMessage) ? rawMessage.join(', ') : String(rawMessage);
-    throw new ApiError(message, payload?.code || 'REQUEST_FAILED', response.status, payload?.errors || []);
+type ParsedBody = {
+  payload: unknown;
+  rawText: string;
+  isJson: boolean;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+async function readBody(response: Response): Promise<ParsedBody> {
+  const rawText = await response.text();
+  if (!rawText) {
+    return { payload: undefined, rawText, isJson: true };
   }
 
-  if (payload && typeof payload === 'object' && 'success' in payload) {
+  try {
+    return { payload: JSON.parse(rawText), rawText, isJson: true };
+  } catch {
+    return { payload: undefined, rawText, isJson: false };
+  }
+}
+
+function getErrorMessage(payload: unknown, fallback: string) {
+  if (!isRecord(payload)) {
+    return fallback;
+  }
+
+  const rawMessage = payload.message;
+  if (Array.isArray(rawMessage)) {
+    return rawMessage.join(', ');
+  }
+  if (rawMessage) {
+    return String(rawMessage);
+  }
+
+  return fallback;
+}
+
+function getErrorCode(payload: unknown, fallback: string) {
+  return isRecord(payload) && payload.code ? String(payload.code) : fallback;
+}
+
+function getErrorList(payload: unknown) {
+  return isRecord(payload) && Array.isArray(payload.errors) ? payload.errors : [];
+}
+
+async function parseResponse<T>(response: Response): Promise<{ data: T; meta: Record<string, unknown> }> {
+  const { payload, rawText, isJson } = await readBody(response);
+
+  if (!response.ok) {
+    if (isDevelopment) {
+      console.log('[api] parsed error body', payload ?? rawText);
+    }
+
+    const fallback = rawText || response.statusText || 'Request failed';
+    throw new ApiError(
+      getErrorMessage(payload, fallback),
+      getErrorCode(payload, 'REQUEST_FAILED'),
+      response.status,
+      getErrorList(payload),
+    );
+  }
+
+  if (!isJson) {
+    throw new ApiError('Invalid JSON response from API', 'INVALID_JSON_RESPONSE', response.status);
+  }
+
+  if (isRecord(payload) && 'success' in payload) {
+    if (payload.success === false) {
+      throw new ApiError(
+        getErrorMessage(payload, 'Request failed'),
+        getErrorCode(payload, 'REQUEST_FAILED'),
+        response.status,
+        getErrorList(payload),
+      );
+    }
+
+    const wrapped = payload as unknown as WrappedResponse<T>;
     return {
-      data: (payload as WrappedResponse<T>).data,
-      meta: (payload as WrappedResponse<T>).meta || {},
+      data: wrapped.data,
+      meta: wrapped.meta || {},
     };
   }
 
@@ -41,11 +125,8 @@ async function parseResponse<T>(response: Response): Promise<{ data: T; meta: Re
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}) {
-  if (process.env.NODE_ENV === 'production' && !configuredApiUrl) {
-    throw new Error('NEXT_PUBLIC_API_URL is required in production for the dashboard API client.');
-  }
-
-  const apiUrl = configuredApiUrl || 'http://localhost:3000';
+  const method = init.method || 'GET';
+  const url = buildApiUrl(path);
   const headers = new Headers(init.headers || {});
   headers.set('Content-Type', headers.get('Content-Type') || 'application/json');
 
@@ -54,17 +135,38 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...init,
-    headers,
-  });
+  if (isDevelopment) {
+    console.log('[api] request', method, url);
+  }
 
   try {
+    const response = await fetch(url, {
+      ...init,
+      method,
+      headers,
+    });
+
+    if (isDevelopment) {
+      console.log('[api] response', response.status, url);
+    }
+
     return await parseResponse<T>(response);
   } catch (error) {
     if ((error as ApiError).status === 401) {
       clearSession();
     }
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    if (error instanceof TypeError && /failed to fetch|networkerror|load failed/i.test(error.message)) {
+      throw new ApiError(
+        'Network request failed. The API may be unreachable or blocked by CORS.',
+        'NETWORK_ERROR',
+        0,
+      );
+    }
+
     throw error;
   }
 }

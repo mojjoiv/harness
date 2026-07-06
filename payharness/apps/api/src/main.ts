@@ -12,7 +12,29 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
-  app.enableCors({ origin: true, credentials: true });
+  const allowedOrigins = [
+    'http://localhost:3001',
+    config.get<string>('FRONTEND_URL'),
+    config.get<string>('APP_URL'),
+    config.get<string>('CHECKOUT_URL'),
+  ].filter(Boolean);
+
+  app.enableCors({
+    credentials: true,
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(null, config.get<string>('NODE_ENV') !== 'production');
+    },
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

@@ -107,6 +107,7 @@ Use the root blueprint at `payharness/render.yaml`. The older `apps/api/render.y
 - `CREDENTIAL_ENCRYPTION_KEY=<base64 encoded 32-byte key>`
 - `APP_URL=https://your-api.onrender.com`
 - `CHECKOUT_URL=https://your-checkout-app.example`
+- `FRONTEND_URL=<your frontend Render URL>`
 - `SUPERADMIN_EMAIL=<platform superadmin email>`
 - `SUPERADMIN_PASSWORD=<platform superadmin password>`
 - `SUPERADMIN_NAME=<platform superadmin name>`
@@ -114,7 +115,16 @@ Use the root blueprint at `payharness/render.yaml`. The older `apps/api/render.y
 
 Frontend Render environment:
 
+- `NODE_VERSION=16.20.2`
 - `NEXT_PUBLIC_API_URL=https://harness-m6qs.onrender.com`
+
+Backend Render environment:
+
+- `FRONTEND_URL=<your frontend Render URL>`
+- `APP_URL=https://harness-m6qs.onrender.com`
+- `CHECKOUT_URL=<your frontend Render URL>`
+
+After changing `NEXT_PUBLIC_API_URL` on Render, redeploy the frontend because Next.js bakes it in at build time.
 
 No Docker setup is required.
 
