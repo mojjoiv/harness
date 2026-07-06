@@ -1,0 +1,275 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  DEVELOPER
+  VIEWER
+}
+
+enum Environment {
+  SANDBOX
+  LIVE
+}
+
+enum Provider {
+  MPESA
+  STRIPE
+  PAYPAL
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  REVOKED
+  PENDING
+  FAILED
+  SUCCEEDED
+}
+
+enum PaymentStatus {
+  PENDING
+  REQUIRES_ACTION
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum TransactionType {
+  PAYMENT
+  REFUND
+  FEE
+  PAYOUT
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  name          String
+  passwordHash  String         @map("password_hash")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  merchantUsers MerchantUser[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Merchant {
+  id                  String                 @id @default(uuid())
+  name                String
+  slug                String                 @unique
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
+  users               MerchantUser[]
+  apiKeys             ApiKey[]
+  providerCredentials ProviderCredential[]
+  checkoutSessions    CheckoutSession[]
+  payments            Payment[]
+  transactions        Transaction[]
+  webhookEndpoints    WebhookEndpoint[]
+  customers           Customer[]
+  subscriptions       MerchantSubscription[]
+  auditLogs           AuditLog[]
+
+  @@map("merchants")
+}
+
+model MerchantUser {
+  id         String   @id @default(uuid())
+  merchantId String   @map("merchant_id")
+  userId     String   @map("user_id")
+  role       UserRole @default(OWNER)
+  createdAt  DateTime @default(now()) @map("created_at")
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, userId])
+  @@map("merchant_users")
+}
+
+model SubscriptionPlan {
+  id          String                 @id @default(uuid())
+  name        String
+  code        String                 @unique
+  priceCents  Int                    @map("price_cents")
+  currency    String                 @default("USD")
+  features    Json                   @default("{}")
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+  subscriptions MerchantSubscription[]
+
+  @@map("subscription_plans")
+}
+
+model MerchantSubscription {
+  id         String           @id @default(uuid())
+  merchantId String           @map("merchant_id")
+  planId     String           @map("plan_id")
+  status     Status           @default(ACTIVE)
+  startedAt  DateTime         @default(now()) @map("started_at")
+  endsAt     DateTime?        @map("ends_at")
+  merchant   Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  plan       SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@map("merchant_subscriptions")
+}
+
+model ApiKey {
+  id         String      @id @default(uuid())
+  merchantId String      @map("merchant_id")
+  name       String
+  prefix     String
+  keyHash    String      @map("key_hash")
+  environment Environment
+  status     Status      @default(ACTIVE)
+  lastUsedAt DateTime?   @map("last_used_at")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  revokedAt  DateTime?   @map("revoked_at")
+  merchant   Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model ProviderCredential {
+  id                    String      @id @default(uuid())
+  merchantId            String      @map("merchant_id")
+  provider              Provider
+  environment           Environment
+  publicConfig          Json        @default("{}") @map("public_config")
+  encryptedSecretConfig Json        @map("encrypted_secret_config")
+  status                Status      @default(ACTIVE)
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+  merchant              Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, provider, environment])
+  @@map("provider_credentials")
+}
+
+model Customer {
+  id         String   @id @default(uuid())
+  merchantId String   @map("merchant_id")
+  email      String?
+  name       String?
+  phone      String?
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  checkoutSessions CheckoutSession[]
+  payments   Payment[]
+
+  @@map("customers")
+}
+
+model CheckoutSession {
+  id          String        @id @default(uuid())
+  merchantId  String        @map("merchant_id")
+  customerId  String?       @map("customer_id")
+  amountCents Int           @map("amount_cents")
+  currency    String
+  status      PaymentStatus @default(PENDING)
+  successUrl  String        @map("success_url")
+  cancelUrl   String        @map("cancel_url")
+  metadata    Json          @default("{}")
+  expiresAt   DateTime      @map("expires_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  merchant    Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  customer    Customer?     @relation(fields: [customerId], references: [id])
+  payments    Payment[]
+
+  @@map("checkout_sessions")
+}
+
+model Payment {
+  id                String           @id @default(uuid())
+  merchantId        String           @map("merchant_id")
+  customerId        String?          @map("customer_id")
+  checkoutSessionId String?          @map("checkout_session_id")
+  provider          Provider
+  amountCents       Int              @map("amount_cents")
+  currency          String
+  status            PaymentStatus    @default(PENDING)
+  providerReference String?          @map("provider_reference")
+  metadata          Json             @default("{}")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  merchant          Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  customer          Customer?        @relation(fields: [customerId], references: [id])
+  checkoutSession   CheckoutSession? @relation(fields: [checkoutSessionId], references: [id])
+  transactions      Transaction[]
+
+  @@map("payments")
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  merchantId  String          @map("merchant_id")
+  paymentId   String?         @map("payment_id")
+  type        TransactionType
+  amountCents Int             @map("amount_cents")
+  currency    String
+  status      PaymentStatus   @default(PENDING)
+  reference   String?
+  metadata    Json            @default("{}")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  merchant    Merchant        @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  payment     Payment?        @relation(fields: [paymentId], references: [id])
+
+  @@map("transactions")
+}
+
+model WebhookEndpoint {
+  id         String             @id @default(uuid())
+  merchantId String             @map("merchant_id")
+  url        String
+  events     String[]
+  secretHash String             @map("secret_hash")
+  status     Status             @default(ACTIVE)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+  merchant   Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id                String           @id @default(uuid())
+  webhookEndpointId String?          @map("webhook_endpoint_id")
+  provider          Provider?
+  eventType         String           @map("event_type")
+  payload           Json
+  status            Status           @default(PENDING)
+  attempts          Int              @default(0)
+  responseCode      Int?             @map("response_code")
+  responseBody      String?          @map("response_body")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  deliveredAt       DateTime?        @map("delivered_at")
+  endpoint          WebhookEndpoint? @relation(fields: [webhookEndpointId], references: [id])
+
+  @@map("webhook_deliveries")
+}
+
+model AuditLog {
+  id         String    @id @default(uuid())
+  merchantId String?   @map("merchant_id")
+  userId     String?   @map("user_id")
+  action     String
+  entity     String
+  entityId   String?   @map("entity_id")
+  metadata   Json      @default("{}")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  merchant   Merchant? @relation(fields: [merchantId], references: [id])
+  user       User?     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}

@@ -1,0 +1,21 @@
+{
+  "name": "payharness",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": "16.20.2"
+  },
+  "scripts": {
+    "build": "npm --workspace apps/api run build",
+    "start:prod": "npm --workspace apps/api run start:prod",
+    "prisma:generate": "npm --workspace apps/api run prisma:generate",
+    "seed": "npm --workspace apps/api run seed"
+  },
+  "devDependencies": {
+    "typescript": "^5.1.6"
+  }
+}
