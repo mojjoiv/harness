@@ -1,0 +1,20 @@
+{
+  "/_app": "pages/_app.js",
+  "/_error": "pages/_error.js",
+  "/analytics": "pages/analytics.html",
+  "/checkout-sessions": "pages/checkout-sessions.html",
+  "/dashboard": "pages/dashboard.html",
+  "/developers/api-keys": "pages/developers/api-keys.html",
+  "/developers/usage": "pages/developers/usage.html",
+  "/developers/webhooks": "pages/developers/webhooks.html",
+  "/": "pages/index.html",
+  "/login": "pages/login.html",
+  "/providers": "pages/providers.html",
+  "/register": "pages/register.html",
+  "/settings/branding": "pages/settings/branding.html",
+  "/settings/general": "pages/settings/general.html",
+  "/settings/profile": "pages/settings/profile.html",
+  "/transactions": "pages/transactions.html",
+  "/_document": "pages/_document.js",
+  "/404": "pages/404.html"
+}

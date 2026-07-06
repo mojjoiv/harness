@@ -5,6 +5,7 @@ Payment aggregator SaaS monorepo for the first backend MVP.
 ## Structure
 
 - `apps/api` - NestJS 10 API with Prisma and PostgreSQL
+- `apps/dashboard` - Next.js merchant dashboard
 - `packages/sdk-js` - placeholder JavaScript SDK package
 - `packages/shared-types` - shared TypeScript types
 - `docs` - API and deployment notes
@@ -22,6 +23,12 @@ Install dependencies from the monorepo root:
 ```bash
 cd payharness
 npm install
+```
+
+Run the dashboard locally:
+
+```bash
+npm --workspace apps/dashboard run dev
 ```
 
 Create API environment variables:
@@ -112,6 +119,8 @@ npm run prisma:migrate:deploy
 The root Render blueprint at [render.yaml](/workspaces/harness/payharness/render.yaml) is the one to use. The older [apps/api/render.yaml](/workspaces/harness/payharness/apps/api/render.yaml) is kept only for reference.
 
 Smoke test steps are documented in [docs/smoke-test.md](/workspaces/harness/payharness/docs/smoke-test.md).
+
+The dashboard can be deployed later as a separate Render web service using `apps/dashboard` as the root directory and `npm --workspace apps/dashboard run build` / `npm --workspace apps/dashboard run start`.
 
 ## API Docs
 
