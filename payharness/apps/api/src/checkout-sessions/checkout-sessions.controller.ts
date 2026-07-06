@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { CheckoutSessionsService } from './checkout-sessions.service';
@@ -11,7 +12,7 @@ export class CheckoutSessionsController {
 
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateCheckoutSessionDto) {
-    return this.sessionsService.create(user.merchantId, dto);
+    return this.sessionsService.create(user.merchantId, user.userId, dto);
   }
 
   @Get(':id')
@@ -20,7 +21,7 @@ export class CheckoutSessionsController {
   }
 
   @Get()
-  list(@CurrentUser() user: AuthUser) {
-    return this.sessionsService.list(user.merchantId);
+  list(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
+    return this.sessionsService.list(user.merchantId, query);
   }
 }

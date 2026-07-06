@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TransactionsService } from './transactions.service';
 
@@ -15,8 +16,9 @@ export class TransactionsController {
     @Query('provider') provider?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query() pagination?: PaginationQueryDto,
   ) {
-    return this.transactionsService.list(user.merchantId, { status, provider, from, to });
+    return this.transactionsService.list(user.merchantId, { status, provider, from, to }, pagination || {});
   }
 
   @Get(':id')

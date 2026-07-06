@@ -11,16 +11,16 @@ export class PaymentsController {
 
   @Post('mpesa/stk')
   mpesaStk(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
-    return this.paymentsService.createMpesaStk(user.merchantId, dto);
+    return this.paymentsService.createMpesaStk(user.merchantId, user.userId, dto);
   }
 
   @Post('stripe/intent')
   stripeIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
-    return this.paymentsService.createStripeIntent(user.merchantId, dto);
+    return this.paymentsService.createStripeIntent(user.merchantId, user.userId, dto);
   }
 
   @Post('paypal/order')
   paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
-    return this.paymentsService.createPaypalOrder(user.merchantId, dto);
+    return this.paymentsService.createPaypalOrder(user.merchantId, user.userId, dto);
   }
 }

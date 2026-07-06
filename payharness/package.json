@@ -13,6 +13,7 @@
     "build": "npm --workspace apps/api run build",
     "start:prod": "npm --workspace apps/api run start:prod",
     "prisma:generate": "npm --workspace apps/api run prisma:generate",
+    "prisma:migrate:deploy": "npm --workspace apps/api run prisma:migrate:deploy",
     "seed": "npm --workspace apps/api run seed"
   },
   "devDependencies": {

@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PaymentStatus, Prisma, Provider } from '@prisma/client';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { getPagination, paginated } from '../common/pagination/pagination';
 import { PrismaService } from '../common/prisma.service';
 
 interface TransactionFilters {
@@ -13,7 +15,8 @@ interface TransactionFilters {
 export class TransactionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(merchantId: string, filters: TransactionFilters) {
+  async list(merchantId: string, filters: TransactionFilters, query: PaginationQueryDto) {
+    const pagination = getPagination(query, ['createdAt', 'amountCents', 'currency', 'status', 'type']);
     const where: Prisma.TransactionWhereInput = { merchantId };
     if (filters.status && Object.values(PaymentStatus).includes(filters.status as PaymentStatus)) {
       where.status = filters.status as PaymentStatus;
@@ -28,11 +31,18 @@ export class TransactionsService {
       };
     }
 
-    return this.prisma.transaction.findMany({
-      where,
-      include: { payment: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [items, total] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where,
+        include: { payment: true },
+        orderBy: { [pagination.sort]: pagination.order },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      this.prisma.transaction.count({ where }),
+    ]);
+
+    return paginated(items, total, pagination);
   }
 
   async get(merchantId: string, id: string) {

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../common/prisma.service';
 import { slugify } from '../common/utils/slug.util';
 import { RegisterDto } from './dto/register.dto';
@@ -11,6 +12,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly auditLogs: AuditLogsService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -57,6 +59,14 @@ export class AuthService {
     if (!merchantUser) {
       throw new UnauthorizedException('User is not attached to a merchant');
     }
+
+    await this.auditLogs.create({
+      merchantId: merchantUser.merchantId,
+      userId: user.id,
+      action: 'auth.login',
+      entity: 'user',
+      entityId: user.id,
+    });
 
     return this.authResponse(user, merchantUser.merchantId, merchantUser.role);
   }

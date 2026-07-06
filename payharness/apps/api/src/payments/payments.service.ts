@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PaymentStatus, Prisma, Provider } from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../common/prisma.service';
 import { MpesaProviderService } from '../payment-providers/mpesa/mpesa-provider.service';
 import { PaypalProviderService } from '../payment-providers/paypal/paypal-provider.service';
@@ -13,12 +14,14 @@ export class PaymentsService {
     private readonly mpesa: MpesaProviderService,
     private readonly stripe: StripeProviderService,
     private readonly paypal: PaypalProviderService,
+    private readonly auditLogs: AuditLogsService,
   ) {}
 
-  async createMpesaStk(merchantId: string, dto: CreateProviderPaymentDto) {
+  async createMpesaStk(merchantId: string, userId: string, dto: CreateProviderPaymentDto) {
     await this.ensureActiveCredentials(merchantId, 'MPESA', dto.environment);
     const result = await this.mpesa.createStkPush({ ...dto });
     const payment = await this.createPayment(merchantId, 'MPESA', dto, result.providerReference, 'PENDING');
+    await this.auditPayment(merchantId, userId, payment.id, 'MPESA');
     return {
       paymentId: payment.id,
       provider: 'MPESA',
@@ -28,10 +31,11 @@ export class PaymentsService {
     };
   }
 
-  async createStripeIntent(merchantId: string, dto: CreateProviderPaymentDto) {
+  async createStripeIntent(merchantId: string, userId: string, dto: CreateProviderPaymentDto) {
     await this.ensureActiveCredentials(merchantId, 'STRIPE', dto.environment);
     const result = await this.stripe.createPaymentIntent({ ...dto });
     const payment = await this.createPayment(merchantId, 'STRIPE', dto, result.providerReference, 'REQUIRES_ACTION');
+    await this.auditPayment(merchantId, userId, payment.id, 'STRIPE');
     return {
       paymentId: payment.id,
       provider: 'STRIPE',
@@ -41,10 +45,11 @@ export class PaymentsService {
     };
   }
 
-  async createPaypalOrder(merchantId: string, dto: CreateProviderPaymentDto) {
+  async createPaypalOrder(merchantId: string, userId: string, dto: CreateProviderPaymentDto) {
     await this.ensureActiveCredentials(merchantId, 'PAYPAL', dto.environment);
     const result = await this.paypal.createOrder({ ...dto });
     const payment = await this.createPayment(merchantId, 'PAYPAL', dto, result.providerReference, 'REQUIRES_ACTION');
+    await this.auditPayment(merchantId, userId, payment.id, 'PAYPAL');
     return {
       paymentId: payment.id,
       provider: 'PAYPAL',
@@ -95,5 +100,16 @@ export class PaymentsService {
     if (!credential) {
       throw new NotFoundException(`Active ${provider} ${environment} credentials were not found`);
     }
+  }
+
+  private auditPayment(merchantId: string, userId: string, paymentId: string, provider: Provider) {
+    return this.auditLogs.create({
+      merchantId,
+      userId,
+      action: 'payment.created',
+      entity: 'payment',
+      entityId: paymentId,
+      metadata: { provider },
+    });
   }
 }

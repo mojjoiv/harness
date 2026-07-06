@@ -15,17 +15,17 @@ export class ProviderCredentialsController {
 
   @Post('mpesa')
   saveMpesa(@CurrentUser() user: AuthUser, @Body() dto: SaveMpesaCredentialDto) {
-    return this.credentialsService.save(user.merchantId, 'MPESA', dto);
+    return this.credentialsService.save(user.merchantId, user.userId, 'MPESA', dto);
   }
 
   @Post('stripe')
   saveStripe(@CurrentUser() user: AuthUser, @Body() dto: SaveStripeCredentialDto) {
-    return this.credentialsService.save(user.merchantId, 'STRIPE', dto);
+    return this.credentialsService.save(user.merchantId, user.userId, 'STRIPE', dto);
   }
 
   @Post('paypal')
   savePaypal(@CurrentUser() user: AuthUser, @Body() dto: SavePaypalCredentialDto) {
-    return this.credentialsService.save(user.merchantId, 'PAYPAL', dto);
+    return this.credentialsService.save(user.merchantId, user.userId, 'PAYPAL', dto);
   }
 
   @Get()

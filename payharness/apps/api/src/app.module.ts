@@ -17,6 +17,13 @@ import { PlansModule } from './plans/plans.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { CommonModule } from './common/common.module';
 import { PaymentProvidersModule } from './payment-providers/payment-providers.module';
+import { MerchantProfileModule } from './merchant-profile/merchant-profile.module';
+import { MerchantBrandingModule } from './merchant-branding/merchant-branding.module';
+import { MerchantSettingsModule } from './merchant-settings/merchant-settings.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { ProviderStatusModule } from './provider-status/provider-status.module';
+import { UsageModule } from './usage/usage.module';
 
 @Module({
   imports: [
@@ -38,6 +45,13 @@ import { PaymentProvidersModule } from './payment-providers/payment-providers.mo
     HealthModule,
     PlansModule,
     SubscriptionsModule,
+    MerchantProfileModule,
+    MerchantBrandingModule,
+    MerchantSettingsModule,
+    DashboardModule,
+    AnalyticsModule,
+    ProviderStatusModule,
+    UsageModule,
   ],
 })
 export class AppModule {}

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, Provider } from '@prisma/client';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
 import { SaveProviderCredentialDto } from './dto/provider-credential.dto';
@@ -9,9 +10,10 @@ export class ProviderCredentialsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CredentialCryptoService,
+    private readonly auditLogs: AuditLogsService,
   ) {}
 
-  async save(merchantId: string, provider: Provider, dto: SaveProviderCredentialDto) {
+  async save(merchantId: string, userId: string, provider: Provider, dto: SaveProviderCredentialDto) {
     const publicConfig = { ...dto.publicConfig };
     const secretConfig = { ...dto.secretConfig };
     const encryptedSecretConfig = this.crypto.encrypt(secretConfig) as unknown as Prisma.InputJsonObject;
@@ -35,6 +37,14 @@ export class ProviderCredentialsService {
         publicConfig: publicConfig as Prisma.InputJsonValue,
         encryptedSecretConfig,
       },
+    });
+    await this.auditLogs.create({
+      merchantId,
+      userId,
+      action: 'provider_credentials.updated',
+      entity: 'provider_credential',
+      entityId: credential.id,
+      metadata: { provider, environment: dto.environment },
     });
     return this.maskCredential(credential);
   }

@@ -64,14 +64,30 @@ Build:
 npm run build
 ```
 
+Local smoke test flow:
+
+```bash
+npm --workspace apps/api run prisma:migrate
+npm --workspace apps/api run start:dev
+curl -X POST http://localhost:3000/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"owner@example.com","name":"Owner","merchantName":"Demo Merchant","password":"password123"}'
+curl -X POST http://localhost:3000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"owner@example.com","password":"password123"}'
+curl http://localhost:3000/dashboard -H "Authorization: Bearer <token>"
+```
+
 ## Render Deployment
 
-Use `apps/api/render.yaml` or create a Render Node service manually.
+Use the root blueprint at `payharness/render.yaml`. The older `apps/api/render.yaml` is kept for reference, but new Render blueprint deploys should point at `payharness/render.yaml`.
 
 - Runtime: Node
+- Root Directory: `payharness`
 - Build Command: `npm install && npm run build`
 - Start Command: `npm run start:prod`
 - `NODE_VERSION=16.20.2`
+- `NODE_ENV=production`
 - `DATABASE_URL=<Render PostgreSQL URL>`
 - `JWT_SECRET=<strong secret>`
 - `JWT_EXPIRES_IN=7d`
@@ -80,6 +96,69 @@ Use `apps/api/render.yaml` or create a Render Node service manually.
 - `CHECKOUT_URL=https://your-checkout-app.example`
 
 No Docker setup is required.
+
+Run database migrations before or during deployment:
+
+```bash
+npm run prisma:migrate:deploy
+```
+
+## API Docs
+
+Swagger UI is available at:
+
+```text
+/docs
+```
+
+Successful API responses, except `/health`, are wrapped as:
+
+```json
+{
+  "success": true,
+  "data": {},
+  "meta": {},
+  "timestamp": "2026-07-06T00:00:00.000Z"
+}
+```
+
+Errors use:
+
+```json
+{
+  "success": false,
+  "code": "BAD_REQUEST",
+  "message": "Readable message",
+  "errors": [],
+  "timestamp": "2026-07-06T00:00:00.000Z"
+}
+```
+
+## Merchant Dashboard Endpoints
+
+All dashboard endpoints require `Authorization: Bearer <token>` and use the merchant ID from the JWT.
+
+- `GET /merchant/profile`
+- `PATCH /merchant/profile`
+- `GET /merchant/branding`
+- `PATCH /merchant/branding`
+- `GET /merchant/settings`
+- `PATCH /merchant/settings`
+- `GET /dashboard`
+- `GET /analytics/revenue?period=daily|weekly|monthly|custom&from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `GET /analytics/providers?period=daily|weekly|monthly|custom&from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `GET /analytics/payments?period=daily|weekly|monthly|custom&from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `GET /providers/status`
+- `GET /usage?page=1&limit=20&method=GET&endpoint=/dashboard&from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `GET /audit-logs?page=1&limit=20`
+
+These existing list endpoints now support pagination with `page`, `limit`, `sort`, and `order`:
+
+- `GET /transactions`
+- `GET /checkout-sessions`
+- `GET /webhooks/endpoints`
+- `GET /usage`
+- `GET /audit-logs`
 
 ## MVP Notes
 

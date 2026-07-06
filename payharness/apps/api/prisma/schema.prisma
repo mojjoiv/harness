@@ -68,6 +68,9 @@ model Merchant {
   slug                String                 @unique
   createdAt           DateTime               @default(now()) @map("created_at")
   updatedAt           DateTime               @updatedAt @map("updated_at")
+  profile             MerchantProfile?
+  branding            MerchantBranding?
+  settings            MerchantSettings?
   users               MerchantUser[]
   apiKeys             ApiKey[]
   providerCredentials ProviderCredential[]
@@ -78,8 +81,68 @@ model Merchant {
   customers           Customer[]
   subscriptions       MerchantSubscription[]
   auditLogs           AuditLog[]
+  apiUsage            ApiUsage[]
 
   @@map("merchants")
+}
+
+model MerchantProfile {
+  id                  String   @id @default(uuid())
+  merchantId          String   @unique @map("merchant_id")
+  businessName        String?  @map("business_name")
+  legalName           String?  @map("legal_name")
+  registrationNumber  String?  @map("registration_number")
+  taxPin              String?  @map("tax_pin")
+  country             String?
+  currency            String?
+  timezone            String?
+  supportEmail        String?  @map("support_email")
+  supportPhone        String?  @map("support_phone")
+  website             String?
+  logoUrl             String?  @map("logo_url")
+  primaryBrandColor   String?  @map("primary_brand_color")
+  secondaryBrandColor String?  @map("secondary_brand_color")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  merchant            Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@map("merchant_profiles")
+}
+
+model MerchantBranding {
+  id                 String   @id @default(uuid())
+  merchantId         String   @unique @map("merchant_id")
+  logoUrl            String?  @map("logo_url")
+  faviconUrl         String?  @map("favicon_url")
+  primaryColor       String   @default("#2563eb") @map("primary_color")
+  secondaryColor     String   @default("#0f172a") @map("secondary_color")
+  buttonColor        String   @default("#2563eb") @map("button_color")
+  successPageMessage String?  @map("success_page_message")
+  cancelPageMessage  String?  @map("cancel_page_message")
+  receiptFooter      String?  @map("receipt_footer")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  merchant           Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@map("merchant_branding")
+}
+
+model MerchantSettings {
+  id                    String      @id @default(uuid())
+  merchantId            String      @unique @map("merchant_id")
+  defaultCurrency       String      @default("KES") @map("default_currency")
+  defaultEnvironment    Environment @default(SANDBOX) @map("default_environment")
+  receiptEmailsEnabled  Boolean     @default(true) @map("receipt_emails_enabled")
+  webhookRetriesEnabled Boolean     @default(true) @map("webhook_retries_enabled")
+  retryCount            Int         @default(3) @map("retry_count")
+  paymentTimeoutMinutes Int         @default(30) @map("payment_timeout_minutes")
+  requireCustomerEmail  Boolean     @default(false) @map("require_customer_email")
+  requireCustomerPhone  Boolean     @default(false) @map("require_customer_phone")
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+  merchant              Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@map("merchant_settings")
 }
 
 model MerchantUser {
@@ -134,6 +197,7 @@ model ApiKey {
   createdAt  DateTime    @default(now()) @map("created_at")
   revokedAt  DateTime?   @map("revoked_at")
   merchant   Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  apiUsage   ApiUsage[]
 
   @@map("api_keys")
 }
@@ -273,4 +337,22 @@ model AuditLog {
   user       User?     @relation(fields: [userId], references: [id])
 
   @@map("audit_logs")
+}
+
+model ApiUsage {
+  id             String   @id @default(uuid())
+  merchantId     String   @map("merchant_id")
+  apiKeyId       String?  @map("api_key_id")
+  endpoint       String
+  method         String
+  statusCode     Int      @map("status_code")
+  responseTimeMs Int      @map("response_time_ms")
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  createdAt      DateTime @default(now()) @map("created_at")
+  merchant       Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  apiKey         ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+
+  @@index([merchantId, createdAt])
+  @@map("api_usage")
 }

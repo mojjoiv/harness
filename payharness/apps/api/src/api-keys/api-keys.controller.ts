@@ -11,7 +11,7 @@ export class ApiKeysController {
 
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateApiKeyDto) {
-    return this.apiKeysService.create(user.merchantId, dto);
+    return this.apiKeysService.create(user.merchantId, user.userId, dto);
   }
 
   @Get()
@@ -21,6 +21,6 @@ export class ApiKeysController {
 
   @Patch(':id/revoke')
   revoke(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.apiKeysService.revoke(user.merchantId, id);
+    return this.apiKeysService.revoke(user.merchantId, user.userId, id);
   }
 }

@@ -2,14 +2,20 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Provider } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { getPagination, paginated } from '../common/pagination/pagination';
 import { PrismaService } from '../common/prisma.service';
 import { CreateWebhookEndpointDto } from './dto/create-webhook-endpoint.dto';
 
 @Injectable()
 export class WebhooksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogs: AuditLogsService,
+  ) {}
 
-  async createEndpoint(merchantId: string, dto: CreateWebhookEndpointDto) {
+  async createEndpoint(merchantId: string, userId: string, dto: CreateWebhookEndpointDto) {
     const secret = `whsec_${randomBytes(24).toString('hex')}`;
     const endpoint = await this.prisma.webhookEndpoint.create({
       data: {
@@ -19,16 +25,34 @@ export class WebhooksService {
         secretHash: await bcrypt.hash(secret, 12),
       },
     });
+    await this.auditLogs.create({
+      merchantId,
+      userId,
+      action: 'webhook.created',
+      entity: 'webhook_endpoint',
+      entityId: endpoint.id,
+    });
     const { secretHash: _secretHash, ...safeEndpoint } = endpoint;
     return { ...safeEndpoint, secret };
   }
 
-  async listEndpoints(merchantId: string) {
-    const endpoints = await this.prisma.webhookEndpoint.findMany({
-      where: { merchantId },
-      orderBy: { createdAt: 'desc' },
-    });
-    return endpoints.map(({ secretHash: _secretHash, ...endpoint }) => endpoint);
+  async listEndpoints(merchantId: string, query: PaginationQueryDto) {
+    const pagination = getPagination(query, ['createdAt', 'url', 'status']);
+    const [endpoints, total] = await Promise.all([
+      this.prisma.webhookEndpoint.findMany({
+        where: { merchantId },
+        orderBy: { [pagination.sort]: pagination.order },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      this.prisma.webhookEndpoint.count({ where: { merchantId } }),
+    ]);
+
+    return paginated(
+      endpoints.map(({ secretHash: _secretHash, ...endpoint }) => endpoint),
+      total,
+      pagination,
+    );
   }
 
   async disableEndpoint(merchantId: string, id: string) {

@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CreateWebhookEndpointDto } from './dto/create-webhook-endpoint.dto';
 import { WebhooksService } from './webhooks.service';
@@ -11,13 +12,13 @@ export class WebhooksController {
   @UseGuards(JwtAuthGuard)
   @Post('endpoints')
   createEndpoint(@CurrentUser() user: AuthUser, @Body() dto: CreateWebhookEndpointDto) {
-    return this.webhooksService.createEndpoint(user.merchantId, dto);
+    return this.webhooksService.createEndpoint(user.merchantId, user.userId, dto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('endpoints')
-  listEndpoints(@CurrentUser() user: AuthUser) {
-    return this.webhooksService.listEndpoints(user.merchantId);
+  listEndpoints(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
+    return this.webhooksService.listEndpoints(user.merchantId, query);
   }
 
   @UseGuards(JwtAuthGuard)

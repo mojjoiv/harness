@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PrismaService } from './prisma.service';
 import { CredentialCryptoService } from './crypto/credential-crypto.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { ApiUsageInterceptor } from './interceptors/api-usage.interceptor';
 
 @Global()
 @Module({
@@ -17,7 +18,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
       }),
     }),
   ],
-  providers: [PrismaService, CredentialCryptoService, JwtAuthGuard],
-  exports: [PrismaService, CredentialCryptoService, JwtAuthGuard, JwtModule],
+  providers: [PrismaService, CredentialCryptoService, JwtAuthGuard, ApiUsageInterceptor],
+  exports: [PrismaService, CredentialCryptoService, JwtAuthGuard, ApiUsageInterceptor, JwtModule],
 })
 export class CommonModule {}
