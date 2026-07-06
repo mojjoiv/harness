@@ -1,6 +1,6 @@
 import { getToken, clearSession } from './auth';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
 
 export class ApiError extends Error {
   code: string;
@@ -25,7 +25,8 @@ export interface WrappedResponse<T> {
 async function parseResponse<T>(response: Response): Promise<{ data: T; meta: Record<string, unknown> }> {
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const message = payload?.message || response.statusText || 'Request failed';
+    const rawMessage = payload?.message || response.statusText || 'Request failed';
+    const message = Array.isArray(rawMessage) ? rawMessage.join(', ') : String(rawMessage);
     throw new ApiError(message, payload?.code || 'REQUEST_FAILED', response.status, payload?.errors || []);
   }
 
@@ -40,6 +41,11 @@ async function parseResponse<T>(response: Response): Promise<{ data: T; meta: Re
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}) {
+  if (process.env.NODE_ENV === 'production' && !configuredApiUrl) {
+    throw new Error('NEXT_PUBLIC_API_URL is required in production for the dashboard API client.');
+  }
+
+  const apiUrl = configuredApiUrl || 'http://localhost:3000';
   const headers = new Headers(init.headers || {});
   headers.set('Content-Type', headers.get('Content-Type') || 'application/json');
 
@@ -48,7 +54,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${apiUrl}${path}`, {
     ...init,
     headers,
   });

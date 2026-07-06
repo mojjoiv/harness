@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { getSession } from '@/lib/auth';
 import { logout } from './auth';
-import { Button, cx } from './ui';
+import { Badge, Button, cx } from './ui';
 
 type NavItem = { label: string; href: string; exact?: boolean };
 type NavSection = { title: string; items: NavItem[] };
@@ -17,9 +18,14 @@ const sections: NavSection[] = [
 export function DashboardLayout({ children }: React.PropsWithChildren) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [role, setRole] = useState('');
   const currentPath = router.asPath.split('?')[0];
 
   const nav = useMemo(() => sections, []);
+
+  useEffect(() => {
+    setRole(getSession()?.role || '');
+  }, []);
 
   return (
     <div className="min-h-screen bg-bg text-ink">
@@ -74,7 +80,10 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
                   Menu
                 </Button>
                 <div>
-                  <div className="text-sm font-medium text-ink">PayHarness</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-medium text-ink">PayHarness</div>
+                    {role === 'SUPERADMIN' ? <Badge tone="blue">Superadmin</Badge> : null}
+                  </div>
                   <div className="text-xs text-muted">Operational console</div>
                 </div>
               </div>

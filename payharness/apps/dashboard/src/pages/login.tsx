@@ -30,9 +30,19 @@ export default function LoginPage() {
     try {
       const { data } = await api.post<any>('/auth/login', values);
       setSession(data);
-      router.push('/dashboard');
+      try {
+        const redirected = await router.push('/dashboard');
+        if (!redirected) {
+          await router.replace('/dashboard');
+        }
+      } catch {
+        await router.replace('/dashboard');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Login request failed', err);
+      }
+      setError(err instanceof Error ? err.message : 'Login failed. Please check your details and try again.');
     } finally {
       setLoading(false);
     }

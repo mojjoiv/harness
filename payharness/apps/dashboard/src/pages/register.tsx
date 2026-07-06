@@ -32,9 +32,19 @@ export default function RegisterPage() {
     try {
       const { data } = await api.post<any>('/auth/register', values);
       setSession(data);
-      router.push('/dashboard');
+      try {
+        const redirected = await router.push('/dashboard');
+        if (!redirected) {
+          await router.replace('/dashboard');
+        }
+      } catch {
+        await router.replace('/dashboard');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Registration request failed', err);
+      }
+      setError(err instanceof Error ? err.message : 'Registration failed. Please check your details and try again.');
     } finally {
       setLoading(false);
     }

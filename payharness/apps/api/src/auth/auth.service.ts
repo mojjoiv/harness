@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../common/prisma.service';
+import { compareRoles } from '../common/authz/roles';
 import { slugify } from '../common/utils/slug.util';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -55,7 +56,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const merchantUser = user.merchantUsers[0];
+    const merchantUser = [...user.merchantUsers].sort((left, right) => compareRoles(right.role, left.role))[0];
     if (!merchantUser) {
       throw new UnauthorizedException('User is not attached to a merchant');
     }

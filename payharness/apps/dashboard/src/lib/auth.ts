@@ -9,7 +9,7 @@ export interface AuthSession {
     name: string;
   };
   merchantId: string;
-  role: string;
+  role: 'SUPERADMIN' | 'OWNER' | 'ADMIN' | 'DEVELOPER' | 'VIEWER' | string;
 }
 
 export function getToken() {

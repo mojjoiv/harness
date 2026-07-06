@@ -107,6 +107,14 @@ Use the root blueprint at `payharness/render.yaml`. The older `apps/api/render.y
 - `CREDENTIAL_ENCRYPTION_KEY=<base64 encoded 32-byte key>`
 - `APP_URL=https://your-api.onrender.com`
 - `CHECKOUT_URL=https://your-checkout-app.example`
+- `SUPERADMIN_EMAIL=<platform superadmin email>`
+- `SUPERADMIN_PASSWORD=<platform superadmin password>`
+- `SUPERADMIN_NAME=<platform superadmin name>`
+- `SUPERADMIN_MERCHANT_NAME=<platform merchant name>`
+
+Frontend Render environment:
+
+- `NEXT_PUBLIC_API_URL=https://harness-m6qs.onrender.com`
 
 No Docker setup is required.
 
