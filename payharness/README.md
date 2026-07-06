@@ -38,6 +38,8 @@ JWT_SECRET=replace-with-a-strong-secret
 CREDENTIAL_ENCRYPTION_KEY=<base64 encoded 32-byte key>
 ```
 
+For Neon, use the PostgreSQL connection string from your Neon project and keep it in `DATABASE_URL`. The app expects a normal PostgreSQL URL and does not need Docker.
+
 Generate an encryption key:
 
 ```bash
@@ -51,6 +53,10 @@ npm --workspace apps/api run prisma:generate
 npm --workspace apps/api run prisma:migrate
 npm --workspace apps/api run seed
 ```
+
+For the MVP deploy path, Render runs `db:setup` automatically before startup. That uses `prisma db push` plus seeding so the schema and default plans stay aligned without managing migrations in the deploy step.
+
+Once the project needs stricter production control, switch deploy automation to `prisma migrate deploy` instead of `prisma db push`.
 
 Start development server:
 
@@ -103,9 +109,9 @@ Run database migrations before or during deployment:
 npm run prisma:migrate:deploy
 ```
 
-For Render deploys, `db:setup` runs automatically before the API starts. It is acceptable for the MVP because it uses `prisma db push` plus seeding to align the schema quickly without forcing migration management during early iteration.
+The root Render blueprint at [render.yaml](/workspaces/harness/payharness/render.yaml) is the one to use. The older [apps/api/render.yaml](/workspaces/harness/payharness/apps/api/render.yaml) is kept only for reference.
 
-Later, once schema changes need tighter production control, switch deployment automation to `prisma migrate deploy` instead of `prisma db push`.
+Smoke test steps are documented in [docs/smoke-test.md](/workspaces/harness/payharness/docs/smoke-test.md).
 
 ## API Docs
 

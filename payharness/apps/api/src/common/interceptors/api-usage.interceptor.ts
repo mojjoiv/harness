@@ -13,7 +13,7 @@ export class ApiUsageInterceptor implements NestInterceptor {
 
     const log = (statusCode: number) => {
       const merchantId = request.user?.merchantId;
-      if (!merchantId || request.url?.startsWith('/health')) {
+      if (!merchantId || request.url?.startsWith('/health') || request.url?.startsWith('/docs')) {
         return;
       }
 

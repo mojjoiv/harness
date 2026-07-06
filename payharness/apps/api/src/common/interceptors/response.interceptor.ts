@@ -6,7 +6,7 @@ import { PaginatedResult } from '../pagination/pagination';
 export class ResponseInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest();
-    if (request.url?.startsWith('/health')) {
+    if (request.url?.startsWith('/health') || request.url?.startsWith('/docs')) {
       return next.handle();
     }
 
