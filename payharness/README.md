@@ -85,7 +85,7 @@ Use the root blueprint at `payharness/render.yaml`. The older `apps/api/render.y
 - Runtime: Node
 - Root Directory: `payharness`
 - Build Command: `npm install && npm run build`
-- Start Command: `npm run start:prod`
+- Start Command: `npm run db:setup && npm run start:prod`
 - `NODE_VERSION=16.20.2`
 - `NODE_ENV=production`
 - `DATABASE_URL=<Render PostgreSQL URL>`
@@ -102,6 +102,10 @@ Run database migrations before or during deployment:
 ```bash
 npm run prisma:migrate:deploy
 ```
+
+For Render deploys, `db:setup` runs automatically before the API starts. It is acceptable for the MVP because it uses `prisma db push` plus seeding to align the schema quickly without forcing migration management during early iteration.
+
+Later, once schema changes need tighter production control, switch deployment automation to `prisma migrate deploy` instead of `prisma db push`.
 
 ## API Docs
 
