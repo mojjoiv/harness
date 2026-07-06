@@ -1,4 +1,5 @@
-import { IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
+import { Environment } from '@prisma/client';
 
 export class CreateProviderPaymentDto {
   @IsInt()
@@ -7,6 +8,9 @@ export class CreateProviderPaymentDto {
 
   @IsString()
   currency: string;
+
+  @IsEnum(Environment)
+  environment: Environment;
 
   @IsOptional()
   @IsString()

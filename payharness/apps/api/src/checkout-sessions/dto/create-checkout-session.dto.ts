@@ -1,4 +1,20 @@
-import { IsInt, IsObject, IsOptional, IsString, IsUrl, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsEmail, IsEnum, IsInt, IsObject, IsOptional, IsPhoneNumber, IsString, IsUrl, Min, ValidateNested } from 'class-validator';
+import { Provider } from '@prisma/client';
+
+export class CheckoutCustomerDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+}
 
 export class CreateCheckoutSessionDto {
   @IsInt()
@@ -15,10 +31,16 @@ export class CreateCheckoutSessionDto {
   cancelUrl: string;
 
   @IsOptional()
-  @IsString()
-  customerId?: string;
+  @ValidateNested()
+  @Type(() => CheckoutCustomerDto)
+  customer?: CheckoutCustomerDto;
 
   @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsArray()
+  @IsEnum(Provider, { each: true })
+  allowedProviders?: Provider[];
 }

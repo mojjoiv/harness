@@ -28,7 +28,7 @@ export class ApiKeysService {
       environment: apiKey.environment,
       prefix: apiKey.prefix,
       status: apiKey.status,
-      secret,
+      apiKey: secret,
       createdAt: apiKey.createdAt,
     };
   }
@@ -38,7 +38,10 @@ export class ApiKeysService {
       where: { merchantId },
       orderBy: { createdAt: 'desc' },
     });
-    return keys.map(({ keyHash: _keyHash, ...key }) => key);
+    return keys.map(({ keyHash: _keyHash, ...key }) => ({
+      ...key,
+      maskedKey: `${key.prefix}...`,
+    }));
   }
 
   async revoke(merchantId: string, id: string) {
@@ -50,6 +53,6 @@ export class ApiKeysService {
       where: { id },
       data: { status: 'REVOKED', revokedAt: new Date() },
     });
-    return apiKey;
+    return { ...apiKey, maskedKey: `${apiKey.prefix}...` };
   }
 }

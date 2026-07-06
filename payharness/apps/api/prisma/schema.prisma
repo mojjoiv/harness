@@ -179,6 +179,7 @@ model CheckoutSession {
   status      PaymentStatus @default(PENDING)
   successUrl  String        @map("success_url")
   cancelUrl   String        @map("cancel_url")
+  allowedProviders Provider[] @default([]) @map("allowed_providers")
   metadata    Json          @default("{}")
   expiresAt   DateTime      @map("expires_at")
   createdAt   DateTime      @default(now()) @map("created_at")

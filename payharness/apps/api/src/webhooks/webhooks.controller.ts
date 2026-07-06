@@ -1,22 +1,52 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CreateWebhookEndpointDto } from './dto/create-webhook-endpoint.dto';
 import { WebhooksService } from './webhooks.service';
 
 @Controller('webhooks')
 export class WebhooksController {
   constructor(private readonly webhooksService: WebhooksService) {}
 
+  @UseGuards(JwtAuthGuard)
+  @Post('endpoints')
+  createEndpoint(@CurrentUser() user: AuthUser, @Body() dto: CreateWebhookEndpointDto) {
+    return this.webhooksService.createEndpoint(user.merchantId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('endpoints')
+  listEndpoints(@CurrentUser() user: AuthUser) {
+    return this.webhooksService.listEndpoints(user.merchantId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('endpoints/:id/disable')
+  disableEndpoint(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.webhooksService.disableEndpoint(user.merchantId, id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('endpoints/:id/test')
+  testEndpoint(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.webhooksService.testEndpoint(user.merchantId, id);
+  }
+
   @Post('mpesa')
   mpesa(@Body() payload: Record<string, unknown>) {
+    // TODO: Verify M-Pesa callback signatures before processing live callbacks.
     return this.webhooksService.receive('MPESA', payload);
   }
 
   @Post('stripe')
   stripe(@Body() payload: Record<string, unknown>) {
+    // TODO: Verify Stripe webhook signatures before processing live callbacks.
     return this.webhooksService.receive('STRIPE', payload);
   }
 
   @Post('paypal')
   paypal(@Body() payload: Record<string, unknown>) {
+    // TODO: Verify PayPal webhook signatures before processing live callbacks.
     return this.webhooksService.receive('PAYPAL', payload);
   }
 }

@@ -18,4 +18,9 @@ export class CheckoutSessionsController {
   get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.sessionsService.get(user.merchantId, id);
   }
+
+  @Get()
+  list(@CurrentUser() user: AuthUser) {
+    return this.sessionsService.list(user.merchantId);
+  }
 }

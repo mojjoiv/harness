@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, Provider } from '@prisma/client';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
-import { SaveProviderCredentialDto } from './dto/save-provider-credential.dto';
+import { SaveProviderCredentialDto } from './dto/provider-credential.dto';
 
 @Injectable()
 export class ProviderCredentialsService {
@@ -12,7 +12,9 @@ export class ProviderCredentialsService {
   ) {}
 
   async save(merchantId: string, provider: Provider, dto: SaveProviderCredentialDto) {
-    const encryptedSecretConfig = this.crypto.encrypt(dto.secretConfig) as unknown as Prisma.InputJsonObject;
+    const publicConfig = { ...dto.publicConfig };
+    const secretConfig = { ...dto.secretConfig };
+    const encryptedSecretConfig = this.crypto.encrypt(secretConfig) as unknown as Prisma.InputJsonObject;
     const credential = await this.prisma.providerCredential.upsert({
       where: {
         merchantId_provider_environment: {
@@ -22,7 +24,7 @@ export class ProviderCredentialsService {
         },
       },
       update: {
-        publicConfig: (dto.publicConfig || {}) as Prisma.InputJsonValue,
+        publicConfig: publicConfig as Prisma.InputJsonValue,
         encryptedSecretConfig,
         status: 'ACTIVE',
       },
@@ -30,7 +32,7 @@ export class ProviderCredentialsService {
         merchantId,
         provider,
         environment: dto.environment,
-        publicConfig: (dto.publicConfig || {}) as Prisma.InputJsonValue,
+        publicConfig: publicConfig as Prisma.InputJsonValue,
         encryptedSecretConfig,
       },
     });
@@ -43,6 +45,23 @@ export class ProviderCredentialsService {
       orderBy: { createdAt: 'desc' },
     });
     return credentials.map((credential) => this.maskCredential(credential));
+  }
+
+  async verify(merchantId: string, id: string) {
+    const credential = await this.prisma.providerCredential.findFirst({
+      where: { id, merchantId, status: 'ACTIVE' },
+    });
+    if (!credential) {
+      return { verified: false, message: 'Active provider credentials were not found' };
+    }
+
+    // TODO: Replace with live provider credential checks when integrations are added.
+    return {
+      verified: true,
+      provider: credential.provider,
+      environment: credential.environment,
+      message: 'Mock credential verification succeeded',
+    };
   }
 
   private maskCredential(credential: {
