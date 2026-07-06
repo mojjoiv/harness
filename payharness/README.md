@@ -97,7 +97,7 @@ Use the root blueprint at `payharness/render.yaml`. The older `apps/api/render.y
 
 - Runtime: Node
 - Root Directory: `payharness`
-- Build Command: `npm install && npm run build`
+- Build Command: `npm install && npm run build:api`
 - Start Command: `npm run db:setup && npm run start:prod`
 - `NODE_VERSION=16.20.2`
 - `NODE_ENV=production`
