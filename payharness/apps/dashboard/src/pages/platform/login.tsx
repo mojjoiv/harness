@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/router';
 import { ApiError, api, buildApiUrl } from '@/lib/api';
 import { getSession, getToken, setSession, type AuthSession } from '@/lib/auth';
@@ -9,6 +9,8 @@ type LoginState = {
   email: string;
   password: string;
 };
+
+type LoginField = keyof LoginState;
 
 function isPlatformSession(data: unknown): data is AuthSession {
   return (
@@ -34,6 +36,11 @@ export default function PlatformLoginPage() {
   const [loading, setLoading] = useState(false);
   const [lastRequestUrl, setLastRequestUrl] = useState('');
   const showDebug = process.env.NODE_ENV !== 'production' || router.query.debug === '1';
+
+  const updateField = (field: LoginField, event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.currentTarget?.value ?? '';
+    setForm((current) => ({ ...current, [field]: value }));
+  };
 
   useEffect(() => {
     if (getToken() && getSession()?.type === 'platform') {
@@ -71,10 +78,10 @@ export default function PlatformLoginPage() {
         <SectionTitle title="Platform sign in" description="Access the SaaS administration console." />
         <form className="space-y-4" onSubmit={onSubmit}>
           <FieldRow label="Email">
-            <Input type="email" autoComplete="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.currentTarget.value }))} />
+            <Input type="email" autoComplete="email" value={form.email} onChange={(event) => updateField('email', event)} />
           </FieldRow>
           <FieldRow label="Password">
-            <Input type="password" autoComplete="current-password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.currentTarget.value }))} />
+            <Input type="password" autoComplete="current-password" value={form.password} onChange={(event) => updateField('password', event)} />
           </FieldRow>
           {error ? <div className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
           <Button type="submit" className="w-full" disabled={loading}>
