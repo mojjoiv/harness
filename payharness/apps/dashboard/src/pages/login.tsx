@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ApiError, api, buildApiUrl } from '@/lib/api';
-import { getToken, setSession, type AuthSession } from '@/lib/auth';
+import { getSession, getToken, setSession, type AuthSession } from '@/lib/auth';
 import { Button, Input, Panel, SectionTitle } from '@/components/ui';
 import { FieldRow } from '@/components/blocks';
 
@@ -34,7 +34,7 @@ export default function LoginPage() {
   const showDebug = process.env.NODE_ENV !== 'production' || router.query.debug === '1';
 
   useEffect(() => {
-    if (getToken()) {
+    if (getToken() && getSession()?.type === 'merchant') {
       router.replace('/dashboard');
     }
   }, [router]);

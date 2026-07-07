@@ -5,7 +5,7 @@ Payment aggregator SaaS monorepo for the first backend MVP.
 ## Structure
 
 - `apps/api` - NestJS 10 API with Prisma and PostgreSQL
-- `apps/dashboard` - Next.js merchant dashboard
+- `apps/dashboard` - Next.js merchant dashboard plus separate platform dashboard
 - `packages/sdk-js` - placeholder JavaScript SDK package
 - `packages/shared-types` - shared TypeScript types
 - `docs` - API and deployment notes
@@ -43,6 +43,9 @@ Set at least:
 DATABASE_URL=postgresql://user:password@localhost:5432/payharness
 JWT_SECRET=replace-with-a-strong-secret
 CREDENTIAL_ENCRYPTION_KEY=<base64 encoded 32-byte key>
+SUPERADMIN_EMAIL=admin@example.com
+SUPERADMIN_PASSWORD=replace-with-a-strong-password
+SUPERADMIN_NAME=Platform Admin
 ```
 
 For Neon, use the PostgreSQL connection string from your Neon project and keep it in `DATABASE_URL`. The app expects a normal PostgreSQL URL and does not need Docker.
@@ -91,6 +94,38 @@ curl -X POST http://localhost:3000/auth/login \
 curl http://localhost:3000/dashboard -H "Authorization: Bearer <token>"
 ```
 
+Platform login uses the separately seeded `PlatformUser` account:
+
+```bash
+curl -X POST http://localhost:3000/platform/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"password123"}'
+curl http://localhost:3000/platform/auth/profile -H "Authorization: Bearer <platform-token>"
+```
+
+## Architecture
+
+PayHarness is split into a SaaS platform layer and merchant layer:
+
+```text
+Platform
+  ↓ owns
+Merchants
+  ↓ contain
+Merchant Users
+```
+
+Platform users are stored in `PlatformUser` and authenticate through `/platform/auth/login`. They represent PayHarness operators such as `SUPERADMIN`, `PLATFORM_ADMIN`, `SUPPORT`, `FINANCE`, and `COMPLIANCE`. A platform user never belongs to a merchant.
+
+Merchant users are stored as `User` records attached to merchants through `MerchantUser`. Merchant roles are `OWNER`, `ADMIN`, `DEVELOPER`, and `VIEWER`. Merchant users authenticate through `/auth/login` or `/auth/register`.
+
+JWTs are intentionally separated:
+
+- Platform JWT: `userId`, `role`, `type=platform`
+- Merchant JWT: `userId`, `merchantId`, `role`, `type=merchant`
+
+Platform routes require platform JWTs. Merchant dashboard routes require merchant JWTs, so platform users cannot enter merchant dashboards and merchant users cannot enter platform routes.
+
 ## Render Deployment
 
 Use the root blueprint at `payharness/render.yaml`. The older `apps/api/render.yaml` is kept for reference, but new Render blueprint deploys should point at `payharness/render.yaml`.
@@ -111,7 +146,6 @@ Use the root blueprint at `payharness/render.yaml`. The older `apps/api/render.y
 - `SUPERADMIN_EMAIL=<platform superadmin email>`
 - `SUPERADMIN_PASSWORD=<platform superadmin password>`
 - `SUPERADMIN_NAME=<platform superadmin name>`
-- `SUPERADMIN_MERCHANT_NAME=<platform merchant name>`
 
 Frontend Render environment:
 
@@ -196,6 +230,20 @@ These existing list endpoints now support pagination with `page`, `limit`, `sort
 - `GET /webhooks/endpoints`
 - `GET /usage`
 - `GET /audit-logs`
+
+## Platform Endpoints
+
+Platform endpoints require `Authorization: Bearer <platform-token>`.
+
+- `POST /platform/auth/login`
+- `GET /platform/auth/profile`
+- `GET /platform/dashboard`
+- `GET /platform/merchants`
+- `GET /platform/plans`
+- `GET /platform/subscriptions`
+- `GET /platform/users`
+
+The platform dashboard lives at `/platform`. Merchant dashboard routes remain unchanged.
 
 ## MVP Notes
 

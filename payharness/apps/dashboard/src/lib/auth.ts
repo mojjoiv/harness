@@ -8,8 +8,19 @@ export interface AuthSession {
     email: string;
     name: string;
   };
-  merchantId: string;
-  role: 'SUPERADMIN' | 'OWNER' | 'ADMIN' | 'DEVELOPER' | 'VIEWER' | string;
+  merchantId?: string;
+  role:
+    | 'OWNER'
+    | 'ADMIN'
+    | 'DEVELOPER'
+    | 'VIEWER'
+    | 'SUPERADMIN'
+    | 'PLATFORM_ADMIN'
+    | 'SUPPORT'
+    | 'FINANCE'
+    | 'COMPLIANCE'
+    | string;
+  type: 'merchant' | 'platform';
 }
 
 export function getToken() {

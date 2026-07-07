@@ -24,6 +24,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ProviderStatusModule } from './provider-status/provider-status.module';
 import { UsageModule } from './usage/usage.module';
+import { PlatformModule } from './platform/platform.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { UsageModule } from './usage/usage.module';
     AnalyticsModule,
     ProviderStatusModule,
     UsageModule,
+    PlatformModule,
   ],
 })
 export class AppModule {}

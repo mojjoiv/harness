@@ -75,9 +75,11 @@ export class AuthService {
   private async authResponse(user: { id: string; email: string; name: string }, merchantId: string, role: string) {
     const accessToken = await this.jwtService.signAsync({
       sub: user.id,
+      userId: user.id,
       email: user.email,
       merchantId,
       role,
+      type: 'merchant',
     });
     return {
       accessToken,
@@ -88,6 +90,7 @@ export class AuthService {
       },
       merchantId,
       role,
+      type: 'merchant',
     };
   }
 }

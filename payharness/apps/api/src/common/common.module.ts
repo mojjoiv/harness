@@ -5,6 +5,7 @@ import { PrismaService } from './prisma.service';
 import { CredentialCryptoService } from './crypto/credential-crypto.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ApiUsageInterceptor } from './interceptors/api-usage.interceptor';
+import { PlatformJwtAuthGuard } from '../platform/common/platform-jwt-auth.guard';
 
 @Global()
 @Module({
@@ -18,7 +19,7 @@ import { ApiUsageInterceptor } from './interceptors/api-usage.interceptor';
       }),
     }),
   ],
-  providers: [PrismaService, CredentialCryptoService, JwtAuthGuard, ApiUsageInterceptor],
-  exports: [PrismaService, CredentialCryptoService, JwtAuthGuard, ApiUsageInterceptor, JwtModule],
+  providers: [PrismaService, CredentialCryptoService, JwtAuthGuard, PlatformJwtAuthGuard, ApiUsageInterceptor],
+  exports: [PrismaService, CredentialCryptoService, JwtAuthGuard, PlatformJwtAuthGuard, ApiUsageInterceptor, JwtModule],
 })
 export class CommonModule {}

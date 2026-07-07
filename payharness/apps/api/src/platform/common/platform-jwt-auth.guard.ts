@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 
 @Injectable()
-export class JwtAuthGuard implements CanActivate {
+export class PlatformJwtAuthGuard implements CanActivate {
   constructor(private readonly jwtService: JwtService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -15,15 +15,14 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync(token);
-      if ((payload.type && payload.type !== 'merchant') || !payload.merchantId) {
-        throw new UnauthorizedException('Merchant token required');
+      if (payload.type !== 'platform') {
+        throw new UnauthorizedException('Platform token required');
       }
       request.user = {
         userId: payload.sub,
         email: payload.email,
-        merchantId: payload.merchantId,
         role: payload.role,
-        type: 'merchant',
+        type: payload.type,
       };
       return true;
     } catch {

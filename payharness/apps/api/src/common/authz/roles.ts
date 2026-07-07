@@ -1,4 +1,4 @@
-export type PlatformRole = 'SUPERADMIN' | 'OWNER' | 'ADMIN' | 'DEVELOPER' | 'VIEWER';
+export type MerchantRole = 'OWNER' | 'ADMIN' | 'DEVELOPER' | 'VIEWER';
 
 export type RoleAction =
   | 'read'
@@ -7,40 +7,34 @@ export type RoleAction =
   | 'manage_api_keys'
   | 'manage_webhooks';
 
-const roleRank: Record<PlatformRole, number> = {
-  SUPERADMIN: 100,
+const roleRank: Record<MerchantRole, number> = {
   OWNER: 80,
   ADMIN: 60,
   DEVELOPER: 40,
   VIEWER: 10,
 };
 
-const roleActions: Record<PlatformRole, RoleAction[]> = {
-  SUPERADMIN: ['read', 'manage_merchant', 'manage_merchant_resources', 'manage_api_keys', 'manage_webhooks'],
+const roleActions: Record<MerchantRole, RoleAction[]> = {
   OWNER: ['read', 'manage_merchant', 'manage_merchant_resources', 'manage_api_keys', 'manage_webhooks'],
   ADMIN: ['read', 'manage_merchant_resources', 'manage_api_keys', 'manage_webhooks'],
   DEVELOPER: ['read', 'manage_api_keys', 'manage_webhooks'],
   VIEWER: ['read'],
 };
 
-export function isPlatformRole(role: string): role is PlatformRole {
+export function isMerchantRole(role: string): role is MerchantRole {
   return role in roleRank;
 }
 
-export function isSuperadmin(role: string): boolean {
-  return role === 'SUPERADMIN';
-}
-
 export function compareRoles(left: string, right: string): number {
-  return (isPlatformRole(left) ? roleRank[left] : 0) - (isPlatformRole(right) ? roleRank[right] : 0);
+  return (isMerchantRole(left) ? roleRank[left] : 0) - (isMerchantRole(right) ? roleRank[right] : 0);
 }
 
-export function hasRoleAtLeast(role: string, minimumRole: PlatformRole): boolean {
-  return isSuperadmin(role) || compareRoles(role, minimumRole) >= 0;
+export function hasRoleAtLeast(role: string, minimumRole: MerchantRole): boolean {
+  return compareRoles(role, minimumRole) >= 0;
 }
 
 export function canPerformRoleAction(role: string, action: RoleAction): boolean {
-  if (!isPlatformRole(role)) {
+  if (!isMerchantRole(role)) {
     return false;
   }
   return roleActions[role].includes(action);

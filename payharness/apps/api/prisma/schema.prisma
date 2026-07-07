@@ -8,11 +8,24 @@ datasource db {
 }
 
 enum UserRole {
-  SUPERADMIN
   OWNER
   ADMIN
   DEVELOPER
   VIEWER
+}
+
+enum PlatformRole {
+  SUPERADMIN
+  PLATFORM_ADMIN
+  SUPPORT
+  FINANCE
+  COMPLIANCE
+}
+
+enum PlatformUserStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
 }
 
 enum Environment {
@@ -61,6 +74,20 @@ model User {
   auditLogs     AuditLog[]
 
   @@map("users")
+}
+
+model PlatformUser {
+  id        String             @id @default(uuid())
+  email     String             @unique
+  password  String
+  name      String
+  role      PlatformRole
+  status    PlatformUserStatus @default(ACTIVE)
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+  lastLogin DateTime?          @map("last_login")
+
+  @@map("platform_users")
 }
 
 model Merchant {
