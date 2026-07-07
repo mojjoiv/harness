@@ -28,6 +28,13 @@ enum PlatformUserStatus {
   DISABLED
 }
 
+enum MerchantStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
 enum Environment {
   SANDBOX
   LIVE
@@ -94,6 +101,7 @@ model Merchant {
   id                  String                 @id @default(uuid())
   name                String
   slug                String                 @unique
+  status              MerchantStatus         @default(PENDING)
   createdAt           DateTime               @default(now()) @map("created_at")
   updatedAt           DateTime               @updatedAt @map("updated_at")
   profile             MerchantProfile?

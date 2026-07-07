@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PrismaService } from './prisma.service';
 import { CredentialCryptoService } from './crypto/credential-crypto.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
 import { ApiUsageInterceptor } from './interceptors/api-usage.interceptor';
 import { PlatformJwtAuthGuard } from '../platform/common/platform-jwt-auth.guard';
 
@@ -19,7 +20,7 @@ import { PlatformJwtAuthGuard } from '../platform/common/platform-jwt-auth.guard
       }),
     }),
   ],
-  providers: [PrismaService, CredentialCryptoService, JwtAuthGuard, PlatformJwtAuthGuard, ApiUsageInterceptor],
-  exports: [PrismaService, CredentialCryptoService, JwtAuthGuard, PlatformJwtAuthGuard, ApiUsageInterceptor, JwtModule],
+  providers: [PrismaService, CredentialCryptoService, JwtAuthGuard, PlatformJwtAuthGuard, RolesGuard, ApiUsageInterceptor],
+  exports: [PrismaService, CredentialCryptoService, JwtAuthGuard, PlatformJwtAuthGuard, RolesGuard, ApiUsageInterceptor, JwtModule],
 })
 export class CommonModule {}

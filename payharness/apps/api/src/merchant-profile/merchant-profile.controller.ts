@@ -1,10 +1,13 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
 import { UpdateMerchantProfileDto } from './dto/update-merchant-profile.dto';
 import { MerchantProfileService } from './merchant-profile.service';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('merchant/profile')
 export class MerchantProfileController {
   constructor(private readonly profileService: MerchantProfileService) {}
@@ -15,6 +18,7 @@ export class MerchantProfileController {
   }
 
   @Patch()
+  @Roles(UserRole.OWNER)
   update(@CurrentUser() user: AuthUser, @Body() dto: UpdateMerchantProfileDto) {
     return this.profileService.update(user.merchantId, user.userId, dto);
   }
