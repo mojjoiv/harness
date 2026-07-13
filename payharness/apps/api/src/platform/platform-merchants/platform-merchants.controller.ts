@@ -1,5 +1,5 @@
-import { Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
-import { PlatformRole } from '@prisma/client';
+import { Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { MerchantStatus, PlatformRole } from '@prisma/client';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -12,8 +12,12 @@ export class PlatformMerchantsController {
   constructor(private readonly merchants: PlatformMerchantsService) {}
 
   @Get()
-  list() {
-    return this.merchants.list();
+  list(@Query('status') status?: string) {
+    const normalized =
+      status && Object.values(MerchantStatus).includes(status as MerchantStatus)
+        ? (status as MerchantStatus)
+        : undefined;
+    return this.merchants.list(normalized);
   }
 
   @Patch(':id/approve')

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { PlatformAuthGate } from '@/components/auth';
 import { PlatformLayout } from '@/components/layout';
 import { SimpleTable } from '@/components/blocks';
 import { Badge, Button, Panel, SectionTitle } from '@/components/ui';
 import { ApiError, api } from '@/lib/api';
 import { dateTime } from '@/lib/format';
-import { PlatformMerchantRecord } from '@/lib/types';
+import { PlatformOwnerRecord } from '@/lib/types';
 
 const STATUS_TONE: Record<string, 'neutral' | 'green' | 'red' | 'blue'> = {
   PENDING: 'blue',
@@ -14,8 +15,8 @@ const STATUS_TONE: Record<string, 'neutral' | 'green' | 'red' | 'blue'> = {
   REJECTED: 'red',
 };
 
-export default function PlatformMerchantsPage() {
-  const [items, setItems] = useState<PlatformMerchantRecord[]>([]);
+export default function PlatformOwnersPage() {
+  const [items, setItems] = useState<PlatformOwnerRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -24,10 +25,10 @@ export default function PlatformMerchantsPage() {
     setLoading(true);
     setError('');
     try {
-      const { data } = await api.get<PlatformMerchantRecord[]>('/platform/merchants');
+      const { data } = await api.get<PlatformOwnerRecord[]>('/platform/owners');
       setItems(data);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load merchants.');
+      setError(err instanceof ApiError ? err.message : 'Failed to load owners.');
     } finally {
       setLoading(false);
     }
@@ -37,11 +38,11 @@ export default function PlatformMerchantsPage() {
     load();
   }, [load]);
 
-  const runAction = async (id: string, action: 'approve' | 'reject' | 'suspend' | 'activate') => {
-    setBusyId(id);
+  const runAction = async (merchantId: string, action: 'approve' | 'reject' | 'suspend' | 'activate') => {
+    setBusyId(merchantId);
     setError('');
     try {
-      await api.patch(`/platform/merchants/${id}/${action}`);
+      await api.patch(`/platform/merchants/${merchantId}/${action}`);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : `Failed to ${action} merchant.`);
@@ -50,22 +51,21 @@ export default function PlatformMerchantsPage() {
     }
   };
 
-  const rows = items.map((merchant) => {
-    const owner = merchant.users[0]?.user;
+  const rows = items.map((owner) => {
+    const merchant = owner.merchant;
     const plan = merchant.subscriptions[0]?.plan;
     const isBusy = busyId === merchant.id;
 
     return [
+      owner.user.name,
       merchant.name,
-      owner ? `${owner.name} (${owner.email})` : '—',
+      owner.user.email,
+      merchant.profile?.country || '—',
       plan?.name || '—',
       <Badge key="status" tone={STATUS_TONE[merchant.status] || 'neutral'}>
         {merchant.status}
       </Badge>,
-      merchant.profile?.country || '—',
-      merchant._count.users,
-      merchant._count.transactions,
-      dateTime(merchant.createdAt),
+      dateTime(owner.createdAt),
       <div key="actions" className="flex flex-wrap gap-2">
         {merchant.status === 'PENDING' && (
           <>
@@ -87,6 +87,9 @@ export default function PlatformMerchantsPage() {
             Activate
           </Button>
         )}
+        <Link href="/platform/merchants" className="inline-flex items-center rounded-xl border border-line bg-white px-3 py-2 text-sm hover:bg-slate-50">
+          View Merchant
+        </Link>
       </div>,
     ];
   });
@@ -94,17 +97,17 @@ export default function PlatformMerchantsPage() {
   return (
     <PlatformAuthGate>
       <PlatformLayout>
-        <SectionTitle title="Merchants" description="All merchants owned by the PayHarness platform." />
+        <SectionTitle title="Owners" description="Every merchant organization owner on the platform." />
         {error ? (
           <Panel className="mb-4 border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</Panel>
         ) : null}
         {loading ? (
-          <Panel className="p-6 text-sm text-muted">Loading merchants…</Panel>
+          <Panel className="p-6 text-sm text-muted">Loading owners…</Panel>
         ) : (
           <SimpleTable
-            headers={['Merchant', 'Owner', 'Plan', 'Status', 'Country', 'Users', 'Transactions', 'Created', 'Actions']}
+            headers={['Owner', 'Merchant', 'Business Email', 'Country', 'Plan', 'Status', 'Created', 'Actions']}
             rows={rows}
-            emptyText="No merchants yet."
+            emptyText="No owners yet."
           />
         )}
       </PlatformLayout>

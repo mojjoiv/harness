@@ -32,4 +32,22 @@ export class AuditLogsService {
 
     return paginated(items, total, pagination);
   }
+
+  async listAll(query: PaginationQueryDto) {
+    const pagination = getPagination(query, ['createdAt', 'action', 'entity']);
+    const [items, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        orderBy: { [pagination.sort]: pagination.order },
+        skip: pagination.skip,
+        take: pagination.take,
+        include: {
+          user: { select: { email: true, name: true } },
+          merchant: { select: { name: true } },
+        },
+      }),
+      this.prisma.auditLog.count(),
+    ]);
+
+    return paginated(items, total, pagination);
+  }
 }
