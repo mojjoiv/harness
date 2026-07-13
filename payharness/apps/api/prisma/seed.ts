@@ -62,6 +62,15 @@ async function main() {
     });
   }
 
+  const providers: Array<'MPESA' | 'STRIPE' | 'PAYPAL'> = ['MPESA', 'STRIPE', 'PAYPAL'];
+  for (const provider of providers) {
+    await prisma.platformGatewayConfig.upsert({
+      where: { provider },
+      update: {},
+      create: { provider, enabled: true },
+    });
+  }
+
   await bootstrapSuperadmin();
 }
 

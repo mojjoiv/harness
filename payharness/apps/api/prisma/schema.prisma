@@ -257,6 +257,7 @@ model ProviderCredential {
   merchantId            String      @map("merchant_id")
   provider              Provider
   environment           Environment
+  label                 String      @default("default")
   publicConfig          Json        @default("{}") @map("public_config")
   encryptedSecretConfig Json        @map("encrypted_secret_config")
   status                Status      @default(ACTIVE)
@@ -264,8 +265,17 @@ model ProviderCredential {
   updatedAt             DateTime    @updatedAt @map("updated_at")
   merchant              Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 
-  @@unique([merchantId, provider, environment])
+  @@unique([merchantId, provider, environment, label])
   @@map("provider_credentials")
+}
+
+model PlatformGatewayConfig {
+  id        String   @id @default(uuid())
+  provider  Provider @unique
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_gateway_configs")
 }
 
 model Customer {

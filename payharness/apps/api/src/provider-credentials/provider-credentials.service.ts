@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma, Provider } from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
+import { PlatformGatewaysService } from '../platform/platform-gateways/platform-gateways.service';
 import { SaveProviderCredentialDto } from './dto/provider-credential.dto';
 
 @Injectable()
@@ -11,18 +12,26 @@ export class ProviderCredentialsService {
     private readonly prisma: PrismaService,
     private readonly crypto: CredentialCryptoService,
     private readonly auditLogs: AuditLogsService,
+    private readonly gateways: PlatformGatewaysService,
   ) {}
 
   async save(merchantId: string, userId: string, provider: Provider, dto: SaveProviderCredentialDto) {
+    const enabled = await this.gateways.isEnabled(provider);
+    if (!enabled) {
+      throw new ForbiddenException('This payment provider is currently disabled platform-wide');
+    }
+
+    const label = dto.label || 'default';
     const publicConfig = { ...dto.publicConfig };
     const secretConfig = { ...dto.secretConfig };
     const encryptedSecretConfig = this.crypto.encrypt(secretConfig) as unknown as Prisma.InputJsonObject;
     const credential = await this.prisma.providerCredential.upsert({
       where: {
-        merchantId_provider_environment: {
+        merchantId_provider_environment_label: {
           merchantId,
           provider,
           environment: dto.environment,
+          label,
         },
       },
       update: {
@@ -34,6 +43,7 @@ export class ProviderCredentialsService {
         merchantId,
         provider,
         environment: dto.environment,
+        label,
         publicConfig: publicConfig as Prisma.InputJsonValue,
         encryptedSecretConfig,
       },
@@ -44,7 +54,7 @@ export class ProviderCredentialsService {
       action: 'provider_credentials.updated',
       entity: 'provider_credential',
       entityId: credential.id,
-      metadata: { provider, environment: dto.environment },
+      metadata: { provider, environment: dto.environment, label },
     });
     return this.maskCredential(credential);
   }
@@ -78,6 +88,7 @@ export class ProviderCredentialsService {
     id: string;
     provider: Provider;
     environment: string;
+    label: string;
     publicConfig: unknown;
     encryptedSecretConfig: unknown;
     status: string;
@@ -98,6 +109,7 @@ export class ProviderCredentialsService {
       id: credential.id,
       provider: credential.provider,
       environment: credential.environment,
+      label: credential.label,
       publicConfig: credential.publicConfig,
       secretConfig: maskedSecretConfig,
       status: credential.status,

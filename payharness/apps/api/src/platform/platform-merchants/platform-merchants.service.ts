@@ -85,7 +85,12 @@ export class PlatformMerchantsService {
   }
 
   private async updateStatus(id: string, status: MerchantStatus, action: string, platformUserId: string) {
-    const merchant = await this.prisma.merchant.findUnique({ where: { id } });
+    const merchant = await this.prisma.merchant.findFirst({
+      where: { id },
+      include: {
+        users: { where: { role: 'OWNER' }, include: { user: true }, take: 1 },
+      },
+    });
     if (!merchant) {
       throw new NotFoundException('Merchant not found');
     }
@@ -105,6 +110,16 @@ export class PlatformMerchantsService {
         previousStatus: merchant.status,
         status,
       },
+    });
+
+    const ownerEmail = merchant.users[0]?.user.email;
+    const notificationEvent = action.replace('platform.merchant.', 'notification.merchant_');
+    await this.auditLogs.create({
+      merchantId: id,
+      action: notificationEvent,
+      entity: 'merchant',
+      entityId: id,
+      metadata: { ownerEmail, status },
     });
 
     return updated;
