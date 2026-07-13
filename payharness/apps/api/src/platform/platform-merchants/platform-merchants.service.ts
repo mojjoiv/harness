@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { MerchantStatus } from '@prisma/client';
 import { AuditLogsService } from '../../audit-logs/audit-logs.service';
 import { PrismaService } from '../../common/prisma.service';
@@ -45,6 +45,43 @@ export class PlatformMerchantsService {
 
   activate(id: string, platformUserId: string) {
     return this.updateStatus(id, MerchantStatus.ACTIVE, 'platform.merchant.activated', platformUserId);
+  }
+
+  async assignPlan(id: string, planId: string, platformUserId: string) {
+    const merchant = await this.prisma.merchant.findUnique({ where: { id } });
+    if (!merchant) {
+      throw new NotFoundException('Merchant not found');
+    }
+
+    const plan = await this.prisma.subscriptionPlan.findUnique({ where: { id: planId } });
+    if (!plan) {
+      throw new NotFoundException('Plan not found');
+    }
+    if (plan.status !== 'ACTIVE') {
+      throw new ConflictException('Plan is not available for assignment');
+    }
+
+    const subscription = await this.prisma.merchantSubscription.create({
+      data: {
+        merchantId: id,
+        planId,
+      },
+      include: { plan: true },
+    });
+
+    await this.auditLogs.create({
+      merchantId: id,
+      action: 'notification.subscription_changed',
+      entity: 'merchant_subscription',
+      entityId: subscription.id,
+      metadata: {
+        platformUserId,
+        planId,
+        planCode: plan.code,
+      },
+    });
+
+    return subscription;
   }
 
   private async updateStatus(id: string, status: MerchantStatus, action: string, platformUserId: string) {

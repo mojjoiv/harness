@@ -130,6 +130,26 @@ export interface PaginationMeta {
 
 export type MerchantStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REJECTED';
 
+export type PlanStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+
+export interface PlanRecord {
+  id: string;
+  name: string;
+  code: string;
+  priceCents: number;
+  annualPriceCents: number | null;
+  currency: string;
+  apiRequestLimit: number | null;
+  transactionLimit: number | null;
+  userLimit: number | null;
+  storageLimitMb: number | null;
+  webhookLimit: number | null;
+  allowedProviders: string[];
+  status: PlanStatus;
+  createdAt: string;
+  _count: { subscriptions: number };
+}
+
 export interface PlatformMerchantRecord {
   id: string;
   name: string;
