@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PlatformAuthGate } from '@/components/auth';
 import { PlatformLayout } from '@/components/layout';
 import { FieldRow, FormGrid, SimpleTable } from '@/components/blocks';
-import { Badge, Button, Input, Panel, SectionTitle } from '@/components/ui';
+import { Badge, Button, Input, Panel, SectionTitle, Select } from '@/components/ui';
 import { ApiError, api } from '@/lib/api';
+import { COUNTRY_CURRENCIES, currencyForCountry } from '@/lib/countries';
 import { money } from '@/lib/format';
 import { PlanRecord } from '@/lib/types';
 
@@ -17,9 +18,9 @@ interface PlanFormState {
   id?: string;
   name: string;
   code: string;
-  priceCents: string;
-  annualPriceCents: string;
-  currency: string;
+  countryCode: string;
+  priceUsd: string;
+  annualPriceUsd: string;
   apiRequestLimit: string;
   transactionLimit: string;
   userLimit: string;
@@ -30,9 +31,9 @@ interface PlanFormState {
 const EMPTY_FORM: PlanFormState = {
   name: '',
   code: '',
-  priceCents: '',
-  annualPriceCents: '',
-  currency: 'USD',
+  countryCode: 'US',
+  priceUsd: '',
+  annualPriceUsd: '',
   apiRequestLimit: '',
   transactionLimit: '',
   userLimit: '',
@@ -43,7 +44,8 @@ const EMPTY_FORM: PlanFormState = {
 function toOptionalInt(value: string) {
   if (value.trim() === '') return undefined;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.max(0, parsed);
 }
 
 export default function PlatformPlansPage() {
@@ -55,13 +57,20 @@ export default function PlatformPlansPage() {
   const [form, setForm] = useState<PlanFormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [rates, setRates] = useState<Record<string, number>>({});
+  const [ratesLoaded, setRatesLoaded] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await api.get<PlanRecord[]>('/platform/plans');
-      setItems(data);
+      const [plansRes, ratesRes] = await Promise.all([
+        api.get<PlanRecord[]>('/platform/plans'),
+        api.get<{ base: string; rates: Record<string, number> }>('/platform/exchange-rates'),
+      ]);
+      setItems(plansRes.data);
+      setRates(ratesRes.data.rates || {});
+      setRatesLoaded(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to load plans.');
     } finally {
@@ -73,6 +82,21 @@ export default function PlatformPlansPage() {
     load();
   }, [load]);
 
+  const currency = currencyForCountry(form.countryCode);
+  const rate = rates[currency] || (currency === 'USD' ? 1 : undefined);
+
+  const convertedMonthly = useMemo(() => {
+    const usd = Number(form.priceUsd);
+    if (!rate || !Number.isFinite(usd) || usd <= 0) return null;
+    return usd * rate;
+  }, [form.priceUsd, rate]);
+
+  const convertedAnnual = useMemo(() => {
+    const usd = Number(form.annualPriceUsd);
+    if (!rate || !Number.isFinite(usd) || usd <= 0) return null;
+    return usd * rate;
+  }, [form.annualPriceUsd, rate]);
+
   const openCreate = () => {
     setForm(EMPTY_FORM);
     setFormError('');
@@ -80,13 +104,17 @@ export default function PlatformPlansPage() {
   };
 
   const openEdit = (plan: PlanRecord) => {
+    const planRate = rates[plan.currency] || (plan.currency === 'USD' ? 1 : undefined);
+    const matchingCountry = COUNTRY_CURRENCIES.find((c) => c.currency === plan.currency);
+    const toUsd = (cents: number) => (planRate ? cents / 100 / planRate : cents / 100);
+
     setForm({
       id: plan.id,
       name: plan.name,
       code: plan.code,
-      priceCents: String(plan.priceCents),
-      annualPriceCents: plan.annualPriceCents != null ? String(plan.annualPriceCents) : '',
-      currency: plan.currency,
+      countryCode: matchingCountry?.countryCode || 'US',
+      priceUsd: toUsd(plan.priceCents).toFixed(2),
+      annualPriceUsd: plan.annualPriceCents != null ? toUsd(plan.annualPriceCents).toFixed(2) : '',
       apiRequestLimit: plan.apiRequestLimit != null ? String(plan.apiRequestLimit) : '',
       transactionLimit: plan.transactionLimit != null ? String(plan.transactionLimit) : '',
       userLimit: plan.userLimit != null ? String(plan.userLimit) : '',
@@ -98,13 +126,24 @@ export default function PlatformPlansPage() {
   };
 
   const submitForm = async () => {
+    if (!rate) {
+      setFormError(`No exchange rate available for ${currency} yet -- try again in a moment.`);
+      return;
+    }
+
     setSaving(true);
     setFormError('');
+
+    const priceCents = Math.max(0, Math.round(Number(form.priceUsd || 0) * rate * 100));
+    const annualPriceCents = form.annualPriceUsd.trim()
+      ? Math.max(0, Math.round(Number(form.annualPriceUsd) * rate * 100))
+      : undefined;
+
     const basePayload = {
       name: form.name,
-      priceCents: Number(form.priceCents),
-      annualPriceCents: toOptionalInt(form.annualPriceCents),
-      currency: form.currency || 'USD',
+      priceCents,
+      annualPriceCents,
+      currency,
       apiRequestLimit: toOptionalInt(form.apiRequestLimit),
       transactionLimit: toOptionalInt(form.transactionLimit),
       userLimit: toOptionalInt(form.userLimit),
@@ -189,7 +228,7 @@ export default function PlatformPlansPage() {
       <PlatformLayout>
         <SectionTitle
           title="Subscription Plans"
-          description="Plans available for merchants on the platform."
+          description="Plans available for merchants on the platform. Prices are entered in USD and converted to the merchant's local currency using the current exchange rate."
           action={<Button onClick={openCreate}>Create Plan</Button>}
         />
         {error ? (
@@ -200,6 +239,9 @@ export default function PlatformPlansPage() {
           <Panel className="mb-4 p-6">
             <h2 className="mb-4 text-lg font-semibold text-ink">{form.id ? 'Edit Plan' : 'Create Plan'}</h2>
             {formError ? <div className="mb-4 text-sm text-rose-700">{formError}</div> : null}
+            {!ratesLoaded ? (
+              <div className="mb-4 text-sm text-muted">Loading current exchange rates…</div>
+            ) : null}
             <FormGrid>
               <FieldRow label="Name">
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -211,26 +253,53 @@ export default function PlatformPlansPage() {
                   onChange={(e) => setForm({ ...form, code: e.target.value })}
                 />
               </FieldRow>
-              <FieldRow label="Monthly Price (cents)">
-                <Input
-                  type="number"
-                  value={form.priceCents}
-                  onChange={(e) => setForm({ ...form, priceCents: e.target.value })}
-                />
-              </FieldRow>
-              <FieldRow label="Annual Price (cents)" hint="Optional">
-                <Input
-                  type="number"
-                  value={form.annualPriceCents}
-                  onChange={(e) => setForm({ ...form, annualPriceCents: e.target.value })}
-                />
+              <FieldRow label="Country" hint="Determines the merchant-facing currency">
+                <Select
+                  value={form.countryCode}
+                  onChange={(e) => setForm({ ...form, countryCode: e.target.value })}
+                >
+                  {COUNTRY_CURRENCIES.map((c) => (
+                    <option key={c.countryCode} value={c.countryCode}>
+                      {c.country} ({c.currency})
+                    </option>
+                  ))}
+                </Select>
               </FieldRow>
               <FieldRow label="Currency">
-                <Input value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
+                <Input value={currency} disabled />
+              </FieldRow>
+              <FieldRow
+                label="Monthly Price (USD)"
+                hint={convertedMonthly != null ? `≈ ${money(Math.round(convertedMonthly * 100), currency)}` : undefined}
+              >
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.priceUsd}
+                  onChange={(e) => setForm({ ...form, priceUsd: e.target.value })}
+                />
+              </FieldRow>
+              <FieldRow
+                label="Annual Price (USD)"
+                hint={
+                  convertedAnnual != null
+                    ? `≈ ${money(Math.round(convertedAnnual * 100), currency)}`
+                    : 'Optional'
+                }
+              >
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.annualPriceUsd}
+                  onChange={(e) => setForm({ ...form, annualPriceUsd: e.target.value })}
+                />
               </FieldRow>
               <FieldRow label="API Request Limit" hint="Leave blank for unlimited">
                 <Input
                   type="number"
+                  min={0}
                   value={form.apiRequestLimit}
                   onChange={(e) => setForm({ ...form, apiRequestLimit: e.target.value })}
                 />
@@ -238,6 +307,7 @@ export default function PlatformPlansPage() {
               <FieldRow label="Transaction Limit" hint="Leave blank for unlimited">
                 <Input
                   type="number"
+                  min={0}
                   value={form.transactionLimit}
                   onChange={(e) => setForm({ ...form, transactionLimit: e.target.value })}
                 />
@@ -245,6 +315,7 @@ export default function PlatformPlansPage() {
               <FieldRow label="User Limit" hint="Leave blank for unlimited">
                 <Input
                   type="number"
+                  min={0}
                   value={form.userLimit}
                   onChange={(e) => setForm({ ...form, userLimit: e.target.value })}
                 />
@@ -252,6 +323,7 @@ export default function PlatformPlansPage() {
               <FieldRow label="Storage Limit (MB)" hint="Leave blank for unlimited">
                 <Input
                   type="number"
+                  min={0}
                   value={form.storageLimitMb}
                   onChange={(e) => setForm({ ...form, storageLimitMb: e.target.value })}
                 />
@@ -259,13 +331,14 @@ export default function PlatformPlansPage() {
               <FieldRow label="Webhook Limit" hint="Leave blank for unlimited">
                 <Input
                   type="number"
+                  min={0}
                   value={form.webhookLimit}
                   onChange={(e) => setForm({ ...form, webhookLimit: e.target.value })}
                 />
               </FieldRow>
             </FormGrid>
             <div className="mt-4 flex gap-2">
-              <Button disabled={saving} onClick={submitForm}>
+              <Button disabled={saving || !ratesLoaded} onClick={submitForm}>
                 {saving ? 'Saving…' : 'Save Plan'}
               </Button>
               <Button variant="ghost" disabled={saving} onClick={() => setShowForm(false)}>
