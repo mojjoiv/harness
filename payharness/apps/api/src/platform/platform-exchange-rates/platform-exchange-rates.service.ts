@@ -1,7 +1,7 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import * as https from 'https';
 
-interface RateSnapshot {
+export interface RateSnapshot {
   base: string;
   rates: Record<string, number>;
   fetchedAt: string;
