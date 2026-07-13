@@ -100,9 +100,8 @@ export default function PlatformPlansPage() {
   const submitForm = async () => {
     setSaving(true);
     setFormError('');
-    const payload = {
+    const basePayload = {
       name: form.name,
-      code: form.code,
       priceCents: Number(form.priceCents),
       annualPriceCents: toOptionalInt(form.annualPriceCents),
       currency: form.currency || 'USD',
@@ -115,9 +114,11 @@ export default function PlatformPlansPage() {
 
     try {
       if (form.id) {
-        await api.patch(`/platform/plans/${form.id}`, payload);
+        // code is immutable after creation -- UpdatePlanDto doesn't accept it,
+        // and the API rejects unknown properties.
+        await api.patch(`/platform/plans/${form.id}`, basePayload);
       } else {
-        await api.post('/platform/plans', payload);
+        await api.post('/platform/plans', { ...basePayload, code: form.code });
       }
       setShowForm(false);
       await load();
