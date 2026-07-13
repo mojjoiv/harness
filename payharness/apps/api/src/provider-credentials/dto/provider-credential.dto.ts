@@ -29,6 +29,10 @@ export class SaveMpesaCredentialDto {
   @IsEnum(Environment)
   environment: Environment;
 
+  @IsOptional()
+  @IsString()
+  label?: string;
+
   @ValidateNested()
   @Type(() => MpesaPublicConfigDto)
   publicConfig: MpesaPublicConfigDto;
@@ -56,6 +60,10 @@ export class SaveStripeCredentialDto {
   @IsEnum(Environment)
   environment: Environment;
 
+  @IsOptional()
+  @IsString()
+  label?: string;
+
   @ValidateNested()
   @Type(() => StripePublicConfigDto)
   publicConfig: StripePublicConfigDto;
@@ -82,6 +90,10 @@ export class PaypalSecretConfigDto {
 export class SavePaypalCredentialDto {
   @IsEnum(Environment)
   environment: Environment;
+
+  @IsOptional()
+  @IsString()
+  label?: string;
 
   @ValidateNested()
   @Type(() => PaypalPublicConfigDto)

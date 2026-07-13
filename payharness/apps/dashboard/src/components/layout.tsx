@@ -108,7 +108,7 @@ const platformItems: NavItem[] = [
   { label: 'Platform Users', href: '/platform/users' },
   { label: 'Subscriptions', href: '/platform/subscriptions' },
   { label: 'Plans', href: '/platform/plans' },
-  { label: 'Payment Gateways', href: '/platform/payment-gateways', disabled: true },
+  { label: 'Payment Gateways', href: '/platform/payment-gateways' },
   { label: 'Audit Logs', href: '/platform/audit-logs' },
   { label: 'Settings', href: '/platform/settings' },
   { label: 'Analytics', href: '/platform/analytics', disabled: true },

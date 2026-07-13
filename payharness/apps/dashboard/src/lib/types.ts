@@ -132,6 +132,13 @@ export type MerchantStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REJECTED';
 
 export type PlanStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
 
+export interface PlatformGatewayRecord {
+  id: string;
+  provider: string;
+  enabled: boolean;
+  updatedAt: string;
+}
+
 export interface PlanRecord {
   id: string;
   name: string;
