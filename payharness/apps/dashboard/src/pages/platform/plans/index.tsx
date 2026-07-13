@@ -43,7 +43,8 @@ const EMPTY_FORM: PlanFormState = {
 function toOptionalInt(value: string) {
   if (value.trim() === '') return undefined;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.max(0, parsed);
 }
 
 export default function PlatformPlansPage() {
@@ -102,7 +103,7 @@ export default function PlatformPlansPage() {
     setFormError('');
     const basePayload = {
       name: form.name,
-      priceCents: Number(form.priceCents),
+      priceCents: Math.max(0, Number(form.priceCents) || 0),
       annualPriceCents: toOptionalInt(form.annualPriceCents),
       currency: form.currency || 'USD',
       apiRequestLimit: toOptionalInt(form.apiRequestLimit),
@@ -214,6 +215,7 @@ export default function PlatformPlansPage() {
               <FieldRow label="Monthly Price (cents)">
                 <Input
                   type="number"
+                  min={0}
                   value={form.priceCents}
                   onChange={(e) => setForm({ ...form, priceCents: e.target.value })}
                 />
@@ -221,6 +223,7 @@ export default function PlatformPlansPage() {
               <FieldRow label="Annual Price (cents)" hint="Optional">
                 <Input
                   type="number"
+                  min={0}
                   value={form.annualPriceCents}
                   onChange={(e) => setForm({ ...form, annualPriceCents: e.target.value })}
                 />
@@ -231,6 +234,7 @@ export default function PlatformPlansPage() {
               <FieldRow label="API Request Limit" hint="Leave blank for unlimited">
                 <Input
                   type="number"
+                  min={0}
                   value={form.apiRequestLimit}
                   onChange={(e) => setForm({ ...form, apiRequestLimit: e.target.value })}
                 />
@@ -238,6 +242,7 @@ export default function PlatformPlansPage() {
               <FieldRow label="Transaction Limit" hint="Leave blank for unlimited">
                 <Input
                   type="number"
+                  min={0}
                   value={form.transactionLimit}
                   onChange={(e) => setForm({ ...form, transactionLimit: e.target.value })}
                 />
@@ -245,6 +250,7 @@ export default function PlatformPlansPage() {
               <FieldRow label="User Limit" hint="Leave blank for unlimited">
                 <Input
                   type="number"
+                  min={0}
                   value={form.userLimit}
                   onChange={(e) => setForm({ ...form, userLimit: e.target.value })}
                 />
@@ -252,6 +258,7 @@ export default function PlatformPlansPage() {
               <FieldRow label="Storage Limit (MB)" hint="Leave blank for unlimited">
                 <Input
                   type="number"
+                  min={0}
                   value={form.storageLimitMb}
                   onChange={(e) => setForm({ ...form, storageLimitMb: e.target.value })}
                 />
@@ -259,6 +266,7 @@ export default function PlatformPlansPage() {
               <FieldRow label="Webhook Limit" hint="Leave blank for unlimited">
                 <Input
                   type="number"
+                  min={0}
                   value={form.webhookLimit}
                   onChange={(e) => setForm({ ...form, webhookLimit: e.target.value })}
                 />
