@@ -10,10 +10,17 @@ export class PlatformMerchantsService {
     private readonly auditLogs: AuditLogsService,
   ) {}
 
-  list() {
+  list(status?: MerchantStatus) {
     return this.prisma.merchant.findMany({
+      where: status ? { status } : undefined,
       orderBy: { createdAt: 'desc' },
       include: {
+        profile: true,
+        users: {
+          where: { role: 'OWNER' },
+          include: { user: true },
+          take: 1,
+        },
         subscriptions: {
           include: { plan: true },
           orderBy: { startedAt: 'desc' },

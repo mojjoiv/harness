@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth';
 import { logout, platformLogout } from './auth';
 import { Badge, Button, cx } from './ui';
 
-type NavItem = { label: string; href: string; exact?: boolean };
+type NavItem = { label: string; href: string; exact?: boolean; disabled?: boolean };
 type NavSection = { title: string; items: NavItem[] };
 
 const sections: NavSection[] = [
@@ -102,11 +102,16 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
 
 const platformItems: NavItem[] = [
   { label: 'Dashboard', href: '/platform', exact: true },
+  { label: 'Owners', href: '/platform/owners' },
   { label: 'Merchants', href: '/platform/merchants' },
+  { label: 'Pending Approvals', href: '/platform/pending' },
+  { label: 'Platform Users', href: '/platform/users' },
   { label: 'Subscriptions', href: '/platform/subscriptions' },
   { label: 'Plans', href: '/platform/plans' },
-  { label: 'Platform Users', href: '/platform/users' },
+  { label: 'Payment Gateways', href: '/platform/payment-gateways', disabled: true },
+  { label: 'Audit Logs', href: '/platform/audit-logs' },
   { label: 'Settings', href: '/platform/settings' },
+  { label: 'Analytics', href: '/platform/analytics', disabled: true },
 ];
 
 export function PlatformLayout({ children }: React.PropsWithChildren) {
@@ -135,6 +140,17 @@ export function PlatformLayout({ children }: React.PropsWithChildren) {
           <nav className="space-y-1">
             {platformItems.map((item) => {
               const active = item.exact ? currentPath === item.href : currentPath.startsWith(item.href);
+              if (item.disabled) {
+                return (
+                  <div
+                    key={item.href}
+                    className="flex items-center justify-between rounded-xl px-3 py-2 text-sm text-muted opacity-60"
+                  >
+                    <span>{item.label}</span>
+                    <Badge tone="neutral">Soon</Badge>
+                  </div>
+                );
+              }
               return (
                 <Link
                   key={item.href}
