@@ -35,6 +35,12 @@ enum MerchantStatus {
   REJECTED
 }
 
+enum PlanStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
 enum Environment {
   SANDBOX
   LIVE
@@ -195,15 +201,23 @@ model MerchantUser {
 }
 
 model SubscriptionPlan {
-  id          String                 @id @default(uuid())
-  name        String
-  code        String                 @unique
-  priceCents  Int                    @map("price_cents")
-  currency    String                 @default("USD")
-  features    Json                   @default("{}")
-  createdAt   DateTime               @default(now()) @map("created_at")
-  updatedAt   DateTime               @updatedAt @map("updated_at")
-  subscriptions MerchantSubscription[]
+  id                String                 @id @default(uuid())
+  name              String
+  code              String                 @unique
+  priceCents        Int                    @map("price_cents")
+  annualPriceCents  Int?                   @map("annual_price_cents")
+  currency          String                 @default("USD")
+  apiRequestLimit   Int?                   @map("api_request_limit")
+  transactionLimit  Int?                   @map("transaction_limit")
+  userLimit         Int?                   @map("user_limit")
+  storageLimitMb    Int?                   @map("storage_limit_mb")
+  webhookLimit      Int?                   @map("webhook_limit")
+  allowedProviders  Provider[]             @default([]) @map("allowed_providers")
+  status            PlanStatus             @default(ACTIVE)
+  features          Json                   @default("{}")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+  subscriptions     MerchantSubscription[]
 
   @@map("subscription_plans")
 }

@@ -1,9 +1,10 @@
-import { Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { MerchantStatus, PlatformRole } from '@prisma/client';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { PlatformJwtAuthGuard } from '../common/platform-jwt-auth.guard';
+import { AssignPlanDto } from '../platform-plans/dto/plan.dto';
 import { PlatformMerchantsService } from './platform-merchants.service';
 
 @Controller('platform/merchants')
@@ -42,5 +43,11 @@ export class PlatformMerchantsController {
   @Roles(PlatformRole.SUPERADMIN)
   activate(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.merchants.activate(id, user.userId);
+  }
+
+  @Patch(':id/plan')
+  @Roles(PlatformRole.SUPERADMIN)
+  assignPlan(@Param('id') id: string, @Body() dto: AssignPlanDto, @CurrentUser() user: AuthUser) {
+    return this.merchants.assignPlan(id, dto.planId, user.userId);
   }
 }
