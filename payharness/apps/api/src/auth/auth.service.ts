@@ -84,6 +84,10 @@ export class AuthService {
       throw new UnauthorizedException('User is not attached to a merchant');
     }
 
+    if (merchantUser.status === 'DEACTIVATED') {
+      throw new ForbiddenException("Your account has been deactivated. Contact your organization's administrator.");
+    }
+
     this.assertMerchantActive(merchantUser.merchant.status);
 
     await this.auditLogs.create({
