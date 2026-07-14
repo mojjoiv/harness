@@ -213,3 +213,24 @@ export interface PlatformAuditLogRecord {
   merchant: { name: string } | null;
   user: { name: string; email: string } | null;
 }
+
+export interface PlatformDashboardOverview {
+  merchants: {
+    total: number;
+    pending: number;
+    active: number;
+    suspended: number;
+    rejected: number;
+  };
+  users: {
+    total: number;
+    owners: number;
+    admins: number;
+    developers: number;
+    viewers: number;
+  };
+  totalTransactions: number;
+  platformMrrCents: number;
+  apiRequestsThisMonth: number;
+  activeGateways: number;
+}
