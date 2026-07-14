@@ -137,13 +137,6 @@ export interface OwnerUserRecord {
   createdAt: string;
   user: { id: string; name: string; email: string };
 }
-  page?: number;
-  limit?: number;
-  total?: number;
-  totalPages?: number;
-  sort?: string;
-  order?: 'asc' | 'desc';
-}
 
 export type MerchantStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REJECTED';
 
