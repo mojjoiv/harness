@@ -49,7 +49,13 @@ export class AuthService {
           name: dto.merchantName,
           slug,
           status: MerchantStatus.PENDING,
-          profile: { create: { businessName: dto.merchantName, legalName: dto.merchantName } },
+          profile: {
+            create: {
+              businessName: dto.merchantName,
+              legalName: dto.merchantName,
+              country: dto.country.toUpperCase(),
+            },
+          },
           branding: { create: {} },
           settings: { create: {} },
           users: { create: { userId: user.id, role: UserRole.OWNER } },

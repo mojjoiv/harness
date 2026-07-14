@@ -5,6 +5,7 @@ import { UsersModule } from './users/users.module';
 import { MerchantsModule } from './merchants/merchants.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { ProviderCredentialsModule } from './provider-credentials/provider-credentials.module';
+import { ProviderAvailabilityModule } from './provider-availability/provider-availability.module';
 import { CheckoutSessionsModule } from './checkout-sessions/checkout-sessions.module';
 import { PaymentsModule } from './payments/payments.module';
 import { TransactionsModule } from './transactions/transactions.module';
@@ -36,6 +37,7 @@ import { PlatformModule } from './platform/platform.module';
     MerchantsModule,
     ApiKeysModule,
     ProviderCredentialsModule,
+    ProviderAvailabilityModule,
     PaymentProvidersModule,
     CheckoutSessionsModule,
     PaymentsModule,

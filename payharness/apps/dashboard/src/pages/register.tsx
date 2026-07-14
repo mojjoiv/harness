@@ -3,14 +3,22 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ApiError, api, buildApiUrl } from '@/lib/api';
 import { getToken, setSession, type AuthSession } from '@/lib/auth';
-import { Button, Input, Panel, SectionTitle } from '@/components/ui';
+import { Button, Input, Panel, SectionTitle, Select } from '@/components/ui';
 import { FieldRow, FormGrid } from '@/components/blocks';
+import { COUNTRY_CURRENCIES } from '@/lib/countries';
 
 type RegisterState = {
   name: string;
   merchantName: string;
   email: string;
   password: string;
+  countryCode: string;
+};
+
+const PROVIDER_LABELS: Record<string, string> = {
+  MPESA: 'M-Pesa',
+  STRIPE: 'Stripe',
+  PAYPAL: 'PayPal',
 };
 
 function formatError(error: unknown) {
@@ -32,12 +40,15 @@ export default function RegisterPage() {
     merchantName: '',
     email: '',
     password: '',
+    countryCode: 'US',
   });
   const [errors, setErrors] = useState<Partial<Record<keyof RegisterState, string>>>({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [lastRequestUrl, setLastRequestUrl] = useState('');
   const [lastError, setLastError] = useState('');
+  const [availableProviders, setAvailableProviders] = useState<string[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState(false);
   const showDebug = process.env.NODE_ENV !== 'production' || router.query.debug === '1';
 
   useEffect(() => {
@@ -46,22 +57,43 @@ export default function RegisterPage() {
     }
   }, [router]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingProviders(true);
+    api
+      .get<string[]>(`/provider-availability?country=${form.countryCode}`)
+      .then(({ data }) => {
+        if (!cancelled) setAvailableProviders(data);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableProviders([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProviders(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.countryCode]);
+
   const validate = (values: RegisterState) => {
     const nextErrors: Partial<Record<keyof RegisterState, string>> = {};
     if (!values.name) nextErrors.name = 'Name is required';
     if (!values.merchantName) nextErrors.merchantName = 'Merchant name is required';
     if (!values.email) nextErrors.email = 'Email is required';
     if (!values.password) nextErrors.password = 'Password is required';
+    if (!values.countryCode) nextErrors.countryCode = 'Country is required';
     return nextErrors;
   };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const values = {
+    const values: RegisterState = {
       name: form.name.trim(),
       merchantName: form.merchantName.trim(),
       email: form.email.trim(),
       password: form.password,
+      countryCode: form.countryCode,
     };
     const nextErrors = validate(values);
     setErrors(nextErrors);
@@ -75,7 +107,13 @@ export default function RegisterPage() {
     const requestUrl = buildApiUrl('/auth/register');
     setLastRequestUrl(requestUrl);
     try {
-      const { data } = await api.post<unknown>('/auth/register', values);
+      const { data } = await api.post<unknown>('/auth/register', {
+        name: values.name,
+        merchantName: values.merchantName,
+        email: values.email,
+        password: values.password,
+        country: values.countryCode,
+      });
       if (!isAuthSession(data)) {
         throw new ApiError('Register response did not include accessToken', 'INVALID_AUTH_RESPONSE', 500);
       }
@@ -147,6 +185,30 @@ export default function RegisterPage() {
               {errors.password ? <div className="text-xs text-rose-700">{errors.password}</div> : null}
             </FieldRow>
           </FormGrid>
+          <FieldRow label="Country" hint="Determines which payment methods you'll be able to use">
+            <Select
+              value={form.countryCode}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setForm((current) => ({ ...current, countryCode: value }));
+              }}
+            >
+              {COUNTRY_CURRENCIES.map((c) => (
+                <option key={c.countryCode} value={c.countryCode}>
+                  {c.country}
+                </option>
+              ))}
+            </Select>
+          </FieldRow>
+          <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-muted">
+            {loadingProviders
+              ? 'Checking available payment methods…'
+              : availableProviders.length > 0
+                ? `Available payment methods in this country: ${availableProviders
+                    .map((p) => PROVIDER_LABELS[p] || p)
+                    .join(', ')}`
+                : 'No payment methods are currently available in this country yet.'}
+          </div>
           {error ? <div className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
           <Button type="submit" disabled={loading}>
             {loading ? 'Creating account...' : 'Register'}
