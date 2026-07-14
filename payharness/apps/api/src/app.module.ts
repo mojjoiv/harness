@@ -13,6 +13,7 @@ import { WebhookDeliveriesModule } from './webhook-deliveries/webhook-deliveries
 import { CustomersModule } from './customers/customers.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { HealthModule } from './health/health.module';
+import { MailerModule } from './mailer/mailer.module';
 import { PlansModule } from './plans/plans.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { CommonModule } from './common/common.module';
@@ -44,6 +45,7 @@ import { PlatformModule } from './platform/platform.module';
     CustomersModule,
     AuditLogsModule,
     HealthModule,
+    MailerModule,
     PlansModule,
     SubscriptionsModule,
     MerchantProfileModule,
