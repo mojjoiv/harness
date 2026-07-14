@@ -234,3 +234,11 @@ export interface PlatformDashboardOverview {
   apiRequestsThisMonth: number;
   activeGateways: number;
 }
+
+export interface ProviderCountryAvailabilityRecord {
+  id: string;
+  provider: string;
+  countryCode: string;
+  enabled: boolean;
+  updatedAt: string;
+}

@@ -284,6 +284,17 @@ model PlatformGatewayConfig {
   @@map("platform_gateway_configs")
 }
 
+model ProviderCountryAvailability {
+  id          String   @id @default(uuid())
+  provider    Provider
+  countryCode String   @map("country_code")
+  enabled     Boolean  @default(true)
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([provider, countryCode])
+  @@map("provider_country_availability")
+}
+
 model Customer {
   id         String   @id @default(uuid())
   merchantId String   @map("merchant_id")

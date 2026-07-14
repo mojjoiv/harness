@@ -4,6 +4,7 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
 import { PlatformGatewaysService } from '../platform/platform-gateways/platform-gateways.service';
+import { ProviderAvailabilityService } from '../provider-availability/provider-availability.service';
 import { SaveProviderCredentialDto } from './dto/provider-credential.dto';
 
 @Injectable()
@@ -13,12 +14,22 @@ export class ProviderCredentialsService {
     private readonly crypto: CredentialCryptoService,
     private readonly auditLogs: AuditLogsService,
     private readonly gateways: PlatformGatewaysService,
+    private readonly availability: ProviderAvailabilityService,
   ) {}
 
   async save(merchantId: string, userId: string, provider: Provider, dto: SaveProviderCredentialDto) {
     const enabled = await this.gateways.isEnabled(provider);
     if (!enabled) {
       throw new ForbiddenException('This payment provider is currently disabled platform-wide');
+    }
+
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: { profile: { select: { country: true } } },
+    });
+    const isAvailableInCountry = await this.availability.isAvailable(provider, merchant?.profile?.country);
+    if (!isAvailableInCountry) {
+      throw new ForbiddenException(`${provider} is not available in your country`);
     }
 
     const label = dto.label || 'default';
@@ -38,6 +49,7 @@ export class ProviderCredentialsService {
         publicConfig: publicConfig as Prisma.InputJsonValue,
         encryptedSecretConfig,
         status: 'ACTIVE',
+
       },
       create: {
         merchantId,

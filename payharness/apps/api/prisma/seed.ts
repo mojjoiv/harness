@@ -71,6 +71,35 @@ async function main() {
     });
   }
 
+  // Starting-point country availability -- editable afterwards from the
+  // Payment Gateways page, since actual provider coverage changes over
+  // time and shouldn't require a code change/redeploy to update.
+  const PAYPAL_COUNTRIES = [
+    'KE', 'NG', 'GH', 'ZA', 'UG', 'TZ', 'RW', 'EG', 'ET', 'ZM', 'CI', 'SN', 'CM', 'MA',
+    'US', 'CA', 'GB', 'DE', 'FR', 'ES', 'IT', 'NL', 'IE', 'CH', 'SE', 'NO', 'DK', 'PL',
+    'AE', 'SA', 'IN', 'PK', 'BD', 'CN', 'JP', 'KR', 'SG', 'MY', 'ID', 'PH', 'VN',
+    'AU', 'NZ', 'BR', 'MX', 'AR', 'CO',
+  ];
+  const STRIPE_COUNTRIES = [
+    'US', 'CA', 'GB', 'DE', 'FR', 'ES', 'IT', 'NL', 'IE', 'CH', 'SE', 'NO', 'DK', 'PL',
+    'AE', 'SG', 'MY', 'AU', 'NZ', 'JP', 'ZA',
+  ];
+  const MPESA_COUNTRIES = ['KE', 'TZ', 'UG', 'RW'];
+
+  const availability: Array<{ provider: 'MPESA' | 'STRIPE' | 'PAYPAL'; countryCode: string }> = [
+    ...MPESA_COUNTRIES.map((countryCode) => ({ provider: 'MPESA' as const, countryCode })),
+    ...STRIPE_COUNTRIES.map((countryCode) => ({ provider: 'STRIPE' as const, countryCode })),
+    ...PAYPAL_COUNTRIES.map((countryCode) => ({ provider: 'PAYPAL' as const, countryCode })),
+  ];
+
+  for (const row of availability) {
+    await prisma.providerCountryAvailability.upsert({
+      where: { provider_countryCode: { provider: row.provider, countryCode: row.countryCode } },
+      update: {},
+      create: { provider: row.provider, countryCode: row.countryCode, enabled: true },
+    });
+  }
+
   await bootstrapSuperadmin();
 }
 
