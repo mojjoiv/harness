@@ -7,5 +7,6 @@ import { PlatformExchangeRatesService } from './platform-exchange-rates.service'
   imports: [CommonModule],
   controllers: [PlatformExchangeRatesController],
   providers: [PlatformExchangeRatesService],
+  exports: [PlatformExchangeRatesService],
 })
 export class PlatformExchangeRatesModule {}
