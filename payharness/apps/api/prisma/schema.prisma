@@ -187,14 +187,20 @@ model MerchantSettings {
   @@map("merchant_settings")
 }
 
+enum MerchantUserStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
 model MerchantUser {
-  id         String   @id @default(uuid())
-  merchantId String   @map("merchant_id")
-  userId     String   @map("user_id")
-  role       UserRole @default(OWNER)
-  createdAt  DateTime @default(now()) @map("created_at")
-  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String             @id @default(uuid())
+  merchantId String             @map("merchant_id")
+  userId     String             @map("user_id")
+  role       UserRole           @default(OWNER)
+  status     MerchantUserStatus @default(ACTIVE)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  merchant   Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([merchantId, userId])
   @@map("merchant_users")

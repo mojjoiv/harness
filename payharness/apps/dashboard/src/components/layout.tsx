@@ -12,7 +12,7 @@ const sections: NavSection[] = [
   { title: 'Main', items: [{ label: 'Dashboard', href: '/dashboard', exact: true }, { label: 'Transactions', href: '/transactions' }, { label: 'Checkout Sessions', href: '/checkout-sessions' }] },
   { title: 'Operations', items: [{ label: 'Providers', href: '/providers' }, { label: 'Analytics', href: '/analytics' }] },
   { title: 'Developers', items: [{ label: 'API Keys', href: '/developers/api-keys' }, { label: 'Webhooks', href: '/developers/webhooks' }, { label: 'Usage', href: '/developers/usage' }] },
-  { title: 'Settings', items: [{ label: 'Profile', href: '/settings/profile' }, { label: 'Branding', href: '/settings/branding' }, { label: 'General', href: '/settings/general' }] },
+  { title: 'Settings', items: [{ label: 'Profile', href: '/settings/profile' }, { label: 'Team', href: '/settings/team' }, { label: 'Branding', href: '/settings/branding' }, { label: 'General', href: '/settings/general' }] },
 ];
 
 export function DashboardLayout({ children }: React.PropsWithChildren) {

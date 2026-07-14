@@ -128,6 +128,23 @@ export interface PaginationMeta {
   order?: 'asc' | 'desc';
 }
 
+export type MerchantUserStatus = 'ACTIVE' | 'DEACTIVATED';
+
+export interface OwnerUserRecord {
+  id: string;
+  role: 'OWNER' | 'ADMIN' | 'DEVELOPER' | 'VIEWER';
+  status: MerchantUserStatus;
+  createdAt: string;
+  user: { id: string; name: string; email: string };
+}
+  page?: number;
+  limit?: number;
+  total?: number;
+  totalPages?: number;
+  sort?: string;
+  order?: 'asc' | 'desc';
+}
+
 export type MerchantStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REJECTED';
 
 export type PlanStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
