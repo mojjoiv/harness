@@ -11,6 +11,7 @@ import * as crypto from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { compareRoles } from '../common/authz/roles';
 import { PrismaService } from '../common/prisma.service';
+import { MailerService } from '../mailer/mailer.service';
 import { CreateOwnerUserDto, UpdateOwnerUserDto } from './dto/owner-user.dto';
 
 @Injectable()
@@ -18,6 +19,7 @@ export class OwnerUsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
+    private readonly mailer: MailerService,
   ) {}
 
   list(merchantId: string) {
@@ -34,6 +36,7 @@ export class OwnerUsersService {
     }
 
     let user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    let tempPassword: string | null = null;
 
     if (user) {
       const existingLink = await this.prisma.merchantUser.findUnique({
@@ -43,7 +46,8 @@ export class OwnerUsersService {
         throw new ConflictException('This person is already part of your team');
       }
     } else {
-      const passwordHash = await bcrypt.hash(this.generateTempPassword(), 12);
+      tempPassword = this.generateTempPassword();
+      const passwordHash = await bcrypt.hash(tempPassword, 12);
       user = await this.prisma.user.create({
         data: { name: dto.name, email: dto.email, passwordHash },
       });
@@ -54,6 +58,8 @@ export class OwnerUsersService {
       include: { user: { select: { id: true, name: true, email: true } } },
     });
 
+    const merchant = await this.prisma.merchant.findUnique({ where: { id: merchantId }, select: { name: true } });
+
     await this.auditLogs.create({
       merchantId,
       userId: actorUserId,
@@ -62,6 +68,32 @@ export class OwnerUsersService {
       entityId: merchantUser.id,
       metadata: { invitedEmail: dto.email, role: dto.role },
     });
+
+    if (tempPassword) {
+      await this.mailer.send({
+        to: dto.email,
+        subject: `You've been added to ${merchant?.name || 'a team'} on PayHarness`,
+        text:
+          `Hi ${dto.name},\n\n` +
+          `You've been added as a ${dto.role} to ${merchant?.name || 'an organization'} on PayHarness.\n\n` +
+          `Your temporary password is: ${tempPassword}\n\n` +
+          `Please log in and change your password as soon as possible.`,
+        html:
+          `<p>Hi ${dto.name},</p>` +
+          `<p>You've been added as a <strong>${dto.role}</strong> to <strong>${merchant?.name || 'an organization'}</strong> on PayHarness.</p>` +
+          `<p>Your temporary password is: <code>${tempPassword}</code></p>` +
+          `<p>Please log in and change your password as soon as possible.</p>`,
+      });
+    } else {
+      await this.mailer.send({
+        to: dto.email,
+        subject: `You've been added to ${merchant?.name || 'a team'} on PayHarness`,
+        text:
+          `Hi ${dto.name},\n\n` +
+          `You've been added as a ${dto.role} to ${merchant?.name || 'an organization'} on PayHarness. ` +
+          `You can log in with your existing PayHarness account.`,
+      });
+    }
 
     return merchantUser;
   }
@@ -136,7 +168,7 @@ export class OwnerUsersService {
 
     const tempPassword = this.generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 12);
-    await this.prisma.user.update({ where: { id: target.userId }, data: { passwordHash } });
+    const user = await this.prisma.user.update({ where: { id: target.userId }, data: { passwordHash } });
 
     await this.auditLogs.create({
       merchantId,
@@ -146,7 +178,24 @@ export class OwnerUsersService {
       entityId: target.id,
     });
 
-    // Returned once -- never stored or logged anywhere else.
+    await this.mailer.send({
+      to: user.email,
+      subject: 'Your PayHarness password has been reset',
+      text:
+        `Hi ${user.name},\n\n` +
+        `Your password was just reset by an administrator on your team.\n\n` +
+        `Your new temporary password is: ${tempPassword}\n\n` +
+        `Please log in and change it as soon as possible. If you didn't expect this, contact your ` +
+        `organization's administrator right away.`,
+      html:
+        `<p>Hi ${user.name},</p>` +
+        `<p>Your password was just reset by an administrator on your team.</p>` +
+        `<p>Your new temporary password is: <code>${tempPassword}</code></p>` +
+        `<p>Please log in and change it as soon as possible. If you didn't expect this, contact your ` +
+        `organization's administrator right away.</p>`,
+    });
+
+    // Also returned once in the API response -- never stored or logged anywhere else.
     return { temporaryPassword: tempPassword };
   }
 

@@ -6,6 +6,7 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../common/prisma.service';
 import { compareRoles } from '../common/authz/roles';
 import { slugify } from '../common/utils/slug.util';
+import { MailerService } from '../mailer/mailer.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -15,6 +16,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly auditLogs: AuditLogsService,
+    private readonly mailer: MailerService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -55,6 +57,28 @@ export class AuthService {
         },
       });
       return { user, merchant };
+    });
+
+    await this.auditLogs.create({
+      merchantId: result.merchant.id,
+      userId: result.user.id,
+      action: 'notification.registration_submitted',
+      entity: 'merchant',
+      entityId: result.merchant.id,
+      metadata: { ownerEmail: result.user.email },
+    });
+
+    await this.mailer.send({
+      to: result.user.email,
+      subject: `Your PayHarness registration is being reviewed`,
+      text:
+        `Hi ${result.user.name},\n\n` +
+        `Thanks for registering ${result.merchant.name} on PayHarness. Your organization is awaiting ` +
+        `approval by the Platform Administrator. We'll email you as soon as a decision is made.`,
+      html:
+        `<p>Hi ${result.user.name},</p>` +
+        `<p>Thanks for registering <strong>${result.merchant.name}</strong> on PayHarness. Your organization ` +
+        `is awaiting approval by the Platform Administrator. We'll email you as soon as a decision is made.</p>`,
     });
 
     return {

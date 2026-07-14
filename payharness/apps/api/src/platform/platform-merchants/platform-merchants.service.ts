@@ -2,12 +2,14 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { MerchantStatus } from '@prisma/client';
 import { AuditLogsService } from '../../audit-logs/audit-logs.service';
 import { PrismaService } from '../../common/prisma.service';
+import { MailerService } from '../../mailer/mailer.service';
 
 @Injectable()
 export class PlatformMerchantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
+    private readonly mailer: MailerService,
   ) {}
 
   list(status?: MerchantStatus) {
@@ -48,7 +50,10 @@ export class PlatformMerchantsService {
   }
 
   async assignPlan(id: string, planId: string, platformUserId: string) {
-    const merchant = await this.prisma.merchant.findUnique({ where: { id } });
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id },
+      include: { users: { where: { role: 'OWNER' }, include: { user: true }, take: 1 } },
+    });
     if (!merchant) {
       throw new NotFoundException('Merchant not found');
     }
@@ -69,6 +74,9 @@ export class PlatformMerchantsService {
       include: { plan: true },
     });
 
+    const ownerEmail = merchant.users[0]?.user.email;
+    const ownerName = merchant.users[0]?.user.name || 'there';
+
     await this.auditLogs.create({
       merchantId: id,
       action: 'notification.subscription_changed',
@@ -78,8 +86,18 @@ export class PlatformMerchantsService {
         platformUserId,
         planId,
         planCode: plan.code,
+        ownerEmail,
       },
     });
+
+    if (ownerEmail) {
+      await this.mailer.send({
+        to: ownerEmail,
+        subject: `Your PayHarness plan has changed`,
+        text: `Hi ${ownerName},\n\n${merchant.name} is now on the ${plan.name} plan.`,
+        html: `<p>Hi ${ownerName},</p><p>${merchant.name} is now on the <strong>${plan.name}</strong> plan.</p>`,
+      });
+    }
 
     return subscription;
   }
@@ -113,6 +131,7 @@ export class PlatformMerchantsService {
     });
 
     const ownerEmail = merchant.users[0]?.user.email;
+    const ownerName = merchant.users[0]?.user.name || 'there';
     const notificationEvent = action.replace('platform.merchant.', 'notification.merchant_');
     await this.auditLogs.create({
       merchantId: id,
@@ -122,6 +141,41 @@ export class PlatformMerchantsService {
       metadata: { ownerEmail, status },
     });
 
+    if (ownerEmail) {
+      const copy = this.statusEmailCopy(status, merchant.name);
+      await this.mailer.send({
+        to: ownerEmail,
+        subject: copy.subject,
+        text: `Hi ${ownerName},\n\n${copy.body}`,
+        html: `<p>Hi ${ownerName},</p><p>${copy.body}</p>`,
+      });
+    }
+
     return updated;
+  }
+
+  private statusEmailCopy(status: MerchantStatus, merchantName: string): { subject: string; body: string } {
+    switch (status) {
+      case MerchantStatus.ACTIVE:
+        return {
+          subject: `${merchantName} is now active on PayHarness`,
+          body: `Your organization ${merchantName} has been approved and is now active on PayHarness. You can log in and start using the platform.`,
+        };
+      case MerchantStatus.REJECTED:
+        return {
+          subject: `Your PayHarness registration was not approved`,
+          body: `Your registration for ${merchantName} was not approved. Please contact PayHarness support if you have questions.`,
+        };
+      case MerchantStatus.SUSPENDED:
+        return {
+          subject: `${merchantName} has been suspended on PayHarness`,
+          body: `Your organization ${merchantName} has been suspended. Please contact PayHarness support for more information.`,
+        };
+      default:
+        return {
+          subject: `An update to your PayHarness account`,
+          body: `There has been an update to ${merchantName}'s status on PayHarness.`,
+        };
+    }
   }
 }
