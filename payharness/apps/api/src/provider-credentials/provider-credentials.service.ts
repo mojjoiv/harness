@@ -8,7 +8,7 @@ import { PlatformGatewaysService } from '../platform/platform-gateways/platform-
 import { ProviderAvailabilityService } from '../provider-availability/provider-availability.service';
 import { SaveProviderCredentialDto } from './dto/provider-credential.dto';
 
-type VerifierResult = { ok: true } | { ok: false; error: string };
+type VerifierResult = { ok: boolean; error?: string };
 
 /**
  * One verifier function per provider. Each currently does a basic shape
@@ -209,12 +209,12 @@ export class ProviderCredentialsService {
       where: { id: credentialId },
       data: result.ok
         ? { lastVerifiedAt: new Date(), lastVerificationError: null, failedVerificationCount: 0 }
-        : { lastVerificationError: result.error, failedVerificationCount: { increment: 1 } },
+        : { lastVerificationError: result.error || 'Verification failed', failedVerificationCount: { increment: 1 } },
     });
 
     return {
       verified: result.ok,
-      message: result.ok ? 'Credentials look valid' : result.error,
+      message: result.ok ? 'Credentials look valid' : result.error || 'Verification failed',
       lastVerifiedAt: updated.lastVerifiedAt,
       failedVerificationCount: updated.failedVerificationCount,
     };
