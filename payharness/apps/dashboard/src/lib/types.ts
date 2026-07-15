@@ -50,6 +50,9 @@ export interface MerchantSettings {
   paymentTimeoutMinutes: number;
   requireCustomerEmail: boolean;
   requireCustomerPhone: boolean;
+  successUrl?: string | null;
+  cancelUrl?: string | null;
+  webhookForwardingUrl?: string | null;
 }
 
 export interface ProviderStatus {
@@ -242,3 +245,19 @@ export interface ProviderCountryAvailabilityRecord {
   enabled: boolean;
   updatedAt: string;
 }
+
+export interface ProviderCredentialRecord {
+  id: string;
+  provider: string;
+  environment: string;
+  label: string;
+  status: string;
+  isDefault: boolean;
+  lastVerifiedAt: string | null;
+  lastVerificationError: string | null;
+  failedVerificationCount: number;
+  webhookUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+

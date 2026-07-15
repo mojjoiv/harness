@@ -99,4 +99,20 @@ export class WebhooksService {
     });
     return { received: true, deliveryId: delivery.id };
   }
+
+  /**
+   * Stub for the merchant-scoped provider callback URL shown on the
+   * Providers page. Confirms the merchant exists so a bad URL fails loudly,
+   * but does not yet verify signatures or route the payload to a
+   * transaction -- that's Checkout Engine scope.
+   */
+  async receiveForMerchant(providerParam: string, merchantId: string, payload: Record<string, unknown>) {
+    const provider = providerParam.toUpperCase() as Provider;
+    const merchant = await this.prisma.merchant.findUnique({ where: { id: merchantId }, select: { id: true } });
+    if (!merchant) {
+      throw new NotFoundException('Unknown merchant');
+    }
+
+    return this.receive(provider, { ...payload, _merchantId: merchantId });
+  }
 }

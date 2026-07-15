@@ -5,7 +5,7 @@ import { SimpleTable } from '@/components/blocks';
 import { Badge, Button, Panel, SectionTitle, Select } from '@/components/ui';
 import { ApiError, api } from '@/lib/api';
 import { dateTime } from '@/lib/format';
-import { PlanRecord, PlatformMerchantRecord } from '@/lib/types';
+import { PlanRecord, PlatformMerchantRecord, ProviderCredentialRecord } from '@/lib/types';
 
 const STATUS_TONE: Record<string, 'neutral' | 'green' | 'red' | 'blue'> = {
   PENDING: 'blue',
@@ -22,6 +22,10 @@ export default function PlatformMerchantsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [planMenuFor, setPlanMenuFor] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState('');
+  const [viewingMerchant, setViewingMerchant] = useState<{ id: string; name: string } | null>(null);
+  const [viewingProviders, setViewingProviders] = useState<ProviderCredentialRecord[]>([]);
+  const [viewingLoading, setViewingLoading] = useState(false);
+  const [providerBusyId, setProviderBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +78,41 @@ export default function PlatformMerchantsPage() {
       setError(err instanceof ApiError ? err.message : 'Failed to change plan.');
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const viewProviders = async (merchant: { id: string; name: string }) => {
+    if (viewingMerchant?.id === merchant.id) {
+      setViewingMerchant(null);
+      return;
+    }
+    setViewingMerchant(merchant);
+    setViewingLoading(true);
+    setError('');
+    try {
+      const { data } = await api.get<ProviderCredentialRecord[]>(`/platform/merchants/${merchant.id}/providers`);
+      setViewingProviders(data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to load providers.');
+    } finally {
+      setViewingLoading(false);
+    }
+  };
+
+  const forceDisconnectProvider = async (credentialId: string) => {
+    if (!viewingMerchant) return;
+    setProviderBusyId(credentialId);
+    setError('');
+    try {
+      await api.patch(`/platform/merchants/${viewingMerchant.id}/providers/${credentialId}/force-disconnect`);
+      const { data } = await api.get<ProviderCredentialRecord[]>(
+        `/platform/merchants/${viewingMerchant.id}/providers`,
+      );
+      setViewingProviders(data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to disconnect provider.');
+    } finally {
+      setProviderBusyId(null);
     }
   };
 
@@ -140,6 +179,9 @@ export default function PlatformMerchantsPage() {
             Change Plan
           </Button>
         )}
+        <Button variant="ghost" onClick={() => viewProviders({ id: merchant.id, name: merchant.name })}>
+          {viewingMerchant?.id === merchant.id ? 'Hide Providers' : 'View Providers'}
+        </Button>
       </div>,
     ];
   });
@@ -160,6 +202,45 @@ export default function PlatformMerchantsPage() {
             emptyText="No merchants yet."
           />
         )}
+
+        {viewingMerchant ? (
+          <Panel className="mt-4 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-ink">Providers -- {viewingMerchant.name}</h2>
+            {viewingLoading ? (
+              <div className="text-sm text-muted">Loading providers…</div>
+            ) : (
+              <SimpleTable
+                headers={['Provider', 'Environment', 'Status', 'Verified', 'Failed Attempts', 'Actions']}
+                rows={viewingProviders.map((credential) => {
+                  const isRevoked = credential.status === 'REVOKED';
+                  const isBusyRow = providerBusyId === credential.id;
+                  return [
+                    credential.provider,
+                    credential.environment,
+                    <Badge key="status" tone={isRevoked ? 'red' : 'green'}>
+                      {credential.status}
+                    </Badge>,
+                    credential.lastVerifiedAt ? dateTime(credential.lastVerifiedAt) : 'Not verified',
+                    credential.failedVerificationCount,
+                    isRevoked ? (
+                      <span key="actions" className="text-sm text-muted">—</span>
+                    ) : (
+                      <Button
+                        key="actions"
+                        variant="danger"
+                        disabled={isBusyRow}
+                        onClick={() => forceDisconnectProvider(credential.id)}
+                      >
+                        Force Disconnect
+                      </Button>
+                    ),
+                  ];
+                })}
+                emptyText="This merchant has no connected providers."
+              />
+            )}
+          </Panel>
+        ) : null}
       </PlatformLayout>
     </PlatformAuthGate>
   );

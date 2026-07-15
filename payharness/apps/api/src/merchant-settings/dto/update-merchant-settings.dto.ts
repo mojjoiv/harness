@@ -1,6 +1,8 @@
-import { Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUrl, Min } from 'class-validator';
 import { Environment } from '@prisma/client';
+
+const emptyToUndefined = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
 
 export class UpdateMerchantSettingsDto {
   @IsOptional()
@@ -38,4 +40,19 @@ export class UpdateMerchantSettingsDto {
   @IsOptional()
   @IsBoolean()
   requireCustomerPhone?: boolean;
+
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @IsUrl({ require_tld: false })
+  successUrl?: string;
+
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @IsUrl({ require_tld: false })
+  cancelUrl?: string;
+
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  @IsUrl({ require_tld: false })
+  webhookForwardingUrl?: string;
 }
