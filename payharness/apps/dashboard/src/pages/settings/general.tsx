@@ -14,6 +14,9 @@ const emptySettings: MerchantSettings = {
   paymentTimeoutMinutes: 30,
   requireCustomerEmail: false,
   requireCustomerPhone: false,
+  successUrl: '',
+  cancelUrl: '',
+  webhookForwardingUrl: '',
 };
 
 export default function GeneralSettingsPage() {
@@ -68,6 +71,21 @@ export default function GeneralSettingsPage() {
                 <option value="true">Yes</option>
                 <option value="false">No</option>
               </Select>
+            </FieldRow>
+          </FormGrid>
+          <h2 className="mt-6 text-sm font-semibold uppercase tracking-wide text-muted">Checkout URLs</h2>
+          <p className="mb-2 text-sm text-muted">
+            Where customers land after checkout, and where PayHarness forwards a copy of every webhook event.
+          </p>
+          <FormGrid>
+            <FieldRow label="Success URL" hint="Customer is redirected here after a successful payment">
+              <Input placeholder="https://yourapp.com/checkout/success" {...register('successUrl')} />
+            </FieldRow>
+            <FieldRow label="Cancel URL" hint="Customer is redirected here if they cancel checkout">
+              <Input placeholder="https://yourapp.com/checkout/cancel" {...register('cancelUrl')} />
+            </FieldRow>
+            <FieldRow label="Webhook Forwarding URL" hint="PayHarness forwards a copy of every event here">
+              <Input placeholder="https://yourapp.com/webhooks/payharness" {...register('webhookForwardingUrl')} />
             </FieldRow>
           </FormGrid>
           <div className="flex items-center gap-3">

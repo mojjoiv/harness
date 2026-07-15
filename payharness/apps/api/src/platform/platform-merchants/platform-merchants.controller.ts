@@ -50,4 +50,19 @@ export class PlatformMerchantsController {
   assignPlan(@Param('id') id: string, @Body() dto: AssignPlanDto, @CurrentUser() user: AuthUser) {
     return this.merchants.assignPlan(id, dto.planId, user.userId);
   }
+
+  @Get(':id/providers')
+  providers(@Param('id') id: string) {
+    return this.merchants.providers(id);
+  }
+
+  @Patch(':id/providers/:credentialId/force-disconnect')
+  @Roles(PlatformRole.SUPERADMIN)
+  forceDisconnectProvider(
+    @Param('id') id: string,
+    @Param('credentialId') credentialId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.merchants.forceDisconnectProvider(id, credentialId, user.userId);
+  }
 }

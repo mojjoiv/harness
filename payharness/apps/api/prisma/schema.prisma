@@ -180,6 +180,9 @@ model MerchantSettings {
   paymentTimeoutMinutes Int         @default(30) @map("payment_timeout_minutes")
   requireCustomerEmail  Boolean     @default(false) @map("require_customer_email")
   requireCustomerPhone  Boolean     @default(false) @map("require_customer_phone")
+  successUrl            String?     @map("success_url")
+  cancelUrl             String?     @map("cancel_url")
+  webhookForwardingUrl  String?     @map("webhook_forwarding_url")
   createdAt             DateTime    @default(now()) @map("created_at")
   updatedAt             DateTime    @updatedAt @map("updated_at")
   merchant              Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
@@ -259,17 +262,21 @@ model ApiKey {
 }
 
 model ProviderCredential {
-  id                    String      @id @default(uuid())
-  merchantId            String      @map("merchant_id")
-  provider              Provider
-  environment           Environment
-  label                 String      @default("default")
-  publicConfig          Json        @default("{}") @map("public_config")
-  encryptedSecretConfig Json        @map("encrypted_secret_config")
-  status                Status      @default(ACTIVE)
-  createdAt             DateTime    @default(now()) @map("created_at")
-  updatedAt             DateTime    @updatedAt @map("updated_at")
-  merchant              Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  id                       String      @id @default(uuid())
+  merchantId               String      @map("merchant_id")
+  provider                 Provider
+  environment              Environment
+  label                    String      @default("default")
+  publicConfig             Json        @default("{}") @map("public_config")
+  encryptedSecretConfig    Json        @map("encrypted_secret_config")
+  status                   Status      @default(ACTIVE)
+  isDefault                Boolean     @default(false) @map("is_default")
+  lastVerifiedAt           DateTime?   @map("last_verified_at")
+  lastVerificationError    String?     @map("last_verification_error")
+  failedVerificationCount  Int         @default(0) @map("failed_verification_count")
+  createdAt                DateTime    @default(now()) @map("created_at")
+  updatedAt                DateTime    @updatedAt @map("updated_at")
+  merchant                 Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 
   @@unique([merchantId, provider, environment, label])
   @@map("provider_credentials")

@@ -3,6 +3,7 @@ import { MerchantStatus } from '@prisma/client';
 import { AuditLogsService } from '../../audit-logs/audit-logs.service';
 import { PrismaService } from '../../common/prisma.service';
 import { MailerService } from '../../mailer/mailer.service';
+import { ProviderCredentialsService } from '../../provider-credentials/provider-credentials.service';
 
 @Injectable()
 export class PlatformMerchantsService {
@@ -10,6 +11,7 @@ export class PlatformMerchantsService {
     private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
     private readonly mailer: MailerService,
+    private readonly providerCredentials: ProviderCredentialsService,
   ) {}
 
   list(status?: MerchantStatus) {
@@ -177,5 +179,13 @@ export class PlatformMerchantsService {
           body: `There has been an update to ${merchantName}'s status on PayHarness.`,
         };
     }
+  }
+
+  providers(merchantId: string) {
+    return this.providerCredentials.list(merchantId);
+  }
+
+  forceDisconnectProvider(merchantId: string, credentialId: string, platformUserId: string) {
+    return this.providerCredentials.forceDisconnect(merchantId, credentialId, platformUserId);
   }
 }

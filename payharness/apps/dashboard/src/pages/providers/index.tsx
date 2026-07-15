@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { api } from '@/lib/api';
-import { ProviderStatus } from '@/lib/types';
-import { Badge, Button, Input, Panel, SectionTitle, Select } from '@/components/ui';
+import { api, ApiError } from '@/lib/api';
+import { ProviderStatus, ProviderCredentialRecord } from '@/lib/types';
+import { Badge, Button, CopyButton, Input, Panel, SectionTitle, Select } from '@/components/ui';
 import { FieldRow, FormGrid, SimpleTable } from '@/components/blocks';
 import { dateTime } from '@/lib/format';
 
@@ -36,17 +36,68 @@ function StatusBadge({ connected }: { connected: boolean }) {
 
 export default function ProvidersPage() {
   const [statuses, setStatuses] = useState<ProviderStatus[]>([]);
+  const [credentials, setCredentials] = useState<ProviderCredentialRecord[]>([]);
   const [message, setMessage] = useState('');
+  const [credentialError, setCredentialError] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<{ provider: string; payload: unknown } | null>(null);
   const mpesa = useForm<MpesaForm>({ defaultValues: { environment: 'SANDBOX', businessType: 'PAYBILL', shortcode: '', accountReference: '', consumerKey: '', consumerSecret: '', passkey: '' } });
   const stripe = useForm<StripeForm>({ defaultValues: { environment: 'SANDBOX', publishableKey: '', secretKey: '', webhookSecret: '' } });
   const paypal = useForm<PaypalForm>({ defaultValues: { environment: 'SANDBOX', clientId: '', clientSecret: '', webhookId: '' } });
 
-  const refresh = () => api.get<ProviderStatus[]>('/providers/status').then(({ data }) => setStatuses(data));
+  const refresh = () => {
+    api.get<ProviderStatus[]>('/providers/status').then(({ data }) => setStatuses(data));
+    api
+      .get<ProviderCredentialRecord[]>('/provider-credentials')
+      .then(({ data }) => setCredentials(data))
+      .catch((err) => setCredentialError(err instanceof ApiError ? err.message : 'Failed to load connections.'));
+  };
 
   useEffect(() => {
     refresh();
   }, []);
+
+  const verify = async (id: string) => {
+    setBusyId(id);
+    setCredentialError('');
+    try {
+      const { data } = await api.post<{ verified: boolean; message: string }>(`/provider-credentials/${id}/verify`);
+      setMessage(data.verified ? 'Credentials verified successfully' : `Verification failed: ${data.message}`);
+      refresh();
+    } catch (err) {
+      setCredentialError(err instanceof ApiError ? err.message : 'Verification failed.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const disconnect = async (id: string) => {
+    setBusyId(id);
+    setCredentialError('');
+    try {
+      await api.patch(`/provider-credentials/${id}/disconnect`);
+      setMessage('Provider disconnected.');
+      refresh();
+    } catch (err) {
+      setCredentialError(err instanceof ApiError ? err.message : 'Failed to disconnect.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const setDefault = async (id: string) => {
+    setBusyId(id);
+    setCredentialError('');
+    try {
+      await api.patch(`/provider-credentials/${id}/default`);
+      setMessage('Default provider updated.');
+      refresh();
+    } catch (err) {
+      setCredentialError(err instanceof ApiError ? err.message : 'Failed to set default.');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const saveMpesa = async (values: MpesaForm) => {
     const { data } = await api.post('/provider-credentials/mpesa', {
@@ -94,6 +145,61 @@ export default function ProvidersPage() {
     <div className="space-y-6">
       <SectionTitle title="Providers" description="Connection status and credential forms for each provider." />
       <SimpleTable headers={['Provider', 'Connected', 'Sandbox', 'Live', 'Verified', 'Last updated']} rows={statusRows} emptyText="No provider connections yet." />
+
+      <h2 className="mb-2 mt-8 text-sm font-semibold uppercase tracking-wide text-muted">Connected Credentials</h2>
+      {credentialError ? (
+        <Panel className="mb-4 border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{credentialError}</Panel>
+      ) : null}
+      <SimpleTable
+        headers={['Provider', 'Environment', 'Label', 'Status', 'Verified', 'Default', 'Webhook URL', 'Actions']}
+        rows={credentials.map((credential) => {
+          const isBusy = busyId === credential.id;
+          const isRevoked = credential.status === 'REVOKED';
+          return [
+            credential.provider,
+            credential.environment,
+            credential.label,
+            <Badge key="status" tone={isRevoked ? 'red' : 'green'}>
+              {credential.status}
+            </Badge>,
+            credential.lastVerifiedAt ? (
+              <Badge key="verified" tone="blue">
+                {dateTime(credential.lastVerifiedAt)}
+              </Badge>
+            ) : (
+              <Badge key="verified" tone={credential.failedVerificationCount > 0 ? 'red' : 'neutral'}>
+                {credential.failedVerificationCount > 0
+                  ? `Failed (${credential.failedVerificationCount})`
+                  : 'Not verified'}
+              </Badge>
+            ),
+            credential.isDefault ? <Badge key="default" tone="blue">Default</Badge> : '—',
+            <div key="webhook" className="flex items-center gap-2">
+              <code className="max-w-[220px] truncate text-xs">{credential.webhookUrl}</code>
+              <CopyButton value={credential.webhookUrl} />
+            </div>,
+            <div key="actions" className="flex flex-wrap gap-2">
+              {!isRevoked && (
+                <>
+                  <Button variant="secondary" disabled={isBusy} onClick={() => verify(credential.id)}>
+                    Verify
+                  </Button>
+                  {!credential.isDefault && (
+                    <Button variant="secondary" disabled={isBusy} onClick={() => setDefault(credential.id)}>
+                      Set Default
+                    </Button>
+                  )}
+                  <Button variant="danger" disabled={isBusy} onClick={() => disconnect(credential.id)}>
+                    Disconnect
+                  </Button>
+                </>
+              )}
+            </div>,
+          ];
+        })}
+        emptyText="No credentials connected yet -- use the forms below."
+      />
+
       {message ? <Panel className="p-4 text-sm text-muted">{message}</Panel> : null}
       {lastSaved ? (
         <Panel className="p-4">
