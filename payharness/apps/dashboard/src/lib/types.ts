@@ -72,6 +72,7 @@ export interface ApiKeyRecord {
   status: string;
   maskedKey?: string;
   createdAt: string;
+  lastUsedAt?: string | null;
 }
 
 export interface CheckoutSessionRecord {
