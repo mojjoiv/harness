@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
@@ -13,6 +13,20 @@ export class ApiKeysService {
   ) {}
 
   async create(merchantId: string, userId: string, dto: CreateApiKeyDto) {
+    const duplicate = await this.prisma.apiKey.findFirst({
+      where: { merchantId, name: dto.name, status: 'ACTIVE' },
+    });
+    if (duplicate) {
+      await this.auditLogs.create({
+        merchantId,
+        userId,
+        action: 'api_key.create_failed',
+        entity: 'api_key',
+        metadata: { reason: 'duplicate_name', name: dto.name },
+      });
+      throw new ConflictException(`You already have an active API key named "${dto.name}"`);
+    }
+
     const secret = `ph_${dto.environment.toLowerCase()}_${randomBytes(24).toString('hex')}`;
     const prefix = secret.slice(0, 16);
     const keyHash = await bcrypt.hash(secret, 12);
