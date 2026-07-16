@@ -60,17 +60,41 @@ export function Button({
   );
 }
 
-export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={cx('w-full rounded-xl border border-line bg-white px-3 py-2 text-sm outline-none ring-0 focus:border-brand', props.className)} />;
-}
+export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  function Input(props, ref) {
+    return (
+      <input
+        {...props}
+        ref={ref}
+        className={cx('w-full rounded-xl border border-line bg-white px-3 py-2 text-sm outline-none ring-0 focus:border-brand', props.className)}
+      />
+    );
+  },
+);
 
-export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={cx('w-full rounded-xl border border-line bg-white px-3 py-2 text-sm outline-none ring-0 focus:border-brand', props.className)} />;
-}
+export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  function Textarea(props, ref) {
+    return (
+      <textarea
+        {...props}
+        ref={ref}
+        className={cx('w-full rounded-xl border border-line bg-white px-3 py-2 text-sm outline-none ring-0 focus:border-brand', props.className)}
+      />
+    );
+  },
+);
 
-export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...props} className={cx('w-full rounded-xl border border-line bg-white px-3 py-2 text-sm outline-none ring-0 focus:border-brand', props.className)} />;
-}
+export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
+  function Select(props, ref) {
+    return (
+      <select
+        {...props}
+        ref={ref}
+        className={cx('w-full rounded-xl border border-line bg-white px-3 py-2 text-sm outline-none ring-0 focus:border-brand', props.className)}
+      />
+    );
+  },
+);
 
 export function Label({ children }: React.PropsWithChildren) {
   return <label className="mb-1 block text-sm font-medium text-ink">{children}</label>;
