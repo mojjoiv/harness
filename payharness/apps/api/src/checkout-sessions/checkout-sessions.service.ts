@@ -17,7 +17,7 @@ export class CheckoutSessionsService {
     private readonly brandingService: MerchantBrandingService,
   ) {}
 
-  async create(merchantId: string, userId: string, dto: CreateCheckoutSessionDto) {
+  async create(merchantId: string, userId: string | undefined, dto: CreateCheckoutSessionDto) {
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
     const customer = dto.customer ? await this.findOrCreateCustomer(merchantId, dto.customer) : undefined;
     const session = await this.prisma.checkoutSession.create({

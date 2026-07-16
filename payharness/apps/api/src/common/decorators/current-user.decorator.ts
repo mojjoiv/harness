@@ -5,7 +5,9 @@ export interface AuthUser {
   email: string;
   merchantId?: string;
   role: string;
-  type: 'merchant' | 'platform';
+  type: 'merchant' | 'platform' | 'api_key';
+  apiKeyId?: string;
+  environment?: 'SANDBOX' | 'LIVE';
 }
 
 export const CurrentUser = createParamDecorator(
