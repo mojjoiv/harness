@@ -253,11 +253,13 @@ export interface ProviderCredentialRecord {
   environment: string;
   label: string;
   status: string;
+  healthStatus: 'VERIFIED' | 'PENDING' | 'INVALID' | 'DISABLED';
   isDefault: boolean;
   lastVerifiedAt: string | null;
   lastVerificationError: string | null;
   failedVerificationCount: number;
   webhookUrl: string;
+  publicConfig?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
