@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
 import { Environment } from '@prisma/client';
 
 export class CreateProviderPaymentDto {
@@ -23,4 +23,15 @@ export class CreateProviderPaymentDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
+
+  /**
+   * SANDBOX only -- lets an integrator deliberately test both the success
+   * and failure paths of their own integration without needing a real
+   * provider account or waiting on anything async. Ignored (and rejected,
+   * see PaymentsService) for LIVE, since there's no real provider call
+   * happening yet to simulate the outcome of.
+   */
+  @IsOptional()
+  @IsIn(['SUCCEEDED', 'FAILED'])
+  simulateOutcome?: 'SUCCEEDED' | 'FAILED';
 }
