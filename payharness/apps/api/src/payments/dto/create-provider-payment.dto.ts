@@ -25,6 +25,16 @@ export class CreateProviderPaymentDto {
   metadata?: Record<string, unknown>;
 
   /**
+   * Required to actually send a real STK push (M-Pesa only). If omitted
+   * (or simulateOutcome is set), M-Pesa falls back to the same instant
+   * simulated settlement as the other providers -- a real push needs a
+   * real phone to prompt.
+   */
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
+
+  /**
    * SANDBOX only -- lets an integrator deliberately test both the success
    * and failure paths of their own integration without needing a real
    * provider account or waiting on anything async. Ignored (and rejected,

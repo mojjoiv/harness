@@ -21,6 +21,44 @@ export interface MpesaVerificationResult {
   smokeTest?: { attempted: boolean; ok: boolean; error?: string };
 }
 
+export interface StkPushInput {
+  consumerKey: string;
+  consumerSecret: string;
+  shortcode: string;
+  passkey: string;
+  businessType: 'PAYBILL' | 'TILL';
+  environment: 'SANDBOX' | 'LIVE';
+  callbackUrl: string;
+  amountCents: number;
+  phoneNumber: string;
+  accountReference: string;
+  description: string;
+}
+
+export interface StkPushResult {
+  merchantRequestId: string;
+  checkoutRequestId: string;
+  responseCode: string;
+  responseDescription: string;
+}
+
+export interface StkQueryInput {
+  consumerKey: string;
+  consumerSecret: string;
+  shortcode: string;
+  passkey: string;
+  environment: 'SANDBOX' | 'LIVE';
+  checkoutRequestId: string;
+}
+
+export type StkQueryStatus = 'SUCCEEDED' | 'FAILED' | 'PENDING';
+
+export interface StkQueryResult {
+  status: StkQueryStatus;
+  resultCode?: string;
+  resultDesc?: string;
+}
+
 interface MpesaApiError extends Error {
   httpStatus?: number;
   daraja?: { errorCode?: string; errorMessage?: string };
@@ -108,35 +146,133 @@ export class MpesaVerificationService {
     input: MpesaVerificationInput,
   ): Promise<MpesaVerificationResult['smokeTest']> {
     try {
-      const timestamp = this.timestamp();
-      const password = Buffer.from(`${input.shortcode}${input.passkey}${timestamp}`).toString('base64');
-
-      await this.request(
-        'SANDBOX',
-        'POST',
-        '/mpesa/stkpush/v1/processrequest',
-        { Authorization: `Bearer ${accessToken}` },
-        {
-          BusinessShortCode: input.shortcode,
-          Password: password,
-          Timestamp: timestamp,
-          TransactionType: input.businessType === 'TILL' ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline',
-          Amount: 1,
-          PartyA: SANDBOX_TEST_PHONE,
-          PartyB: input.shortcode,
-          PhoneNumber: SANDBOX_TEST_PHONE,
-          CallBackURL: input.callbackUrl,
-          AccountReference: 'VERIFY',
-          TransactionDesc: 'Provider Verification',
-        },
-      );
-
+      await this.initiateStkPushWithToken(accessToken, {
+        consumerKey: input.consumerKey,
+        consumerSecret: input.consumerSecret,
+        shortcode: input.shortcode,
+        passkey: input.passkey,
+        businessType: input.businessType,
+        environment: 'SANDBOX',
+        callbackUrl: input.callbackUrl,
+        amountCents: 100,
+        phoneNumber: SANDBOX_TEST_PHONE,
+        accountReference: 'VERIFY',
+        description: 'Provider Verification',
+      });
       return { attempted: true, ok: true };
     } catch (error) {
       const apiError = error as MpesaApiError;
       this.logger.warn(`M-Pesa STK smoke test failed: ${apiError.message}`);
       return { attempted: true, ok: false, error: this.friendlyError(apiError) };
     }
+  }
+
+  /**
+   * Sends a real Lipa Na M-Pesa Online (STK Push) request -- this is what
+   * actually prompts the customer's phone for their PIN. Real money in
+   * LIVE, so callers (PaymentsService) are responsible for only reaching
+   * this in SANDBOX until live processing is deliberately turned on
+   * elsewhere -- this method itself doesn't refuse LIVE, since the smoke
+   * test above legitimately calls it with environment locked to SANDBOX,
+   * and the query/status-check side of the flow needs to work in both.
+   */
+  async initiateStkPush(input: StkPushInput): Promise<StkPushResult> {
+    const accessToken = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
+    return this.initiateStkPushWithToken(accessToken, input);
+  }
+
+  private async initiateStkPushWithToken(
+    accessToken: string,
+    input: Omit<StkPushInput, 'consumerKey' | 'consumerSecret'> & { consumerKey?: string; consumerSecret?: string },
+  ): Promise<StkPushResult> {
+    const timestamp = this.timestamp();
+    const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
+    // Daraja wants whole-unit amounts (e.g. KES, not cents).
+    const amount = Math.max(1, Math.round(input.amountCents / 100));
+
+    const body = await this.request(
+      input.environment,
+      'POST',
+      '/mpesa/stkpush/v1/processrequest',
+      { Authorization: `Bearer ${accessToken}` },
+      {
+        BusinessShortCode: input.shortcode,
+        Password: password,
+        Timestamp: timestamp,
+        TransactionType: input.businessType === 'TILL' ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline',
+        Amount: amount,
+        PartyA: input.phoneNumber,
+        PartyB: input.shortcode,
+        PhoneNumber: input.phoneNumber,
+        CallBackURL: input.callbackUrl,
+        AccountReference: input.accountReference,
+        TransactionDesc: input.description,
+      },
+    );
+
+    if (!body.CheckoutRequestID) {
+      throw this.apiError('Safaricom did not return a CheckoutRequestID', 502, body);
+    }
+
+    return {
+      merchantRequestId: body.MerchantRequestID,
+      checkoutRequestId: body.CheckoutRequestID,
+      responseCode: body.ResponseCode,
+      responseDescription: body.ResponseDescription,
+    };
+  }
+
+  /**
+   * Checks whether a customer has actually completed (or declined, or
+   * timed out on) an STK push that's already been sent. Safaricom responds
+   * with a distinct error (not the normal success/failure ResultCode
+   * shape) while the transaction is still awaiting the customer's PIN --
+   * that specific case is mapped to PENDING here rather than treated as a
+   * failure, since "still waiting" isn't an error.
+   */
+  async queryStkStatus(input: StkQueryInput): Promise<StkQueryResult> {
+    const accessToken = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
+    const timestamp = this.timestamp();
+    const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
+
+    try {
+      const body = await this.request(
+        input.environment,
+        'POST',
+        '/mpesa/stkpushquery/v1/query',
+        { Authorization: `Bearer ${accessToken}` },
+        {
+          BusinessShortCode: input.shortcode,
+          Password: password,
+          Timestamp: timestamp,
+          CheckoutRequestID: input.checkoutRequestId,
+        },
+      );
+
+      // ResultCode '0' -- customer entered their PIN and it succeeded.
+      // Any other ResultCode -- customer declined, timed out, or it
+      // genuinely failed for some other reason.
+      if (body.ResultCode === '0' || body.ResultCode === 0) {
+        return { status: 'SUCCEEDED', resultCode: String(body.ResultCode), resultDesc: body.ResultDesc };
+      }
+      return { status: 'FAILED', resultCode: String(body.ResultCode), resultDesc: body.ResultDesc };
+    } catch (error) {
+      const apiError = error as MpesaApiError;
+      // Safaricom returns errorCode 500.001.1001 while the transaction is
+      // still being processed (customer hasn't responded on their phone
+      // yet) -- that's "come back later", not a failure.
+      if (apiError.daraja?.errorCode === '500.001.1001') {
+        return { status: 'PENDING' };
+      }
+      return {
+        status: 'FAILED',
+        resultDesc: apiError.daraja?.errorMessage || apiError.message || 'Query failed',
+      };
+    }
+  }
+
+  private buildPassword(shortcode: string, passkey: string, timestamp: string): string {
+    return Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
   }
 
   private timestamp(): string {
