@@ -344,6 +344,7 @@ model Payment {
   customerId        String?          @map("customer_id")
   checkoutSessionId String?          @map("checkout_session_id")
   provider          Provider
+  environment       Environment      @default(SANDBOX)
   amountCents       Int              @map("amount_cents")
   currency          String
   status            PaymentStatus    @default(PENDING)
