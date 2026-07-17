@@ -34,6 +34,13 @@ function StatusBadge({ connected }: { connected: boolean }) {
   return <Badge tone={connected ? 'green' : 'neutral'}>{connected ? 'Connected' : 'Disconnected'}</Badge>;
 }
 
+const HEALTH_META: Record<string, { emoji: string; label: string; tone: 'neutral' | 'green' | 'red' | 'blue' }> = {
+  VERIFIED: { emoji: '🟢', label: 'Verified', tone: 'green' },
+  PENDING: { emoji: '🟡', label: 'Pending Verification', tone: 'neutral' },
+  INVALID: { emoji: '🔴', label: 'Invalid Credentials', tone: 'red' },
+  DISABLED: { emoji: '⚫', label: 'Disabled', tone: 'neutral' },
+};
+
 export default function ProvidersPage() {
   const [statuses, setStatuses] = useState<ProviderStatus[]>([]);
   const [credentials, setCredentials] = useState<ProviderCredentialRecord[]>([]);
@@ -151,28 +158,39 @@ export default function ProvidersPage() {
         <Panel className="mb-4 border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{credentialError}</Panel>
       ) : null}
       <SimpleTable
-        headers={['Provider', 'Environment', 'Label', 'Status', 'Verified', 'Default', 'Webhook URL', 'Actions']}
+        headers={['Provider', 'Environment', 'Config', 'Health', 'Default', 'Webhook URL', 'Actions']}
         rows={credentials.map((credential) => {
           const isBusy = busyId === credential.id;
           const isRevoked = credential.status === 'REVOKED';
+          const health = HEALTH_META[credential.healthStatus] || HEALTH_META.PENDING;
+          const shortcode = credential.publicConfig?.shortcode as string | undefined;
+          const businessType = credential.publicConfig?.businessType as string | undefined;
           return [
             credential.provider,
             credential.environment,
-            credential.label,
-            <Badge key="status" tone={isRevoked ? 'red' : 'green'}>
-              {credential.status}
-            </Badge>,
-            credential.lastVerifiedAt ? (
-              <Badge key="verified" tone="blue">
-                {dateTime(credential.lastVerifiedAt)}
+            <div key="config" className="text-xs text-muted">
+              <div>{credential.label}</div>
+              {shortcode ? <div>Shortcode: {shortcode}</div> : null}
+              {businessType ? <div>{businessType}</div> : null}
+            </div>,
+            <div key="health">
+              <Badge tone={health.tone}>
+                {health.emoji} {health.label}
               </Badge>
-            ) : (
-              <Badge key="verified" tone={credential.failedVerificationCount > 0 ? 'red' : 'neutral'}>
-                {credential.failedVerificationCount > 0
-                  ? `Failed (${credential.failedVerificationCount})`
-                  : 'Not verified'}
-              </Badge>
-            ),
+              <div className="mt-1 text-xs text-muted">
+                {credential.lastVerifiedAt
+                  ? `Last verified: ${dateTime(credential.lastVerifiedAt)}`
+                  : 'Never verified'}
+              </div>
+              {credential.lastVerificationError ? (
+                <div className="mt-1 max-w-[220px] text-xs text-rose-700" title={credential.lastVerificationError}>
+                  {credential.lastVerificationError}
+                </div>
+              ) : null}
+              {credential.failedVerificationCount > 0 ? (
+                <div className="text-xs text-muted">Failed attempts: {credential.failedVerificationCount}</div>
+              ) : null}
+            </div>,
             credential.isDefault ? <Badge key="default" tone="blue">Default</Badge> : '—',
             <div key="webhook" className="flex items-center gap-2">
               <code className="max-w-[220px] truncate text-xs">{credential.webhookUrl}</code>

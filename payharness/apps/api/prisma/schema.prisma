@@ -116,6 +116,7 @@ model Merchant {
   users               MerchantUser[]
   apiKeys             ApiKey[]
   providerCredentials ProviderCredential[]
+  providerVerificationLogs ProviderVerificationLog[]
   checkoutSessions    CheckoutSession[]
   payments            Payment[]
   transactions        Transaction[]
@@ -280,6 +281,24 @@ model ProviderCredential {
 
   @@unique([merchantId, provider, environment, label])
   @@map("provider_credentials")
+}
+
+model ProviderVerificationLog {
+  id             String      @id @default(uuid())
+  merchantId     String      @map("merchant_id")
+  credentialId   String      @map("credential_id")
+  provider       Provider
+  environment    Environment
+  success        Boolean
+  responseTimeMs Int?        @map("response_time_ms")
+  httpStatus     Int?        @map("http_status")
+  oauthSucceeded Boolean?    @map("oauth_succeeded")
+  failureReason  String?     @map("failure_reason")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  merchant       Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([credentialId, createdAt])
+  @@map("provider_verification_logs")
 }
 
 model PlatformGatewayConfig {

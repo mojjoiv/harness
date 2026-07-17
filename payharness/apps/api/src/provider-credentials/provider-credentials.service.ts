@@ -1,47 +1,43 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, Provider } from '@prisma/client';
+import * as http from 'http';
+import * as https from 'https';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
+import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
 import { PlatformGatewaysService } from '../platform/platform-gateways/platform-gateways.service';
 import { ProviderAvailabilityService } from '../provider-availability/provider-availability.service';
 import { SaveProviderCredentialDto } from './dto/provider-credential.dto';
 
-type VerifierResult = { ok: boolean; error?: string };
-
-/**
- * One verifier function per provider. Each currently does a basic shape
- * check only (decryptable, required keys present) and does NOT call the
- * real provider API yet -- that comes in the Checkout Engine phase. The
- * point of keeping these as separate, swappable functions per provider
- * (rather than one big verify() with if/else branches) is so that phase can
- * plug in real Stripe/M-Pesa/PayPal API calls here without touching the
- * controller or the rest of this service.
- */
-const VERIFIERS: Record<Provider, (secretConfig: Record<string, unknown>) => VerifierResult> = {
-  MPESA: (secretConfig) => {
-    if (!secretConfig.consumerKey || !secretConfig.consumerSecret || !secretConfig.passkey) {
-      return { ok: false, error: 'M-Pesa credentials are missing required fields' };
-    }
-    return { ok: true };
-  },
-  STRIPE: (secretConfig) => {
-    if (!secretConfig.secretKey) {
-      return { ok: false, error: 'Stripe secret key is missing' };
-    }
-    return { ok: true };
-  },
-  PAYPAL: (secretConfig) => {
-    if (!secretConfig.clientSecret) {
-      return { ok: false, error: 'PayPal client secret is missing' };
-    }
-    return { ok: true };
-  },
+type VerifierResult = {
+  ok: boolean;
+  error?: string;
+  responseTimeMs?: number;
+  httpStatus?: number;
+  oauthSucceeded?: boolean;
 };
+
+interface VerifierContext {
+  publicConfig: Record<string, unknown>;
+  secretConfig: Record<string, unknown>;
+  environment: 'SANDBOX' | 'LIVE';
+  callbackUrl: string;
+}
 
 @Injectable()
 export class ProviderCredentialsService {
+  /**
+   * One verifier function per provider. M-Pesa calls the real Safaricom
+   * Daraja API (see MpesaVerificationService) -- an actual OAuth exchange,
+   * not a shape check. Stripe and PayPal are still shape-checks only for
+   * now (their real API integration hasn't been built yet); swapping them
+   * in later is just replacing their function body here, same as M-Pesa
+   * was until this phase.
+   */
+  private readonly verifiers: Record<Provider, (ctx: VerifierContext) => Promise<VerifierResult>>;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CredentialCryptoService,
@@ -49,7 +45,50 @@ export class ProviderCredentialsService {
     private readonly gateways: PlatformGatewaysService,
     private readonly availability: ProviderAvailabilityService,
     private readonly config: ConfigService,
-  ) {}
+    private readonly mpesaVerification: MpesaVerificationService,
+  ) {
+    this.verifiers = {
+      MPESA: async (ctx) => {
+        const { publicConfig, secretConfig } = ctx;
+        if (!secretConfig.consumerKey || !secretConfig.consumerSecret || !secretConfig.passkey) {
+          return { ok: false, error: 'M-Pesa credentials are missing required fields' };
+        }
+        if (!publicConfig.shortcode || !publicConfig.businessType) {
+          return { ok: false, error: 'Shortcode and business type are required' };
+        }
+
+        const result = await this.mpesaVerification.verifyConnection({
+          consumerKey: secretConfig.consumerKey as string,
+          consumerSecret: secretConfig.consumerSecret as string,
+          passkey: secretConfig.passkey as string,
+          shortcode: publicConfig.shortcode as string,
+          businessType: publicConfig.businessType as 'PAYBILL' | 'TILL',
+          environment: ctx.environment,
+          callbackUrl: ctx.callbackUrl,
+        });
+
+        return {
+          ok: result.ok,
+          error: result.error,
+          responseTimeMs: result.responseTimeMs,
+          httpStatus: result.httpStatus,
+          oauthSucceeded: result.oauthSucceeded,
+        };
+      },
+      STRIPE: async ({ secretConfig }) => {
+        if (!secretConfig.secretKey) {
+          return { ok: false, error: 'Stripe secret key is missing' };
+        }
+        return { ok: true };
+      },
+      PAYPAL: async ({ secretConfig }) => {
+        if (!secretConfig.clientSecret) {
+          return { ok: false, error: 'PayPal client secret is missing' };
+        }
+        return { ok: true };
+      },
+    };
+  }
 
   async save(merchantId: string, userId: string, provider: Provider, dto: SaveProviderCredentialDto) {
     const enabled = await this.gateways.isEnabled(provider);
@@ -83,9 +122,6 @@ export class ProviderCredentialsService {
         publicConfig: publicConfig as Prisma.InputJsonValue,
         encryptedSecretConfig,
         status: 'ACTIVE',
-        // Saved credentials need re-verifying -- clear any stale result
-        // from a previous connection rather than implying these new
-        // credentials were already checked.
         lastVerifiedAt: null,
         lastVerificationError: null,
         failedVerificationCount: 0,
@@ -107,7 +143,12 @@ export class ProviderCredentialsService {
       entityId: credential.id,
       metadata: { provider, environment: dto.environment, label },
     });
-    return this.maskCredential(credential);
+
+    // Automatic verification -- the merchant shouldn't have to remember to
+    // click Verify every time they change a key/secret/passkey/shortcode.
+    await this.runVerification(credential);
+    const refreshed = await this.getOwnedOrThrow(merchantId, credential.id);
+    return this.maskCredential(refreshed);
   }
 
   async list(merchantId: string) {
@@ -120,16 +161,76 @@ export class ProviderCredentialsService {
 
   async verify(merchantId: string, id: string) {
     const credential = await this.getOwnedOrThrow(merchantId, id);
+    return this.runVerification(credential);
+  }
 
-    let decrypted: Record<string, unknown>;
+  async health(merchantId: string, id: string) {
+    const credential = await this.getOwnedOrThrow(merchantId, id);
+    const webhookReachable = await this.checkWebhookReachable(credential.provider, credential.merchantId);
+    return {
+      verified: Boolean(credential.lastVerifiedAt) && credential.status === 'ACTIVE',
+      environment: credential.environment,
+      lastVerifiedAt: credential.lastVerifiedAt,
+      status: this.healthStatus(credential),
+      oauth: credential.provider === 'MPESA' ? Boolean(credential.lastVerifiedAt) : null,
+      webhook: webhookReachable,
+      lastError: credential.lastVerificationError,
+      failedVerificationCount: credential.failedVerificationCount,
+    };
+  }
+
+  /**
+   * Confirms our own callback URL actually resolves and responds -- catches
+   * real misconfiguration (e.g. a wrong APP_URL) rather than assuming it's
+   * fine. Not the same thing as "Safaricom has actually delivered a real
+   * callback here" (that needs tracking real inbound deliveries against
+   * this credential, which webhooks.service.ts's receiveForMerchant()
+   * stub doesn't do yet -- flagging as a natural next step, not silently
+   * pretending it's covered).
+   */
+  private async checkWebhookReachable(provider: Provider, merchantId: string): Promise<boolean> {
+    const url = this.webhookUrl(provider, merchantId);
     try {
-      decrypted = this.crypto.decrypt(credential.encryptedSecretConfig as any);
+      const parsed = new URL(url);
+      const client = parsed.protocol === 'http:' ? http : https;
+      return await new Promise<boolean>((resolve) => {
+        const request = client.request(
+          { hostname: parsed.hostname, port: parsed.port, path: parsed.pathname, method: 'HEAD', timeout: 5000 },
+          (res) => {
+            res.resume();
+            // Any response at all -- even a 404/405 for a HEAD the route
+            // doesn't explicitly support -- means something is listening.
+            // Only a connection failure/timeout means unreachable.
+            resolve(Boolean(res.statusCode));
+          },
+        );
+        request.on('error', () => resolve(false));
+        request.on('timeout', () => {
+          request.destroy();
+          resolve(false);
+        });
+        request.end();
+      });
     } catch {
-      return this.recordVerification(credential.id, { ok: false, error: 'Stored credentials could not be read' });
+      return false;
     }
+  }
 
-    const result = VERIFIERS[credential.provider](decrypted);
-    return this.recordVerification(credential.id, result);
+  /**
+   * ACTIVE + never verified = pending. ACTIVE + verified = verified.
+   * ACTIVE + has a verification error = invalid. REVOKED = disabled.
+   * Matches the four-state health model (verified/pending/invalid/disabled)
+   * merchants see as colored badges in the dashboard.
+   */
+  private healthStatus(credential: {
+    status: string;
+    lastVerifiedAt: Date | null;
+    lastVerificationError: string | null;
+  }): 'VERIFIED' | 'PENDING' | 'INVALID' | 'DISABLED' {
+    if (credential.status === 'REVOKED') return 'DISABLED';
+    if (credential.lastVerificationError) return 'INVALID';
+    if (credential.lastVerifiedAt) return 'VERIFIED';
+    return 'PENDING';
   }
 
   async disconnect(merchantId: string, userId: string, id: string) {
@@ -204,12 +305,54 @@ export class ProviderCredentialsService {
     return this.maskCredential(updated);
   }
 
-  private async recordVerification(credentialId: string, result: VerifierResult) {
+  private async runVerification(credential: {
+    id: string;
+    merchantId: string;
+    provider: Provider;
+    environment: 'SANDBOX' | 'LIVE';
+    publicConfig: unknown;
+    encryptedSecretConfig: unknown;
+  }) {
+    let decrypted: Record<string, unknown>;
+    try {
+      decrypted = this.crypto.decrypt(credential.encryptedSecretConfig as any);
+    } catch {
+      return this.recordVerification(credential, { ok: false, error: 'Stored credentials could not be read' });
+    }
+
+    const result = await this.verifiers[credential.provider]({
+      publicConfig: (credential.publicConfig as Record<string, unknown>) || {},
+      secretConfig: decrypted,
+      environment: credential.environment,
+      callbackUrl: this.webhookUrl(credential.provider, credential.merchantId),
+    });
+
+    return this.recordVerification(credential, result);
+  }
+
+  private async recordVerification(
+    credential: { id: string; merchantId: string; provider: Provider; environment: 'SANDBOX' | 'LIVE' },
+    result: VerifierResult,
+  ) {
     const updated = await this.prisma.providerCredential.update({
-      where: { id: credentialId },
+      where: { id: credential.id },
       data: result.ok
         ? { lastVerifiedAt: new Date(), lastVerificationError: null, failedVerificationCount: 0 }
         : { lastVerificationError: result.error || 'Verification failed', failedVerificationCount: { increment: 1 } },
+    });
+
+    await this.prisma.providerVerificationLog.create({
+      data: {
+        merchantId: credential.merchantId,
+        credentialId: credential.id,
+        provider: credential.provider,
+        environment: credential.environment,
+        success: result.ok,
+        responseTimeMs: result.responseTimeMs,
+        httpStatus: result.httpStatus,
+        oauthSucceeded: result.oauthSucceeded,
+        failureReason: result.ok ? null : result.error || 'Verification failed',
+      },
     });
 
     return {
@@ -267,6 +410,7 @@ export class ProviderCredentialsService {
       publicConfig: credential.publicConfig,
       secretConfig: maskedSecretConfig,
       status: credential.status,
+      healthStatus: this.healthStatus(credential),
       isDefault: credential.isDefault,
       lastVerifiedAt: credential.lastVerifiedAt,
       lastVerificationError: credential.lastVerificationError,
