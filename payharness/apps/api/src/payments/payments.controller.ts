@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
@@ -22,6 +22,16 @@ export class PaymentsController {
   @Post('paypal/order')
   paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     return this.paymentsService.createPaypalOrder(user.merchantId as string, user.userId || undefined, this.lockEnvironment(user, dto));
+  }
+
+  /**
+   * Poll this while a real M-Pesa STK push is PENDING to find out once the
+   * customer has entered their PIN (or declined, or timed out). Safe to
+   * call repeatedly.
+   */
+  @Get(':id/query')
+  query(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.paymentsService.queryPayment(user.merchantId as string, user.userId || undefined, id);
   }
 
   /**

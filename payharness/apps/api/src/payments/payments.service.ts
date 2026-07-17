@@ -1,10 +1,13 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { PaymentStatus, Prisma, Provider } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
+import { Payment, PaymentStatus, Prisma, Provider } from '@prisma/client';
 import * as http from 'http';
 import * as https from 'https';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
 import { MpesaProviderService } from '../payment-providers/mpesa/mpesa-provider.service';
+import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
 import { PaypalProviderService } from '../payment-providers/paypal/paypal-provider.service';
 import { StripeProviderService } from '../payment-providers/stripe/stripe-provider.service';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
@@ -15,14 +18,31 @@ export class PaymentsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly crypto: CredentialCryptoService,
     private readonly mpesa: MpesaProviderService,
+    private readonly mpesaVerification: MpesaVerificationService,
     private readonly stripe: StripeProviderService,
     private readonly paypal: PaypalProviderService,
     private readonly auditLogs: AuditLogsService,
   ) {}
 
   async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
-    return this.process(merchantId, userId, 'MPESA', dto, (input) => this.mpesa.createStkPush(input));
+    if (dto.environment === 'LIVE') {
+      this.blockLive('MPESA');
+    }
+
+    const credential = await this.getActiveCredential(merchantId, 'MPESA', dto.environment);
+
+    // Real push only when the caller gave us a phone to prompt and isn't
+    // asking for the instant simulated path -- otherwise fall back to the
+    // same simulate-and-settle-immediately flow the other providers use,
+    // so quick testing without a real phone still works exactly as before.
+    if (!dto.phoneNumber || dto.simulateOutcome) {
+      return this.process(merchantId, userId, 'MPESA', dto, (input) => this.mpesa.createStkPush(input));
+    }
+
+    return this.createRealMpesaStk(merchantId, userId, credential, dto);
   }
 
   async createStripeIntent(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
@@ -34,18 +54,169 @@ export class PaymentsService {
   }
 
   /**
-   * Shared flow for all three providers: validate the merchant actually has
-   * this provider connected for the requested environment, validate/attach
-   * a CheckoutSession if one was given, call the (still mocked) provider
-   * adapter, then settle the result.
+   * Checks a real, still-pending M-Pesa STK push against Safaricom and
+   * settles it (payment + transaction + checkout session + webhook
+   * forwarding) if the customer has responded. Safe to call repeatedly
+   * while genuinely still pending -- Safaricom's own "still processing"
+   * response maps to PENDING here rather than being treated as a failure.
+   */
+  async queryPayment(merchantId: string, userId: string | undefined, paymentId: string) {
+    const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, merchantId } });
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+    if (payment.provider !== 'MPESA') {
+      throw new BadRequestException('Only M-Pesa payments support status queries right now');
+    }
+    if (payment.status !== 'PENDING') {
+      // Already settled -- nothing to query, just report what we have.
+      return { paymentId: payment.id, status: payment.status };
+    }
+    if (!payment.providerReference) {
+      throw new BadRequestException('This payment has no Safaricom CheckoutRequestID to query');
+    }
+
+    const credential = await this.getActiveCredential(merchantId, 'MPESA', payment.environment);
+    const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(credential);
+    const publicConfig = credential.publicConfig as { shortcode: string };
+
+    const result = await this.mpesaVerification.queryStkStatus({
+      consumerKey: secrets.consumerKey,
+      consumerSecret: secrets.consumerSecret,
+      shortcode: publicConfig.shortcode,
+      passkey: secrets.passkey,
+      environment: payment.environment,
+      checkoutRequestId: payment.providerReference,
+    });
+
+    if (result.status === 'PENDING') {
+      return { paymentId: payment.id, status: 'PENDING' as const };
+    }
+
+    await this.settlePendingPayment(merchantId, userId, payment, result.status, result.resultDesc);
+    return { paymentId: payment.id, status: result.status };
+  }
+
+  private async createRealMpesaStk(
+    merchantId: string,
+    userId: string | undefined,
+    credential: { publicConfig: unknown; encryptedSecretConfig: unknown },
+    dto: CreateProviderPaymentDto,
+  ) {
+    const session = await this.getAndValidateSession(merchantId, dto.checkoutSessionId);
+    const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(credential);
+    const publicConfig = credential.publicConfig as { shortcode: string; businessType: 'PAYBILL' | 'TILL' };
+
+    const pushResult = await this.mpesaVerification.initiateStkPush({
+      consumerKey: secrets.consumerKey,
+      consumerSecret: secrets.consumerSecret,
+      shortcode: publicConfig.shortcode,
+      passkey: secrets.passkey,
+      businessType: publicConfig.businessType,
+      environment: 'SANDBOX',
+      callbackUrl: this.webhookUrl('MPESA', merchantId),
+      amountCents: dto.amountCents,
+      phoneNumber: dto.phoneNumber as string,
+      accountReference: (dto.metadata?.accountReference as string) || 'PayHarness',
+      description: (dto.metadata?.description as string) || 'Payment',
+    });
+
+    const payment = await this.prisma.payment.create({
+      data: {
+        merchantId,
+        provider: 'MPESA',
+        environment: 'SANDBOX',
+        amountCents: dto.amountCents,
+        currency: dto.currency,
+        status: 'PENDING',
+        customerId: dto.customerId,
+        checkoutSessionId: session?.id,
+        providerReference: pushResult.checkoutRequestId,
+        metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+        transactions: {
+          create: {
+            merchantId,
+            type: 'PAYMENT',
+            amountCents: dto.amountCents,
+            currency: dto.currency,
+            status: 'PENDING',
+            reference: pushResult.checkoutRequestId,
+            metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+          },
+        },
+      },
+    });
+
+    await this.auditLogs.create({
+      merchantId,
+      userId,
+      action: 'payment.stk_push_sent',
+      entity: 'payment',
+      entityId: payment.id,
+      metadata: { checkoutRequestId: pushResult.checkoutRequestId, phoneNumber: this.maskPhone(dto.phoneNumber!) },
+    });
+
+    return {
+      paymentId: payment.id,
+      provider: 'MPESA' as const,
+      environment: 'SANDBOX' as const,
+      status: 'PENDING' as const,
+      checkoutRequestId: pushResult.checkoutRequestId,
+      message: 'STK push sent -- ask the customer to check their phone, then poll GET /payments/:id/query',
+    };
+  }
+
+  private async settlePendingPayment(
+    merchantId: string,
+    userId: string | undefined,
+    payment: Payment,
+    finalStatus: 'SUCCEEDED' | 'FAILED',
+    reason?: string,
+  ) {
+    await this.prisma.payment.update({ where: { id: payment.id }, data: { status: finalStatus } });
+    await this.prisma.transaction.updateMany({
+      where: { paymentId: payment.id },
+      data: { status: finalStatus },
+    });
+
+    await this.auditLogs.create({
+      merchantId,
+      userId,
+      action: 'payment.settled',
+      entity: 'payment',
+      entityId: payment.id,
+      metadata: { status: finalStatus, reason },
+    });
+
+    if (payment.checkoutSessionId) {
+      const session = await this.prisma.checkoutSession.update({
+        where: { id: payment.checkoutSessionId },
+        data: { status: finalStatus },
+      });
+      await this.forwardWebhook(merchantId, {
+        event: finalStatus === 'SUCCEEDED' ? 'payment.succeeded' : 'payment.failed',
+        checkoutSessionId: session.id,
+        paymentId: payment.id,
+        provider: payment.provider,
+        environment: payment.environment,
+        amountCents: payment.amountCents,
+        currency: payment.currency,
+        status: finalStatus,
+      });
+    }
+  }
+
+  /**
+   * Shared flow for the still-simulated providers (Stripe, PayPal, and
+   * M-Pesa when no real phone number is given): validate credentials and
+   * any linked CheckoutSession, call the mock adapter, then settle
+   * immediately. See createRealMpesaStk() for the genuinely async,
+   * real-Safaricom path.
    *
    * LIVE is deliberately blocked with a clear error rather than faking a
-   * "successful" charge -- none of the three provider adapters call a real
-   * API yet, and silently pretending a live payment succeeded would risk a
-   * merchant believing they got paid when no money moved anywhere. SANDBOX
-   * settles synchronously and immediately (no real async wait to simulate),
-   * driven by an explicit simulateOutcome flag so an integrator can test
-   * both their success and failure handling on demand.
+   * "successful" charge -- Stripe/PayPal adapters don't call a real API
+   * yet, and silently pretending a live payment succeeded would risk a
+   * merchant believing they got paid when no money moved anywhere.
    */
   private async process(
     merchantId: string,
@@ -55,13 +226,10 @@ export class PaymentsService {
     callAdapter: (input: Record<string, unknown>) => Promise<{ providerReference: string }>,
   ) {
     if (dto.environment === 'LIVE') {
-      throw new BadRequestException(
-        `Live ${provider} payment processing isn't available yet -- this provider isn't connected to a real ` +
-          'payment API. Use SANDBOX to test your integration.',
-      );
+      this.blockLive(provider);
     }
 
-    await this.ensureActiveCredentials(merchantId, provider, dto.environment);
+    await this.getActiveCredential(merchantId, provider, dto.environment);
 
     const session = await this.getAndValidateSession(merchantId, dto.checkoutSessionId);
 
@@ -135,6 +303,13 @@ export class PaymentsService {
     };
   }
 
+  private blockLive(provider: Provider): never {
+    throw new BadRequestException(
+      `Live ${provider} payment processing isn't available yet -- this provider isn't connected to a real ` +
+        'payment API. Use SANDBOX to test your integration.',
+    );
+  }
+
   private async getAndValidateSession(merchantId: string, checkoutSessionId?: string) {
     if (!checkoutSessionId) {
       return null;
@@ -155,7 +330,7 @@ export class PaymentsService {
     return session;
   }
 
-  private async ensureActiveCredentials(
+  private async getActiveCredential(
     merchantId: string,
     provider: Provider,
     environment: CreateProviderPaymentDto['environment'],
@@ -166,6 +341,20 @@ export class PaymentsService {
     if (!credential) {
       throw new NotFoundException(`Active ${provider} ${environment} credentials were not found`);
     }
+    return credential;
+  }
+
+  private decryptSecrets<T>(credential: { encryptedSecretConfig: unknown }): T {
+    return this.crypto.decrypt(credential.encryptedSecretConfig as any) as T;
+  }
+
+  private webhookUrl(provider: Provider, merchantId: string) {
+    const appUrl = this.config.get<string>('APP_URL') || 'http://localhost:3000';
+    return `${appUrl.replace(/\/$/, '')}/webhooks/provider/${provider.toLowerCase()}/${merchantId}`;
+  }
+
+  private maskPhone(phone: string) {
+    return phone.length > 4 ? `${'*'.repeat(phone.length - 4)}${phone.slice(-4)}` : phone;
   }
 
   private async forwardWebhook(merchantId: string, payload: Record<string, unknown>) {
