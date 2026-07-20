@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -43,6 +43,11 @@ export class ProviderCredentialsController {
   @Roles(UserRole.OWNER)
   verify(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.credentialsService.verify(user.merchantId, id);
+  }
+
+  @Get(':id/verification-history')
+  verificationHistory(@CurrentUser() user: AuthUser, @Param('id') id: string, @Query('limit') limit?: string) {
+    return this.credentialsService.verificationHistory(user.merchantId, id, limit ? Number(limit) : undefined);
   }
 
   @Patch(':id/disconnect')

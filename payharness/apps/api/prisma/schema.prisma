@@ -262,22 +262,37 @@ model ApiKey {
   @@map("api_keys")
 }
 
+enum ProviderVerificationStatus {
+  PENDING
+  VERIFIED
+  PARTIALLY_VERIFIED
+  FAILED
+}
+
 model ProviderCredential {
-  id                       String      @id @default(uuid())
-  merchantId               String      @map("merchant_id")
+  id                       String                     @id @default(uuid())
+  merchantId               String                     @map("merchant_id")
   provider                 Provider
   environment              Environment
-  label                    String      @default("default")
-  publicConfig             Json        @default("{}") @map("public_config")
-  encryptedSecretConfig    Json        @map("encrypted_secret_config")
-  status                   Status      @default(ACTIVE)
-  isDefault                Boolean     @default(false) @map("is_default")
-  lastVerifiedAt           DateTime?   @map("last_verified_at")
-  lastVerificationError    String?     @map("last_verification_error")
-  failedVerificationCount  Int         @default(0) @map("failed_verification_count")
-  createdAt                DateTime    @default(now()) @map("created_at")
-  updatedAt                DateTime    @updatedAt @map("updated_at")
-  merchant                 Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  label                    String                     @default("default")
+  publicConfig             Json                       @default("{}") @map("public_config")
+  encryptedSecretConfig    Json                       @map("encrypted_secret_config")
+  status                   Status                     @default(ACTIVE)
+  isDefault                Boolean                    @default(false) @map("is_default")
+  verificationStatus       ProviderVerificationStatus @default(PENDING) @map("verification_status")
+  oauthVerified            Boolean                    @default(false) @map("oauth_verified")
+  accountVerified          Boolean                    @default(false) @map("account_verified")
+  webhookVerified          Boolean                    @default(false) @map("webhook_verified")
+  environmentVerified      Boolean                    @default(false) @map("environment_verified")
+  verificationLatencyMs    Int?                       @map("verification_latency_ms")
+  verificationWarnings     Json                       @default("[]") @map("verification_warnings")
+  verificationErrors       Json                       @default("[]") @map("verification_errors")
+  lastVerifiedAt           DateTime?                  @map("last_verified_at")
+  lastVerificationError    String?                    @map("last_verification_error")
+  failedVerificationCount  Int                        @default(0) @map("failed_verification_count")
+  createdAt                DateTime                   @default(now()) @map("created_at")
+  updatedAt                DateTime                   @updatedAt @map("updated_at")
+  merchant                 Merchant                   @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 
   @@unique([merchantId, provider, environment, label])
   @@map("provider_credentials")
@@ -294,6 +309,8 @@ model ProviderVerificationLog {
   httpStatus     Int?        @map("http_status")
   oauthSucceeded Boolean?    @map("oauth_succeeded")
   failureReason  String?     @map("failure_reason")
+  warnings       Json        @default("[]")
+  errors         Json        @default("[]")
   createdAt      DateTime    @default(now()) @map("created_at")
   merchant       Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
 

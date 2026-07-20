@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as https from 'https';
+import { computeOverallStatus, ProviderVerificationResult } from '../provider-verification.types';
 
 export interface MpesaVerificationInput {
   consumerKey: string;
@@ -12,13 +13,10 @@ export interface MpesaVerificationInput {
   callbackUrl: string;
 }
 
-export interface MpesaVerificationResult {
+export interface MpesaSmokeTestResult {
+  attempted: boolean;
   ok: boolean;
-  responseTimeMs: number;
-  httpStatus?: number;
-  oauthSucceeded: boolean;
   error?: string;
-  smokeTest?: { attempted: boolean; ok: boolean; error?: string };
 }
 
 export interface StkPushInput {
@@ -90,35 +88,89 @@ export class MpesaVerificationService {
 
   constructor(private readonly config: ConfigService) {}
 
-  async verifyConnection(input: MpesaVerificationInput): Promise<MpesaVerificationResult> {
+  /**
+   * Runs the full verification pipeline and returns the generic,
+   * provider-agnostic result shape (see provider-verification.types.ts).
+   * Persistence (writing this onto the ProviderCredential row and into
+   * provider_verification_logs) is the caller's job
+   * (provider-credentials.service.ts) -- this method only runs checks.
+   *
+   * Step 1: OAuth token exchange -> oauthVerified
+   * Step 2: Shortcode/business-type shape validation -> accountVerified
+   * Step 3: Environment check -> environmentVerified
+   * Step 4: Latency measurement -> latencyMs
+   * Step 5 (persistence) happens in the caller, not here
+   */
+  async verify(input: MpesaVerificationInput): Promise<ProviderVerificationResult> {
     const startedAt = Date.now();
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // Step 2 -- account/business config shape. Daraja itself doesn't have
+    // a standalone "does this shortcode exist" check outside of actually
+    // transacting, so this validates the shape PayHarness requires
+    // (5-7 digit numeric shortcode, a recognized business type) rather
+    // than confirming the shortcode is registered with Safaricom -- that
+    // can only really be confirmed by the OAuth+STK round trip below.
+    const accountVerified = /^\d{5,7}$/.test(input.shortcode) && ['PAYBILL', 'TILL'].includes(input.businessType);
+    if (!accountVerified) {
+      errors.push('Shortcode must be 5-7 digits and business type must be PAYBILL or TILL');
+    }
+
+    // Step 1 -- OAuth
+    let oauthVerified = false;
+    let httpStatus: number | undefined;
+    let smokeTest: { attempted: boolean; ok: boolean; error?: string } | undefined;
 
     try {
       const token = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
-      const responseTimeMs = Date.now() - startedAt;
-      this.logger.log(`M-Pesa OAuth succeeded in ${responseTimeMs}ms (${input.environment})`);
+      oauthVerified = true;
+      httpStatus = 200;
+      this.logger.log(`M-Pesa OAuth succeeded (${input.environment})`);
 
-      let smokeTest: MpesaVerificationResult['smokeTest'];
       const smokeTestEnabled = this.config.get<string>('ENABLE_MPESA_SMOKE_TEST') === 'true';
       if (input.environment === 'SANDBOX' && smokeTestEnabled) {
         smokeTest = await this.runSmokeTest(token, input);
+        if (!smokeTest.ok) {
+          warnings.push(`Smoke test STK push failed: ${smokeTest.error}`);
+        }
       }
-
-      return { ok: true, responseTimeMs, httpStatus: 200, oauthSucceeded: true, smokeTest };
     } catch (error) {
-      const responseTimeMs = Date.now() - startedAt;
       const apiError = error as MpesaApiError;
-      this.logger.warn(
-        `M-Pesa OAuth failed after ${responseTimeMs}ms (${input.environment}, status ${apiError.httpStatus}): ${apiError.message}`,
-      );
-      return {
-        ok: false,
-        responseTimeMs,
-        httpStatus: apiError.httpStatus,
-        oauthSucceeded: false,
-        error: this.friendlyError(apiError),
-      };
+      httpStatus = apiError.httpStatus;
+      const friendly = this.friendlyError(apiError);
+      errors.push(friendly);
+      this.logger.warn(`M-Pesa OAuth failed (${input.environment}, status ${httpStatus}): ${apiError.message}`);
     }
+
+    // Step 3 -- environment check. A lightweight version: the OAuth call
+    // above was already made against the base URL for the DECLARED
+    // environment, so oauthVerified succeeding there is itself evidence
+    // the credentials match that environment. A stronger check (calling
+    // the OTHER environment's URL too, to confirm it's REJECTED there)
+    // would catch a sandbox key mislabeled as LIVE, but doubles the
+    // number of real Safaricom calls per verification for a signal that's
+    // only useful in a fairly narrow misconfiguration case -- deferring
+    // that rather than adding it silently.
+    const environmentVerified = oauthVerified;
+
+    const latencyMs = Date.now() - startedAt;
+    const webhookVerified = false; // see provider-credentials.service.ts's own reachability probe
+
+    const result: ProviderVerificationResult = {
+      provider: 'MPESA',
+      overallStatus: computeOverallStatus({ oauthVerified, accountVerified, webhookVerified, environmentVerified }),
+      oauthVerified,
+      accountVerified,
+      webhookVerified,
+      environmentVerified,
+      latencyMs,
+      verifiedAt: oauthVerified ? new Date() : null,
+      errors,
+      warnings,
+    };
+
+    return result;
   }
 
   /** Generates a short-lived OAuth token via Daraja's client-credentials grant. Never logs the token itself. */
@@ -144,7 +196,7 @@ export class MpesaVerificationService {
   private async runSmokeTest(
     accessToken: string,
     input: MpesaVerificationInput,
-  ): Promise<MpesaVerificationResult['smokeTest']> {
+  ): Promise<MpesaSmokeTestResult> {
     try {
       await this.initiateStkPushWithToken(accessToken, {
         consumerKey: input.consumerKey,
