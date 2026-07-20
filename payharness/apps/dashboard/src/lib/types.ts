@@ -253,7 +253,15 @@ export interface ProviderCredentialRecord {
   environment: string;
   label: string;
   status: string;
-  healthStatus: 'VERIFIED' | 'PENDING' | 'INVALID' | 'DISABLED';
+  healthStatus: 'VERIFIED' | 'PENDING' | 'PARTIALLY_VERIFIED' | 'INVALID' | 'DISABLED';
+  verificationStatus: string;
+  oauthVerified: boolean;
+  accountVerified: boolean;
+  webhookVerified: boolean;
+  environmentVerified: boolean;
+  verificationLatencyMs: number | null;
+  verificationWarnings: string[];
+  verificationErrors: string[];
   isDefault: boolean;
   lastVerifiedAt: string | null;
   lastVerificationError: string | null;
@@ -262,5 +270,18 @@ export interface ProviderCredentialRecord {
   publicConfig?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProviderVerificationLogRecord {
+  id: string;
+  provider: string;
+  environment: string;
+  success: boolean;
+  responseTimeMs: number | null;
+  oauthSucceeded: boolean | null;
+  failureReason: string | null;
+  warnings: string[];
+  errors: string[];
+  createdAt: string;
 }
 

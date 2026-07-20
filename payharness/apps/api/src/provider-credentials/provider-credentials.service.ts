@@ -1,23 +1,16 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, Provider } from '@prisma/client';
+import { Prisma, Provider, ProviderVerificationStatus } from '@prisma/client';
 import * as http from 'http';
 import * as https from 'https';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
+import { computeOverallStatus, ProviderVerificationResult } from '../payment-providers/provider-verification.types';
 import { PlatformGatewaysService } from '../platform/platform-gateways/platform-gateways.service';
 import { ProviderAvailabilityService } from '../provider-availability/provider-availability.service';
 import { SaveProviderCredentialDto } from './dto/provider-credential.dto';
-
-type VerifierResult = {
-  ok: boolean;
-  error?: string;
-  responseTimeMs?: number;
-  httpStatus?: number;
-  oauthSucceeded?: boolean;
-};
 
 interface VerifierContext {
   publicConfig: Record<string, unknown>;
@@ -36,7 +29,7 @@ export class ProviderCredentialsService {
    * in later is just replacing their function body here, same as M-Pesa
    * was until this phase.
    */
-  private readonly verifiers: Record<Provider, (ctx: VerifierContext) => Promise<VerifierResult>>;
+  private readonly verifiers: Record<Provider, (ctx: VerifierContext) => Promise<ProviderVerificationResult>>;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -51,13 +44,13 @@ export class ProviderCredentialsService {
       MPESA: async (ctx) => {
         const { publicConfig, secretConfig } = ctx;
         if (!secretConfig.consumerKey || !secretConfig.consumerSecret || !secretConfig.passkey) {
-          return { ok: false, error: 'M-Pesa credentials are missing required fields' };
+          return this.shapeFailure('MPESA', ['M-Pesa credentials are missing required fields']);
         }
         if (!publicConfig.shortcode || !publicConfig.businessType) {
-          return { ok: false, error: 'Shortcode and business type are required' };
+          return this.shapeFailure('MPESA', ['Shortcode and business type are required']);
         }
 
-        const result = await this.mpesaVerification.verifyConnection({
+        return this.mpesaVerification.verify({
           consumerKey: secretConfig.consumerKey as string,
           consumerSecret: secretConfig.consumerSecret as string,
           passkey: secretConfig.passkey as string,
@@ -66,28 +59,58 @@ export class ProviderCredentialsService {
           environment: ctx.environment,
           callbackUrl: ctx.callbackUrl,
         });
-
-        return {
-          ok: result.ok,
-          error: result.error,
-          responseTimeMs: result.responseTimeMs,
-          httpStatus: result.httpStatus,
-          oauthSucceeded: result.oauthSucceeded,
-        };
       },
+      // Mocked shape-checks for now, matching StripeProviderService/
+      // PaypalProviderService's own still-mocked payment adapters -- but
+      // already returning the SAME generic result shape M-Pesa does, so a
+      // future phase can wire real Stripe/PayPal API calls in here without
+      // anything downstream (health endpoint, dashboard, verification log)
+      // needing to change.
       STRIPE: async ({ secretConfig }) => {
-        if (!secretConfig.secretKey) {
-          return { ok: false, error: 'Stripe secret key is missing' };
-        }
-        return { ok: true };
+        const accountVerified = Boolean(secretConfig.secretKey);
+        return this.shapeResult('STRIPE', {
+          oauthVerified: accountVerified,
+          accountVerified,
+          environmentVerified: accountVerified,
+          errors: accountVerified ? [] : ['Stripe secret key is missing'],
+        });
       },
       PAYPAL: async ({ secretConfig }) => {
-        if (!secretConfig.clientSecret) {
-          return { ok: false, error: 'PayPal client secret is missing' };
-        }
-        return { ok: true };
+        const accountVerified = Boolean(secretConfig.clientSecret);
+        return this.shapeResult('PAYPAL', {
+          oauthVerified: accountVerified,
+          accountVerified,
+          environmentVerified: accountVerified,
+          errors: accountVerified ? [] : ['PayPal client secret is missing'],
+        });
       },
     };
+  }
+
+  private shapeResult(
+    provider: string,
+    partial: Pick<ProviderVerificationResult, 'oauthVerified' | 'accountVerified' | 'environmentVerified'> & {
+      errors: string[];
+    },
+  ): ProviderVerificationResult {
+    const overallStatus: ProviderVerificationResult['overallStatus'] =
+      partial.errors.length === 0 ? 'VERIFIED' : 'FAILED';
+    return {
+      provider,
+      overallStatus,
+      oauthVerified: partial.oauthVerified,
+      accountVerified: partial.accountVerified,
+      webhookVerified: false,
+      environmentVerified: partial.environmentVerified,
+      latencyMs: 0,
+      verifiedAt: overallStatus === 'VERIFIED' ? new Date() : null,
+      errors: partial.errors,
+      warnings: [],
+    };
+  }
+
+  private shapeFailure(provider: string, errors: string[]): ProviderVerificationResult {
+    return this.shapeResult(provider, { oauthVerified: false, accountVerified: false, environmentVerified: false, errors });
   }
 
   async save(merchantId: string, userId: string, provider: Provider, dto: SaveProviderCredentialDto) {
@@ -166,17 +189,41 @@ export class ProviderCredentialsService {
 
   async health(merchantId: string, id: string) {
     const credential = await this.getOwnedOrThrow(merchantId, id);
-    const webhookReachable = await this.checkWebhookReachable(credential.provider, credential.merchantId);
     return {
-      verified: Boolean(credential.lastVerifiedAt) && credential.status === 'ACTIVE',
-      environment: credential.environment,
-      lastVerifiedAt: credential.lastVerifiedAt,
+      provider: credential.provider,
       status: this.healthStatus(credential),
-      oauth: credential.provider === 'MPESA' ? Boolean(credential.lastVerifiedAt) : null,
-      webhook: webhookReachable,
+      verificationStatus: credential.verificationStatus,
+      oauth: credential.oauthVerified,
+      account: credential.accountVerified,
+      webhook: credential.webhookVerified,
+      environment: credential.environment,
+      environmentVerified: credential.environmentVerified,
+      latency: credential.verificationLatencyMs,
+      lastVerifiedAt: credential.lastVerifiedAt,
       lastError: credential.lastVerificationError,
       failedVerificationCount: credential.failedVerificationCount,
+      warnings: credential.verificationWarnings,
+      errors: credential.verificationErrors,
+      nextRecommendedAction: this.nextRecommendedAction(credential),
     };
+  }
+
+  private nextRecommendedAction(credential: {
+    status: string;
+    verificationStatus: string;
+    oauthVerified: boolean;
+    webhookVerified: boolean;
+    lastVerificationError: string | null;
+  }): string {
+    if (credential.status === 'REVOKED') return 'Reconnect this provider to use it again';
+    if (!credential.oauthVerified) {
+      return credential.lastVerificationError
+        ? `Fix credentials: ${credential.lastVerificationError}`
+        : 'Run verification to check these credentials';
+    }
+    if (!credential.webhookVerified) return 'Check that your API is publicly reachable so callbacks can be delivered';
+    if (credential.verificationStatus === 'VERIFIED') return 'No action needed';
+    return 'Re-run verification';
   }
 
   /**
@@ -224,13 +271,11 @@ export class ProviderCredentialsService {
    */
   private healthStatus(credential: {
     status: string;
-    lastVerifiedAt: Date | null;
-    lastVerificationError: string | null;
-  }): 'VERIFIED' | 'PENDING' | 'INVALID' | 'DISABLED' {
+    verificationStatus: string;
+  }): 'VERIFIED' | 'PENDING' | 'PARTIALLY_VERIFIED' | 'INVALID' | 'DISABLED' {
     if (credential.status === 'REVOKED') return 'DISABLED';
-    if (credential.lastVerificationError) return 'INVALID';
-    if (credential.lastVerifiedAt) return 'VERIFIED';
-    return 'PENDING';
+    if (credential.verificationStatus === 'FAILED') return 'INVALID';
+    return credential.verificationStatus as 'VERIFIED' | 'PENDING' | 'PARTIALLY_VERIFIED';
   }
 
   async disconnect(merchantId: string, userId: string, id: string) {
@@ -317,7 +362,7 @@ export class ProviderCredentialsService {
     try {
       decrypted = this.crypto.decrypt(credential.encryptedSecretConfig as any);
     } catch {
-      return this.recordVerification(credential, { ok: false, error: 'Stored credentials could not be read' });
+      return this.recordVerification(credential, this.shapeFailure(credential.provider, ['Stored credentials could not be read']));
     }
 
     const result = await this.verifiers[credential.provider]({
@@ -327,18 +372,48 @@ export class ProviderCredentialsService {
       callbackUrl: this.webhookUrl(credential.provider, credential.merchantId),
     });
 
-    return this.recordVerification(credential, result);
+    // The verifier functions above don't have a clean way to check our own
+    // webhook reachability (that's this service's concern, not a provider
+    // API concern) -- fill it in here rather than duplicating the probe in
+    // every verifier.
+    const webhookVerified = await this.checkWebhookReachable(credential.provider, credential.merchantId);
+    const withWebhook: ProviderVerificationResult = {
+      ...result,
+      webhookVerified,
+      overallStatus: computeOverallStatus({
+        oauthVerified: result.oauthVerified,
+        accountVerified: result.accountVerified,
+        webhookVerified,
+        environmentVerified: result.environmentVerified,
+      }),
+    };
+
+    return this.recordVerification(credential, withWebhook);
   }
 
   private async recordVerification(
     credential: { id: string; merchantId: string; provider: Provider; environment: 'SANDBOX' | 'LIVE' },
-    result: VerifierResult,
+    result: ProviderVerificationResult,
   ) {
+    const verified = result.overallStatus === 'VERIFIED';
+    const verificationStatus: ProviderVerificationStatus = result.overallStatus as ProviderVerificationStatus;
+    const primaryError = result.errors[0];
+
     const updated = await this.prisma.providerCredential.update({
       where: { id: credential.id },
-      data: result.ok
-        ? { lastVerifiedAt: new Date(), lastVerificationError: null, failedVerificationCount: 0 }
-        : { lastVerificationError: result.error || 'Verification failed', failedVerificationCount: { increment: 1 } },
+      data: {
+        verificationStatus,
+        oauthVerified: result.oauthVerified,
+        accountVerified: result.accountVerified,
+        webhookVerified: result.webhookVerified,
+        environmentVerified: result.environmentVerified,
+        verificationLatencyMs: result.latencyMs,
+        verificationWarnings: result.warnings as Prisma.InputJsonValue,
+        verificationErrors: result.errors as Prisma.InputJsonValue,
+        ...(verified
+          ? { lastVerifiedAt: new Date(), lastVerificationError: null, failedVerificationCount: 0 }
+          : { lastVerificationError: primaryError || 'Verification failed', failedVerificationCount: { increment: 1 } }),
+      },
     });
 
     await this.prisma.providerVerificationLog.create({
@@ -347,17 +422,18 @@ export class ProviderCredentialsService {
         credentialId: credential.id,
         provider: credential.provider,
         environment: credential.environment,
-        success: result.ok,
-        responseTimeMs: result.responseTimeMs,
-        httpStatus: result.httpStatus,
-        oauthSucceeded: result.oauthSucceeded,
-        failureReason: result.ok ? null : result.error || 'Verification failed',
+        success: verified,
+        responseTimeMs: result.latencyMs,
+        oauthSucceeded: result.oauthVerified,
+        failureReason: verified ? null : primaryError || 'Verification failed',
+        warnings: result.warnings as Prisma.InputJsonValue,
+        errors: result.errors as Prisma.InputJsonValue,
       },
     });
 
     return {
-      verified: result.ok,
-      message: result.ok ? 'Credentials look valid' : result.error || 'Verification failed',
+      verified,
+      message: verified ? 'Credentials look valid' : primaryError || 'Verification failed',
       lastVerifiedAt: updated.lastVerifiedAt,
       failedVerificationCount: updated.failedVerificationCount,
     };
@@ -386,6 +462,14 @@ export class ProviderCredentialsService {
     encryptedSecretConfig: unknown;
     status: string;
     isDefault: boolean;
+    verificationStatus: string;
+    oauthVerified: boolean;
+    accountVerified: boolean;
+    webhookVerified: boolean;
+    environmentVerified: boolean;
+    verificationLatencyMs: number | null;
+    verificationWarnings: unknown;
+    verificationErrors: unknown;
     lastVerifiedAt: Date | null;
     lastVerificationError: string | null;
     failedVerificationCount: number;
@@ -411,6 +495,14 @@ export class ProviderCredentialsService {
       secretConfig: maskedSecretConfig,
       status: credential.status,
       healthStatus: this.healthStatus(credential),
+      verificationStatus: credential.verificationStatus,
+      oauthVerified: credential.oauthVerified,
+      accountVerified: credential.accountVerified,
+      webhookVerified: credential.webhookVerified,
+      environmentVerified: credential.environmentVerified,
+      verificationLatencyMs: credential.verificationLatencyMs,
+      verificationWarnings: credential.verificationWarnings,
+      verificationErrors: credential.verificationErrors,
       isDefault: credential.isDefault,
       lastVerifiedAt: credential.lastVerifiedAt,
       lastVerificationError: credential.lastVerificationError,
@@ -419,5 +511,15 @@ export class ProviderCredentialsService {
       createdAt: credential.createdAt,
       updatedAt: credential.updatedAt,
     };
+  }
+
+  /** Verification history for a single credential -- most recent first. */
+  async verificationHistory(merchantId: string, id: string, limit = 20) {
+    await this.getOwnedOrThrow(merchantId, id);
+    return this.prisma.providerVerificationLog.findMany({
+      where: { credentialId: id, merchantId },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 100),
+    });
   }
 }
