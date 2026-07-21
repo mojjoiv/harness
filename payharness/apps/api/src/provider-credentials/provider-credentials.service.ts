@@ -17,6 +17,8 @@ interface VerifierContext {
   secretConfig: Record<string, unknown>;
   environment: 'SANDBOX' | 'LIVE';
   callbackUrl: string;
+  credentialId: string;
+  merchantId: string;
 }
 
 @Injectable()
