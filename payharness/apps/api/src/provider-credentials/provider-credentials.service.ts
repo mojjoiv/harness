@@ -45,19 +45,20 @@ export class ProviderCredentialsService {
     this.verifiers = {
       MPESA: async (ctx) => {
         const { publicConfig, secretConfig } = ctx;
-        if (!secretConfig.consumerKey || !secretConfig.consumerSecret || !secretConfig.passkey) {
-          return this.shapeFailure('MPESA', ['M-Pesa credentials are missing required fields']);
-        }
-        if (!publicConfig.shortcode || !publicConfig.businessType) {
-          return this.shapeFailure('MPESA', ['Shortcode and business type are required']);
-        }
-
+        // No pre-check bypass here on purpose: verifyConfiguration() and
+        // verifyOAuth() inside the adapter already handle missing/invalid
+        // fields correctly (a missing consumerKey just fails OAuth with a
+        // friendly error). Every path needs to go through verify() so
+        // every outcome -- including "fields are missing" -- actually
+        // gets persisted, since persistence now lives inside the adapter.
         return this.mpesaVerification.verify({
-          consumerKey: secretConfig.consumerKey as string,
-          consumerSecret: secretConfig.consumerSecret as string,
-          passkey: secretConfig.passkey as string,
-          shortcode: publicConfig.shortcode as string,
-          businessType: publicConfig.businessType as 'PAYBILL' | 'TILL',
+          credentialId: ctx.credentialId,
+          merchantId: ctx.merchantId,
+          consumerKey: (secretConfig.consumerKey as string) || '',
+          consumerSecret: (secretConfig.consumerSecret as string) || '',
+          passkey: (secretConfig.passkey as string) || '',
+          shortcode: (publicConfig.shortcode as string) || '',
+          businessType: (publicConfig.businessType as 'PAYBILL' | 'TILL') || 'PAYBILL',
           environment: ctx.environment,
           callbackUrl: ctx.callbackUrl,
         });
