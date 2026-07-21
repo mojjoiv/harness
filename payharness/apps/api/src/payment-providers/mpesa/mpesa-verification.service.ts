@@ -1,9 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma, Provider, ProviderVerificationStatus } from '@prisma/client';
 import * as https from 'https';
+import { checkUrlReachable } from '../../common/http/reachability.util';
+import { PrismaService } from '../../common/prisma.service';
 import { computeOverallStatus, ProviderVerificationResult } from '../provider-verification.types';
 
 export interface MpesaVerificationInput {
+  credentialId: string;
+  merchantId: string;
   consumerKey: string;
   consumerSecret: string;
   shortcode: string;
@@ -57,6 +62,23 @@ export interface StkQueryResult {
   resultDesc?: string;
 }
 
+/**
+ * Phase 2 (capability detection/persistence/API exposure) isn't built yet
+ * -- this is only the static list the verifyCapabilities() pipeline stage
+ * currently reports, not persisted or exposed anywhere yet. Kept here now
+ * so Phase 2 has a concrete starting point rather than inventing it from
+ * scratch.
+ */
+export interface ProviderCapabilities {
+  supportsSTKPush: boolean;
+  supportsC2B: boolean;
+  supportsB2C: boolean;
+  supportsTransactionStatus: boolean;
+  supportsReversal: boolean;
+  supportsBalance: boolean;
+  supportsRegisterUrls: boolean;
+}
+
 interface MpesaApiError extends Error {
   httpStatus?: number;
   daraja?: { errorCode?: string; errorMessage?: string };
@@ -71,106 +93,224 @@ const SANDBOX_TEST_PHONE = '254708374149';
  * Talks to the real Safaricom Daraja API to confirm a merchant's M-Pesa
  * credentials actually work -- not a shape check, an actual OAuth exchange.
  * Deliberately kept independent from MpesaProviderService (the STK-push
- * adapter used by the payments/checkout flow), per the separation the spec
- * asked for: this service answers "are these credentials valid", the other
- * answers "process this payment".
+ * adapter used by the payments/checkout flow): this service answers "are
+ * these credentials valid", the other answers "process this payment".
  *
  * IMPORTANT: I cannot reach sandbox.safaricom.co.ke from my sandbox to test
  * this end-to-end -- network egress here only covers package registries.
- * Built strictly to Safaricom's documented Daraja API contract (OAuth
- * client-credentials grant, STK push request shape), but please confirm a
- * real verify actually authenticates once this is deployed somewhere with
- * normal internet access.
+ * Built strictly to Safaricom's documented Daraja API contract, but please
+ * confirm a real verify actually authenticates once this is deployed
+ * somewhere with normal internet access.
  */
 @Injectable()
 export class MpesaVerificationService {
   private readonly logger = new Logger(MpesaVerificationService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /**
-   * Runs the full verification pipeline and returns the generic,
-   * provider-agnostic result shape (see provider-verification.types.ts).
-   * Persistence (writing this onto the ProviderCredential row and into
-   * provider_verification_logs) is the caller's job
-   * (provider-credentials.service.ts) -- this method only runs checks.
-   *
-   * Step 1: OAuth token exchange -> oauthVerified
-   * Step 2: Shortcode/business-type shape validation -> accountVerified
-   * Step 3: Environment check -> environmentVerified
-   * Step 4: Latency measurement -> latencyMs
-   * Step 5 (persistence) happens in the caller, not here
+   * Public API stays adapter.verify() -- internally it's now an explicit
+   * pipeline of named stages run in order, instead of one method doing
+   * everything inline. Each stage is independently testable/reusable, and
+   * this is also where persistence and webhook-checking moved TO (they
+   * used to live in the caller, provider-credentials.service.ts) -- this
+   * adapter is now fully self-contained for M-Pesa specifically. Stripe
+   * and PayPal don't have a dedicated adapter class yet (still inline
+   * shape-checks in provider-credentials.service.ts), so they're still
+   * persisted by the caller for now -- that asymmetry is intentional,
+   * not an oversight: M-Pesa is the first full pipeline adapter, matching
+   * how the capability-detection phase after this one is scoped.
    */
   async verify(input: MpesaVerificationInput): Promise<ProviderVerificationResult> {
     const startedAt = Date.now();
-    const errors: string[] = [];
-    const warnings: string[] = [];
+    this.emitVerificationEvents('provider.verification.started', input, null);
 
-    // Step 2 -- account/business config shape. Daraja itself doesn't have
-    // a standalone "does this shortcode exist" check outside of actually
-    // transacting, so this validates the shape PayHarness requires
-    // (5-7 digit numeric shortcode, a recognized business type) rather
-    // than confirming the shortcode is registered with Safaricom -- that
-    // can only really be confirmed by the OAuth+STK round trip below.
+    const configCheck = this.verifyConfiguration(input);
+    const oauthCheck = await this.verifyOAuth(input);
+    const environmentVerified = oauthCheck.oauthVerified;
+    const webhookVerified = await this.verifyWebhook(input);
+    const capabilities = this.verifyCapabilities(oauthCheck.oauthVerified);
+
+    const latencyMs = Date.now() - startedAt;
+    const errors = [...configCheck.errors, ...oauthCheck.errors];
+    const warnings = [...oauthCheck.warnings];
+
+    const result = this.calculateHealth({
+      provider: 'MPESA',
+      oauthVerified: oauthCheck.oauthVerified,
+      accountVerified: configCheck.accountVerified,
+      webhookVerified,
+      environmentVerified,
+      latencyMs,
+      errors,
+      warnings,
+    });
+
+    this.logger.log(
+      `M-Pesa capabilities detected: ${Object.entries(capabilities)
+        .filter(([, supported]) => supported)
+        .map(([name]) => name)
+        .join(', ') || 'none'}`,
+    );
+
+    await this.persistVerification(input, result);
+    this.emitVerificationEvents(
+      result.overallStatus === 'FAILED' ? 'provider.verification.failed' : 'provider.verification.completed',
+      input,
+      result,
+    );
+
+    return result;
+  }
+
+  /** Stage: shape-validate the shortcode/business type before spending a real API call on OAuth. */
+  private verifyConfiguration(input: MpesaVerificationInput): { accountVerified: boolean; errors: string[] } {
+    // Daraja itself doesn't have a standalone "does this shortcode exist"
+    // check outside of actually transacting, so this validates the shape
+    // PayHarness requires rather than confirming registration with
+    // Safaricom -- that can only really be confirmed by the OAuth+STK
+    // round trip in verifyOAuth() below.
     const accountVerified = /^\d{5,7}$/.test(input.shortcode) && ['PAYBILL', 'TILL'].includes(input.businessType);
-    if (!accountVerified) {
-      errors.push('Shortcode must be 5-7 digits and business type must be PAYBILL or TILL');
-    }
+    return {
+      accountVerified,
+      errors: accountVerified ? [] : ['Shortcode must be 5-7 digits and business type must be PAYBILL or TILL'],
+    };
+  }
 
-    // Step 1 -- OAuth
-    let oauthVerified = false;
-    let httpStatus: number | undefined;
-    let smokeTest: { attempted: boolean; ok: boolean; error?: string } | undefined;
-
+  /** Stage: the actual OAuth client-credentials exchange against Safaricom, plus the optional smoke test. */
+  private async verifyOAuth(
+    input: MpesaVerificationInput,
+  ): Promise<{ oauthVerified: boolean; errors: string[]; warnings: string[] }> {
     try {
       const token = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
-      oauthVerified = true;
-      httpStatus = 200;
       this.logger.log(`M-Pesa OAuth succeeded (${input.environment})`);
 
+      const warnings: string[] = [];
       const smokeTestEnabled = this.config.get<string>('ENABLE_MPESA_SMOKE_TEST') === 'true';
       if (input.environment === 'SANDBOX' && smokeTestEnabled) {
-        smokeTest = await this.runSmokeTest(token, input);
+        const smokeTest = await this.runSmokeTest(token, input);
         if (!smokeTest.ok) {
           warnings.push(`Smoke test STK push failed: ${smokeTest.error}`);
         }
       }
+      return { oauthVerified: true, errors: [], warnings };
     } catch (error) {
       const apiError = error as MpesaApiError;
-      httpStatus = apiError.httpStatus;
       const friendly = this.friendlyError(apiError);
-      errors.push(friendly);
-      this.logger.warn(`M-Pesa OAuth failed (${input.environment}, status ${httpStatus}): ${apiError.message}`);
+      this.logger.warn(
+        `M-Pesa OAuth failed (${input.environment}, status ${apiError.httpStatus}): ${apiError.message}`,
+      );
+      return { oauthVerified: false, errors: [friendly], warnings: [] };
     }
+  }
 
-    // Step 3 -- environment check. A lightweight version: the OAuth call
-    // above was already made against the base URL for the DECLARED
-    // environment, so oauthVerified succeeding there is itself evidence
-    // the credentials match that environment. A stronger check (calling
-    // the OTHER environment's URL too, to confirm it's REJECTED there)
-    // would catch a sandbox key mislabeled as LIVE, but doubles the
-    // number of real Safaricom calls per verification for a signal that's
-    // only useful in a fairly narrow misconfiguration case -- deferring
-    // that rather than adding it silently.
-    const environmentVerified = oauthVerified;
+  /** Stage: confirm our own generated callback URL actually resolves. */
+  private async verifyWebhook(input: MpesaVerificationInput): Promise<boolean> {
+    return checkUrlReachable(input.callbackUrl);
+  }
 
-    const latencyMs = Date.now() - startedAt;
-    const webhookVerified = false; // see provider-credentials.service.ts's own reachability probe
-
-    const result: ProviderVerificationResult = {
-      provider: 'MPESA',
-      overallStatus: computeOverallStatus({ oauthVerified, accountVerified, webhookVerified, environmentVerified }),
-      oauthVerified,
-      accountVerified,
-      webhookVerified,
-      environmentVerified,
-      latencyMs,
-      verifiedAt: oauthVerified ? new Date() : null,
-      errors,
-      warnings,
+  /**
+   * Stage: what can this provider actually do, given how it's configured?
+   * Static for now -- STK Push and transaction status are the only two
+   * flows this codebase implements today. Not yet persisted or exposed
+   * via the API/dashboard -- that's Phase 2, this just detects and logs
+   * it so Phase 2 has something concrete to build on.
+   */
+  private verifyCapabilities(oauthVerified: boolean): ProviderCapabilities {
+    return {
+      supportsSTKPush: oauthVerified,
+      supportsC2B: false,
+      supportsB2C: false,
+      supportsTransactionStatus: oauthVerified,
+      supportsReversal: false,
+      supportsBalance: false,
+      supportsRegisterUrls: false,
     };
+  }
 
-    return result;
+  /** Stage: combine the individual checks into the shared VERIFIED/PARTIALLY_VERIFIED/FAILED result shape. */
+  private calculateHealth(input: {
+    provider: string;
+    oauthVerified: boolean;
+    accountVerified: boolean;
+    webhookVerified: boolean;
+    environmentVerified: boolean;
+    latencyMs: number;
+    errors: string[];
+    warnings: string[];
+  }): ProviderVerificationResult {
+    return {
+      provider: input.provider,
+      overallStatus: computeOverallStatus(input),
+      oauthVerified: input.oauthVerified,
+      accountVerified: input.accountVerified,
+      webhookVerified: input.webhookVerified,
+      environmentVerified: input.environmentVerified,
+      latencyMs: input.latencyMs,
+      verifiedAt: input.oauthVerified ? new Date() : null,
+      errors: input.errors,
+      warnings: input.warnings,
+    };
+  }
+
+  /** Stage: write the result onto the ProviderCredential row and into provider_verification_logs. */
+  private async persistVerification(input: MpesaVerificationInput, result: ProviderVerificationResult): Promise<void> {
+    const verified = result.overallStatus === 'VERIFIED';
+    const primaryError = result.errors[0];
+
+    await this.prisma.providerCredential.update({
+      where: { id: input.credentialId },
+      data: {
+        verificationStatus: result.overallStatus as ProviderVerificationStatus,
+        oauthVerified: result.oauthVerified,
+        accountVerified: result.accountVerified,
+        webhookVerified: result.webhookVerified,
+        environmentVerified: result.environmentVerified,
+        verificationLatencyMs: result.latencyMs,
+        verificationWarnings: result.warnings as Prisma.InputJsonValue,
+        verificationErrors: result.errors as Prisma.InputJsonValue,
+        ...(verified
+          ? { lastVerifiedAt: new Date(), lastVerificationError: null, failedVerificationCount: 0 }
+          : { lastVerificationError: primaryError || 'Verification failed', failedVerificationCount: { increment: 1 } }),
+      },
+    });
+
+    await this.prisma.providerVerificationLog.create({
+      data: {
+        merchantId: input.merchantId,
+        credentialId: input.credentialId,
+        provider: 'MPESA' as Provider,
+        environment: input.environment,
+        success: verified,
+        responseTimeMs: result.latencyMs,
+        oauthSucceeded: result.oauthVerified,
+        failureReason: verified ? null : primaryError || 'Verification failed',
+        warnings: result.warnings as Prisma.InputJsonValue,
+        errors: result.errors as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  /**
+   * Stage: domain events. No event infrastructure exists in this codebase
+   * yet -- that's a separate future phase (introducing domain events
+   * platform-wide). This is a deliberate, clearly-labeled stub: it logs
+   * what WOULD be emitted, in the right shape and at the right pipeline
+   * step, so wiring in a real emitter later is a small, local change here
+   * rather than a new pipeline design.
+   */
+  private emitVerificationEvents(
+    event: 'provider.verification.started' | 'provider.verification.completed' | 'provider.verification.failed',
+    input: MpesaVerificationInput,
+    result: ProviderVerificationResult | null,
+  ): void {
+    this.logger.debug(
+      `[event:${event}] provider=MPESA merchantId=${input.merchantId} credentialId=${input.credentialId}` +
+        (result ? ` status=${result.overallStatus}` : ''),
+    );
   }
 
   /** Generates a short-lived OAuth token via Daraja's client-credentials grant. Never logs the token itself. */
