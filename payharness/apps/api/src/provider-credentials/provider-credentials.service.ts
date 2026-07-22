@@ -373,12 +373,32 @@ export class ProviderCredentialsService {
       secretConfig: decrypted,
       environment: credential.environment,
       callbackUrl: this.webhookUrl(credential.provider, credential.merchantId),
+      credentialId: credential.id,
+      merchantId: credential.merchantId,
     });
 
-    // The verifier functions above don't have a clean way to check our own
-    // webhook reachability (that's this service's concern, not a provider
-    // API concern) -- fill it in here rather than duplicating the probe in
-    // every verifier.
+    // M-Pesa's adapter now runs its own full pipeline internally --
+    // including its own webhook check and persistence (see
+    // MpesaVerificationService.verify()) -- so re-checking the webhook
+    // and calling recordVerification() again here would just write the
+    // same result a second time. Stripe/PayPal don't have a dedicated
+    // adapter class yet (still inline shape-checks above), so they still
+    // need this service to do the webhook check + persistence for them.
+    if (credential.provider === 'MPESA') {
+      const updated = await this.prisma.providerCredential.findUniqueOrThrow({ where: { id: credential.id } });
+      return {
+        verified: result.overallStatus === 'VERIFIED',
+        message: result.overallStatus === 'VERIFIED' ? 'Credentials look valid' : result.errors[0] || 'Verification failed',
+        lastVerifiedAt: updated.lastVerifiedAt,
+        failedVerificationCount: updated.failedVerificationCount,
+        healthStatus: this.healthStatus(updated),
+      };
+    }
+
+    // The Stripe/PayPal shape-checks above don't have a clean way to check
+    // our own webhook reachability (that's this service's concern, not a
+    // provider API concern) -- fill it in here rather than duplicating the
+    // probe in every verifier.
     const webhookVerified = await this.checkWebhookReachable(credential.provider, credential.merchantId);
     const withWebhook: ProviderVerificationResult = {
       ...result,
