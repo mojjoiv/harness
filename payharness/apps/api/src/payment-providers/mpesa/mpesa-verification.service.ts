@@ -3,13 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, Provider, ProviderVerificationStatus } from '@prisma/client';
 import * as https from 'https';
 import * as http from 'http';
-import * as url from 'url';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../common/prisma.service';
-import { computeOverallStatus, ProviderVerificationResult } from '../provider-verification.types';
 
 // --------------------------------------------------------------------
-// Interfaces (unchanged from original, except adding WebhookVerificationResult)
+// Interfaces (unchanged)
 // --------------------------------------------------------------------
 export interface MpesaVerificationInput {
   credentialId: string;
@@ -82,10 +80,10 @@ export interface WebhookVerificationResult {
   reachable: boolean;
   statusCode?: number;
   latencyMs?: number;
-  error?: string;           // human-readable error message
-  networkError?: string;    // low‑level network/exception details
+  error?: string;
+  networkError?: string;
   requestUrl: string;
-  responseBody?: string;    // truncated to avoid huge logs
+  responseBody?: string;
 }
 
 interface MpesaApiError extends Error {
@@ -122,7 +120,7 @@ export class MpesaVerificationService {
     // Stage 2: OAuth (actual API call)
     const oauthCheck = await this.verifyOAuth(input, correlationId);
 
-    // Stage 3: Webhook reachability (detailed)
+    // Stage 3: Webhook reachability (POST with lightweight payload)
     const webhookResult = await this.verifyWebhook(input, correlationId);
     const webhookReachable = webhookResult.reachable;
 
@@ -155,7 +153,6 @@ export class MpesaVerificationService {
     if (oauthCheck.warnings.length) {
       warnings.push({ step: 'oauth', warnings: oauthCheck.warnings });
     }
-    // Add correlationId to warnings for storage (since we cannot add a column)
     warnings.push({ correlationId });
 
     // Compute overall status per the new rules:
@@ -163,28 +160,14 @@ export class MpesaVerificationService {
     // If OAuth, environment, account, and webhook (including 405) pass -> VERIFIED.
     const oauthOk = oauthCheck.oauthVerified;
     const accountOk = configCheck.accountVerified;
-    const envOk = true; // environment is always considered verified if we got this far? Actually we have environmentVerified flag in result.
-    // We'll set environmentVerified = true if no errors related to environment.
-    // In this service, environment is just a string; we consider it verified if OAuth succeeded with that env.
-    const environmentVerified = oauthOk; // since OAuth uses the environment to connect.
+    const environmentVerified = oauthOk; // OAuth uses the environment
 
     let overallStatus: ProviderVerificationStatus;
     if (oauthOk && accountOk && webhookReachable && environmentVerified) {
       overallStatus = 'VERIFIED';
-    } else if (!oauthOk || !accountOk || !webhookReachable || !environmentVerified) {
-      // If any component fails (including webhook), it's PARTIALLY_VERIFIED
-      // unless all fail? We'll mark as FAILED only if critical components fail? 
-      // The original computeOverallStatus may mark FAILED if OAuth fails and others fail? 
-      // We'll follow the rule: only mark PARTIALLY_VERIFIED when a component fails.
-      // If OAuth fails, it's a component failure -> PARTIALLY_VERIFIED.
-      // If webhook fails, it's a component failure -> PARTIALLY_VERIFIED.
-      // Only if everything fails? Still PARTIALLY_VERIFIED because some components might pass.
-      // The spec says: "Only mark PARTIALLY_VERIFIED when an actual verification component fails."
-      // So if any fails, it's PARTIALLY_VERIFIED. 
-      // But if all fail? Still PARTIALLY_VERIFIED.
-      overallStatus = 'PARTIALLY_VERIFIED';
     } else {
-      overallStatus = 'FAILED'; // fallback (should not happen)
+      // Any component failure -> PARTIALLY_VERIFIED
+      overallStatus = 'PARTIALLY_VERIFIED';
     }
 
     const result: ProviderVerificationResult = {
@@ -196,7 +179,7 @@ export class MpesaVerificationService {
       environmentVerified,
       latencyMs,
       verifiedAt: oauthOk ? new Date() : null,
-      errors: errors.length ? errors.map(e => JSON.stringify(e)) : [], // flatten to strings for compatibility
+      errors: errors.length ? errors.map(e => JSON.stringify(e)) : [],
       warnings: warnings.map(w => JSON.stringify(w)),
     };
 
@@ -255,34 +238,36 @@ export class MpesaVerificationService {
     }
   }
 
-  // ---- Stage: Enhanced webhook reachability ----
+  // ---- Stage: Enhanced webhook reachability using POST ----
   private async verifyWebhook(
     input: MpesaVerificationInput,
     correlationId: string,
   ): Promise<WebhookVerificationResult> {
-    const urlObj = new URL(input.callbackUrl);
-    const requestUrl = input.callbackUrl;
+    const targetUrl = input.callbackUrl;
     const timeoutMs = 5000;
     const maxRedirects = 5;
     let redirectCount = 0;
-    let currentUrl = requestUrl;
-
+    let currentUrl = targetUrl;
     const startTime = Date.now();
 
-    const performRequest = (targetUrl: string): Promise<WebhookVerificationResult> => {
+    // Lightweight verification payload
+    const payload = JSON.stringify({ verification: true, timestamp: new Date().toISOString() });
+
+    const performRequest = (urlToFetch: string): Promise<WebhookVerificationResult> => {
       return new Promise((resolve) => {
-        const parsed = new URL(targetUrl);
+        const parsed = new URL(urlToFetch);
         const options: https.RequestOptions = {
           hostname: parsed.hostname,
           port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
           path: parsed.pathname + parsed.search,
-          method: 'GET', // Original checkUrlReachable uses GET; we keep GET
+          method: 'POST',
           headers: {
             'User-Agent': 'PayHarness-Verification/1.0',
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload),
             Accept: '*/*',
           },
           timeout: timeoutMs,
-          // We follow redirects manually, so we don't use the built-in followRedirect
         };
 
         const protocol = parsed.protocol === 'https:' ? https : http;
@@ -293,7 +278,11 @@ export class MpesaVerificationService {
           res.on('end', () => {
             const latencyMs = Date.now() - startTime;
 
-            // Handle redirects (3xx)
+            // Handle redirects (3xx) – follow them with POST? Usually redirects for POST may become GET,
+            // but we'll follow with a GET as per common behavior; we'll just follow the location.
+            // For simplicity, we'll follow with a GET (since many implementations do that).
+            // However, to keep it simple, we'll follow with a POST again? The spec says "follow redirects"
+            // without specifying method. We'll use the same method (POST) on redirect.
             if (statusCode >= 300 && statusCode < 400 && res.headers.location) {
               if (redirectCount >= maxRedirects) {
                 resolve({
@@ -301,33 +290,40 @@ export class MpesaVerificationService {
                   statusCode,
                   latencyMs,
                   error: `Too many redirects (max ${maxRedirects})`,
-                  requestUrl: targetUrl,
+                  requestUrl: urlToFetch,
                   responseBody: responseBody.slice(0, 500),
                 });
                 return;
               }
               redirectCount++;
               const location = res.headers.location;
-              const nextUrl = new URL(location, targetUrl).href;
-              // Recursively follow redirect
+              const nextUrl = new URL(location, urlToFetch).href;
+              // Recurse with the same POST method, but some servers may not allow POST on redirect.
+              // The requirement is to follow redirects; we'll follow with POST.
               performRequest(nextUrl).then(resolve);
               return;
             }
 
-            // Determine reachability based on status code (as per spec)
-            const reachableStatuses = [200, 201, 202, 204, 401, 403, 405];
-            const reachable = reachableStatuses.includes(statusCode);
-
-            // Truncate response body for logging
-            const truncatedBody = responseBody.slice(0, 1000);
+            // Determine reachability: treat any HTTP response except network failures as reachable.
+            // According to spec, these status codes are explicitly reachable:
+            // 200, 201, 202, 204, 400, 401, 403, 405, 409.
+            // We'll accept any 2xx or 4xx as reachable; 5xx? Not in list, but maybe we should treat as reachable?
+            // The spec says "only mark verification failed on DNS, TLS, connection refused, timeout, invalid URL."
+            // So any HTTP response (including 500) should be considered reachable, because the server responded.
+            // The explicit list is a subset; we'll consider any HTTP status code (>=100) as reachable.
+            // But we'll also keep the explicit list for clarity.
+            const reachableStatuses = [200, 201, 202, 204, 400, 401, 403, 405, 409];
+            // Actually, the spec says "Consider any HTTP response except network failures as proof that the endpoint exists."
+            // So we should treat any status code as reachable, as long as we get a response.
+            // However, we'll also log the status code.
+            const reachable = true; // Any response means reachable.
 
             resolve({
               reachable,
               statusCode,
               latencyMs,
-              requestUrl: targetUrl,
-              responseBody: truncatedBody,
-              error: reachable ? undefined : `HTTP ${statusCode} not in allowed reachable set`,
+              requestUrl: urlToFetch,
+              responseBody: responseBody.slice(0, 1000),
             });
           });
         });
@@ -337,7 +333,6 @@ export class MpesaVerificationService {
           let errorMsg = err.message;
           let networkError = err.code || 'UNKNOWN';
 
-          // Categorize the error for clearer diagnostics
           if (err.code === 'ENOTFOUND') {
             errorMsg = `DNS resolution failed for ${parsed.hostname}`;
           } else if (err.code === 'ECONNREFUSED') {
@@ -353,7 +348,7 @@ export class MpesaVerificationService {
             latencyMs,
             error: errorMsg,
             networkError: `${networkError}: ${err.message}`,
-            requestUrl: targetUrl,
+            requestUrl: urlToFetch,
           });
         });
 
@@ -365,10 +360,11 @@ export class MpesaVerificationService {
             latencyMs,
             error: `Request timed out after ${timeoutMs}ms`,
             networkError: 'ETIMEDOUT',
-            requestUrl: targetUrl,
+            requestUrl: urlToFetch,
           });
         });
 
+        req.write(payload);
         req.end();
       });
     };
@@ -403,18 +399,14 @@ export class MpesaVerificationService {
     const verified = result.overallStatus === 'VERIFIED';
     const primaryError = result.errors.length > 0 ? result.errors[0] : null;
 
-    // Prepare structured error details for the log
     const errorDetails: any[] = [];
-    // Add OAuth errors if any
     if (!result.oauthVerified) {
       errorDetails.push({
         step: 'oauth',
         message: 'OAuth authentication failed',
-        // we can include more details from the error array
         details: result.errors.filter(e => e.includes('oauth') || e.includes('Invalid') || e.includes('Unauthorized')),
       });
     }
-    // Add webhook errors if any
     if (!webhookResult.reachable) {
       errorDetails.push({
         step: 'webhook',
@@ -426,7 +418,6 @@ export class MpesaVerificationService {
         responseBody: webhookResult.responseBody,
       });
     }
-    // Add configuration errors if any
     if (!result.accountVerified) {
       errorDetails.push({
         step: 'configuration',
@@ -434,11 +425,9 @@ export class MpesaVerificationService {
       });
     }
 
-    // Build warnings including correlationId
     const warningDetails: any[] = [];
     warningDetails.push({ correlationId });
     if (result.warnings.length > 0) {
-      // parse warnings if they are JSON strings
       result.warnings.forEach(w => {
         try { warningDetails.push(JSON.parse(w)); } catch { warningDetails.push({ warning: w }); }
       });
@@ -461,7 +450,6 @@ export class MpesaVerificationService {
       },
     });
 
-    // Create a detailed verification log entry
     await this.prisma.providerVerificationLog.create({
       data: {
         merchantId: input.merchantId,
@@ -472,7 +460,6 @@ export class MpesaVerificationService {
         responseTimeMs: result.latencyMs,
         oauthSucceeded: result.oauthVerified,
         failureReason: verified ? null : primaryError || 'Verification failed',
-        // Store structured data in warnings and errors JSON fields
         warnings: warningDetails as Prisma.InputJsonValue,
         errors: errorDetails as Prisma.InputJsonValue,
       },
@@ -723,4 +710,20 @@ export class MpesaVerificationService {
       request.end();
     });
   }
+}
+
+// --------------------------------------------------------------------
+// ProviderVerificationResult type (must be defined somewhere)
+// --------------------------------------------------------------------
+export interface ProviderVerificationResult {
+  provider: string;
+  overallStatus: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'FAILED';
+  oauthVerified: boolean;
+  accountVerified: boolean;
+  webhookVerified: boolean;
+  environmentVerified: boolean;
+  latencyMs: number;
+  verifiedAt: Date | null;
+  errors: string[];
+  warnings: string[];
 }
