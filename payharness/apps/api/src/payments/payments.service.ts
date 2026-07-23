@@ -107,7 +107,14 @@ export class PaymentsService {
     const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(credential);
     const publicConfig = credential.publicConfig as { shortcode: string; businessType: 'PAYBILL' | 'TILL' };
 
-    let pushResult;
+   let pushResult;
+
+this.logger.log('========== MPESA STK REQUEST ==========');
+this.logger.log(`Environment: ${dto.environment}`);
+this.logger.log(`Shortcode: ${publicConfig.shortcode}`);
+this.logger.log(`BusinessType: ${publicConfig.businessType}`);
+this.logger.log(`PhoneNumber: ${dto.phoneNumber}`);
+this.logger.log(`AmountCents: ${dto.amountCents}`);
 
 try {
   pushResult = await this.mpesaVerification.initiateStkPush({
@@ -125,14 +132,19 @@ try {
     description:
       (dto.metadata?.description as string) || 'Payment',
   });
+
+  this.logger.log('========== MPESA STK SUCCESS ==========');
+  this.logger.log(JSON.stringify(pushResult, null, 2));
+
 } catch (error: any) {
   this.logger.error('========== MPESA STK FAILED ==========');
-
   this.logger.error(error?.message);
-
   this.logger.error(error?.stack);
 
-  this.logger.error(JSON.stringify(error?.response?.data));
+  this.logger.error('Daraja Response:');
+  this.logger.error(JSON.stringify(error?.daraja, null, 2));
+
+  this.logger.error(`HTTP Status: ${error?.httpStatus}`);
 
   throw error;
 }
