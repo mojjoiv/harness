@@ -141,7 +141,7 @@ try {
       data: {
         merchantId,
         provider: 'MPESA',
-        environment: dto.environment,,
+        environment: dto.environment,
         amountCents: dto.amountCents,
         currency: dto.currency,
         status: 'PENDING',
