@@ -107,25 +107,41 @@ export class PaymentsService {
     const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(credential);
     const publicConfig = credential.publicConfig as { shortcode: string; businessType: 'PAYBILL' | 'TILL' };
 
-    const pushResult = await this.mpesaVerification.initiateStkPush({
-      consumerKey: secrets.consumerKey,
-      consumerSecret: secrets.consumerSecret,
-      shortcode: publicConfig.shortcode,
-      passkey: secrets.passkey,
-      businessType: publicConfig.businessType,
-      environment: 'SANDBOX',
-      callbackUrl: this.webhookUrl('MPESA', merchantId),
-      amountCents: dto.amountCents,
-      phoneNumber: dto.phoneNumber as string,
-      accountReference: (dto.metadata?.accountReference as string) || 'PayHarness',
-      description: (dto.metadata?.description as string) || 'Payment',
-    });
+    let pushResult;
+
+try {
+  pushResult = await this.mpesaVerification.initiateStkPush({
+    consumerKey: secrets.consumerKey,
+    consumerSecret: secrets.consumerSecret,
+    shortcode: publicConfig.shortcode,
+    passkey: secrets.passkey,
+    businessType: publicConfig.businessType,
+    environment: dto.environment,
+    callbackUrl: this.webhookUrl('MPESA', merchantId),
+    amountCents: dto.amountCents,
+    phoneNumber: dto.phoneNumber!,
+    accountReference:
+      (dto.metadata?.accountReference as string) || 'PayHarness',
+    description:
+      (dto.metadata?.description as string) || 'Payment',
+  });
+} catch (error: any) {
+  this.logger.error('========== MPESA STK FAILED ==========');
+
+  this.logger.error(error?.message);
+
+  this.logger.error(error?.stack);
+
+  this.logger.error(JSON.stringify(error?.response?.data));
+
+  throw error;
+}
 
     const payment = await this.prisma.payment.create({
       data: {
         merchantId,
         provider: 'MPESA',
-        environment: 'SANDBOX',
+        environment: dto.environment,,
         amountCents: dto.amountCents,
         currency: dto.currency,
         status: 'PENDING',
