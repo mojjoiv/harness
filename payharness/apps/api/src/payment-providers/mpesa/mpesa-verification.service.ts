@@ -277,8 +277,8 @@ export class MpesaVerificationService {
           res.on('data', (chunk) => { responseBody += chunk; });
           res.on('end', () => {
             this.logger.log(`Response Status: ${res.statusCode}`);
-            this.logger.log(`Response Body: ${data}`);
-            const latencyMs = Date.now() - startTime;
+            this.logger.log(`Response Body: ${responseBody}`);           
+             const latencyMs = Date.now() - startTime;
 
             // Handle redirects (3xx) – follow them with POST? Usually redirects for POST may become GET,
             // but we'll follow with a GET as per common behavior; we'll just follow the location.
