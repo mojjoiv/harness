@@ -276,6 +276,8 @@ export class MpesaVerificationService {
           let responseBody = '';
           res.on('data', (chunk) => { responseBody += chunk; });
           res.on('end', () => {
+            this.logger.log(`Response Status: ${res.statusCode}`);
+            this.logger.log(`Response Body: ${data}`);
             const latencyMs = Date.now() - startTime;
 
             // Handle redirects (3xx) – follow them with POST? Usually redirects for POST may become GET,
@@ -486,6 +488,7 @@ export class MpesaVerificationService {
     environment: 'SANDBOX' | 'LIVE',
   ): Promise<string> {
     const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+    this.logger.log(`Sending STK Push request`);
     const body = await this.request(
       environment,
       'GET',
@@ -529,6 +532,7 @@ export class MpesaVerificationService {
   // ---- STK Push methods (unchanged) ----
   async initiateStkPush(input: StkPushInput): Promise<StkPushResult> {
     const accessToken = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
+    this.logger.log(`OAuth Token Preview: ${accessToken.substring(0,25)}...`);
     return this.initiateStkPushWithToken(accessToken, input);
   }
 
@@ -537,6 +541,7 @@ export class MpesaVerificationService {
     input: Omit<StkPushInput, 'consumerKey' | 'consumerSecret'> & { consumerKey?: string; consumerSecret?: string },
   ): Promise<StkPushResult> {
     const timestamp = this.timestamp();
+    this.logger.log(`STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`);
     const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
     const amount = Math.max(1, Math.round(input.amountCents / 100));
 
@@ -665,6 +670,7 @@ export class MpesaVerificationService {
     body?: Record<string, unknown>,
   ): Promise<Record<string, any>> {
     const url = new URL(`${this.baseUrl(environment)}${path}`);
+    this.logger.log(`HTTP ${method} ${url.href}`);
     const payload = body ? JSON.stringify(body) : undefined;
 
     return new Promise((resolve, reject) => {
