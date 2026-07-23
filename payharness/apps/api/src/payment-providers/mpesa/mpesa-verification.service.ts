@@ -130,46 +130,43 @@ export class MpesaVerificationService {
 
     const latencyMs = Date.now() - startedAt;
 
-    // Build errors array with structured provider info
-    const errors: any[] = [];
-    if (configCheck.errors.length) {
-      errors.push({ step: 'configuration', errors: configCheck.errors });
-    }
-    if (oauthCheck.errors.length) {
-      errors.push({ step: 'oauth', errors: oauthCheck.errors });
-    }
+    // Errors/warnings stay plain, human-readable strings -- these get
+    // rendered directly on the dashboard (lastVerificationError, the
+    // Providers page's error text) and matched against by
+    // nextRecommendedAction, so a JSON blob here would show up broken
+    // in the UI instead of a readable message.
+    const errors: string[] = [...configCheck.errors, ...oauthCheck.errors];
     if (!webhookReachable && webhookResult.error) {
-      errors.push({
-        step: 'webhook',
-        requestUrl: webhookResult.requestUrl,
-        statusCode: webhookResult.statusCode,
-        error: webhookResult.error,
-        networkError: webhookResult.networkError,
-        latencyMs: webhookResult.latencyMs,
-        responseBody: webhookResult.responseBody,
-      });
+      errors.push(
+        `Webhook unreachable: ${webhookResult.error}` +
+          (webhookResult.statusCode ? ` (status ${webhookResult.statusCode})` : ''),
+      );
     }
 
-    const warnings: any[] = [];
-    if (oauthCheck.warnings.length) {
-      warnings.push({ step: 'oauth', warnings: oauthCheck.warnings });
-    }
-    warnings.push({ correlationId });
+    const warnings: string[] = [...oauthCheck.warnings];
 
-    // Compute overall status per the new rules:
-    // Only mark PARTIALLY_VERIFIED when an actual verification component fails.
-    // If OAuth, environment, account, and webhook (including 405) pass -> VERIFIED.
     const oauthOk = oauthCheck.oauthVerified;
     const accountOk = configCheck.accountVerified;
-    const environmentVerified = oauthOk; // OAuth uses the environment
+    // Environment check is the lightweight version: OAuth succeeding
+    // against the DECLARED environment's base URL is itself evidence the
+    // credentials match that environment. A stronger check (confirming
+    // they're REJECTED against the other environment's URL too) would
+    // catch a mislabeled sandbox/live key, but doubles real Safaricom
+    // calls per verification for a fairly narrow case.
+    const environmentVerified = oauthOk;
 
-    let overallStatus: ProviderVerificationStatus;
-    if (oauthOk && accountOk && webhookReachable && environmentVerified) {
-      overallStatus = 'VERIFIED';
-    } else {
-      // Any component failure -> PARTIALLY_VERIFIED
-      overallStatus = 'PARTIALLY_VERIFIED';
-    }
+    // Shared with Stripe/PayPal's verifiers in provider-credentials.service.ts,
+    // so every provider computes VERIFIED/PARTIALLY_VERIFIED/FAILED the same
+    // way instead of each adapter reimplementing this decision slightly
+    // differently (that's what drifted here before this fix -- this branch
+    // previously had no FAILED case at all, so completely wrong credentials
+    // still reported "Partially Verified").
+    const overallStatus = computeOverallStatus({
+      oauthVerified: oauthOk,
+      accountVerified: accountOk,
+      webhookVerified: webhookReachable,
+      environmentVerified,
+    });
 
     const result: ProviderVerificationResult = {
       provider: 'MPESA',
@@ -180,8 +177,8 @@ export class MpesaVerificationService {
       environmentVerified,
       latencyMs,
       verifiedAt: oauthOk ? new Date() : null,
-      errors: errors.length ? errors.map(e => JSON.stringify(e)) : [],
-      warnings: warnings.map(w => JSON.stringify(w)),
+      errors,
+      warnings,
     };
 
     this.logger.log(
