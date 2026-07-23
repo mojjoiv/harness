@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Payment, PaymentStatus, Prisma, Provider } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import * as http from 'http';
 import * as https from 'https';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
@@ -25,24 +26,49 @@ export class PaymentsService {
     private readonly stripe: StripeProviderService,
     private readonly paypal: PaypalProviderService,
     private readonly auditLogs: AuditLogsService,
-  ) {}
+  ) {
+    // Startup markers -- confirms this build (with instrumentation) is
+    // actually the one running, without needing to trigger a real request.
+    this.logger.log('PaymentsService instrumentation loaded');
+    this.logger.log('createRealMpesaStk instrumentation enabled');
+  }
 
   async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
-    if (dto.environment === 'LIVE') {
-      this.blockLive('MPESA');
+    const correlationId = randomUUID();
+    const log = (msg: string) => this.logger.log(`[correlationId=${correlationId}] ${msg}`);
+
+    log(
+      `createMpesaStk entering: merchantId=${merchantId} environment=${dto.environment} ` +
+        `checkoutSessionId=${dto.checkoutSessionId || 'none'} phone=${this.maskPhone(dto.phoneNumber || '')} ` +
+        `simulateOutcome=${dto.simulateOutcome || 'none'}`,
+    );
+
+    try {
+      if (dto.environment === 'LIVE') {
+        this.blockLive('MPESA');
+      }
+
+      const credential = await this.getActiveCredential(merchantId, 'MPESA', dto.environment);
+      log(
+        `Credential loaded: credentialId=${credential.id} provider=${credential.provider} ` +
+          `environment=${credential.environment}`,
+      );
+
+      // Real push only when the caller gave us a phone to prompt and isn't
+      // asking for the instant simulated path -- otherwise fall back to the
+      // same simulate-and-settle-immediately flow the other providers use,
+      // so quick testing without a real phone still works exactly as before.
+      if (!dto.phoneNumber || dto.simulateOutcome) {
+        log('Flow selected: SIMULATED (no phone number, or simulateOutcome provided)');
+        return this.process(merchantId, userId, 'MPESA', dto, (input) => this.mpesa.createStkPush(input));
+      }
+
+      log('Flow selected: REAL. Entering createRealMpesaStk');
+      return await this.createRealMpesaStk(merchantId, userId, credential, dto, correlationId);
+    } catch (error) {
+      this.logUnhandledError(correlationId, 'createMpesaStk', error);
+      throw error;
     }
-
-    const credential = await this.getActiveCredential(merchantId, 'MPESA', dto.environment);
-
-    // Real push only when the caller gave us a phone to prompt and isn't
-    // asking for the instant simulated path -- otherwise fall back to the
-    // same simulate-and-settle-immediately flow the other providers use,
-    // so quick testing without a real phone still works exactly as before.
-    if (!dto.phoneNumber || dto.simulateOutcome) {
-      return this.process(merchantId, userId, 'MPESA', dto, (input) => this.mpesa.createStkPush(input));
-    }
-
-    return this.createRealMpesaStk(merchantId, userId, credential, dto);
   }
 
   async createStripeIntent(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
@@ -102,96 +128,149 @@ export class PaymentsService {
     userId: string | undefined,
     credential: { publicConfig: unknown; encryptedSecretConfig: unknown },
     dto: CreateProviderPaymentDto,
+    correlationId: string,
   ) {
-    const session = await this.getAndValidateSession(merchantId, dto.checkoutSessionId);
-    const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(credential);
-    const publicConfig = credential.publicConfig as { shortcode: string; businessType: 'PAYBILL' | 'TILL' };
+    const log = (msg: string) => this.logger.log(`[correlationId=${correlationId}] ${msg}`);
+    let step = 'start';
 
-   let pushResult;
+    try {
+      step = 'getAndValidateSession';
+      const session = await this.getAndValidateSession(merchantId, dto.checkoutSessionId);
+      log(`Step complete: getAndValidateSession -> sessionId=${session?.id || 'none'}`);
 
-this.logger.log('========== MPESA STK REQUEST ==========');
-this.logger.log(`Environment: ${dto.environment}`);
-this.logger.log(`Shortcode: ${publicConfig.shortcode}`);
-this.logger.log(`BusinessType: ${publicConfig.businessType}`);
-this.logger.log(`PhoneNumber: ${dto.phoneNumber}`);
-this.logger.log(`AmountCents: ${dto.amountCents}`);
+      step = 'decryptSecrets';
+      const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(
+        credential,
+      );
+      log('Step complete: decryptSecrets (values not logged)');
 
-try {
-  pushResult = await this.mpesaVerification.initiateStkPush({
-    consumerKey: secrets.consumerKey,
-    consumerSecret: secrets.consumerSecret,
-    shortcode: publicConfig.shortcode,
-    passkey: secrets.passkey,
-    businessType: publicConfig.businessType,
-    environment: dto.environment,
-    callbackUrl: this.webhookUrl('MPESA', merchantId),
-    amountCents: dto.amountCents,
-    phoneNumber: dto.phoneNumber!,
-    accountReference:
-      (dto.metadata?.accountReference as string) || 'PayHarness',
-    description:
-      (dto.metadata?.description as string) || 'Payment',
-  });
+      step = 'loadPublicConfig';
+      const publicConfig = credential.publicConfig as { shortcode: string; businessType: 'PAYBILL' | 'TILL' };
+      log(`Step complete: loadPublicConfig -> shortcode=${publicConfig.shortcode} businessType=${publicConfig.businessType}`);
 
-  this.logger.log('========== MPESA STK SUCCESS ==========');
-  this.logger.log(JSON.stringify(pushResult, null, 2));
+      step = 'webhookUrl';
+      const callbackUrl = this.webhookUrl('MPESA', merchantId);
+      log(`Step complete: webhookUrl -> ${callbackUrl}`);
 
-} catch (error: any) {
-  this.logger.error('========== MPESA STK FAILED ==========');
-  this.logger.error(error?.message);
-  this.logger.error(error?.stack);
-
-  this.logger.error('Daraja Response:');
-  this.logger.error(JSON.stringify(error?.daraja, null, 2));
-
-  this.logger.error(`HTTP Status: ${error?.httpStatus}`);
-
-  throw error;
-}
-
-    const payment = await this.prisma.payment.create({
-      data: {
-        merchantId,
-        provider: 'MPESA',
+      step = 'initiateStkPush';
+      log(
+        `Before initiateStkPush: environment=${dto.environment} amountCents=${dto.amountCents} phone=${this.maskPhone(dto.phoneNumber || '')}`,
+      );
+      const pushResult = await this.mpesaVerification.initiateStkPush({
+        consumerKey: secrets.consumerKey,
+        consumerSecret: secrets.consumerSecret,
+        shortcode: publicConfig.shortcode,
+        passkey: secrets.passkey,
+        businessType: publicConfig.businessType,
         environment: dto.environment,
+        callbackUrl,
         amountCents: dto.amountCents,
-        currency: dto.currency,
-        status: 'PENDING',
-        customerId: dto.customerId,
-        checkoutSessionId: session?.id,
-        providerReference: pushResult.checkoutRequestId,
-        metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
-        transactions: {
-          create: {
-            merchantId,
-            type: 'PAYMENT',
-            amountCents: dto.amountCents,
-            currency: dto.currency,
-            status: 'PENDING',
-            reference: pushResult.checkoutRequestId,
-            metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+        phoneNumber: dto.phoneNumber!,
+        accountReference: (dto.metadata?.accountReference as string) || 'PayHarness',
+        description: (dto.metadata?.description as string) || 'Payment',
+      });
+      log(
+        `After initiateStkPush: checkoutRequestId=${pushResult.checkoutRequestId} ` +
+          `responseCode=${pushResult.responseCode} responseDescription=${pushResult.responseDescription}`,
+      );
+
+      step = 'payment.create';
+      log('Before prisma.payment.create');
+      const payment = await this.prisma.payment.create({
+        data: {
+          merchantId,
+          provider: 'MPESA',
+          environment: dto.environment,
+          amountCents: dto.amountCents,
+          currency: dto.currency,
+          status: 'PENDING',
+          customerId: dto.customerId,
+          checkoutSessionId: session?.id,
+          providerReference: pushResult.checkoutRequestId,
+          metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+          transactions: {
+            create: {
+              merchantId,
+              type: 'PAYMENT',
+              amountCents: dto.amountCents,
+              currency: dto.currency,
+              status: 'PENDING',
+              reference: pushResult.checkoutRequestId,
+              metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+            },
           },
         },
-      },
-    });
+      });
+      log(`After prisma.payment.create: paymentId=${payment.id}`);
 
-    await this.auditLogs.create({
-      merchantId,
-      userId,
-      action: 'payment.stk_push_sent',
-      entity: 'payment',
-      entityId: payment.id,
-      metadata: { checkoutRequestId: pushResult.checkoutRequestId, phoneNumber: this.maskPhone(dto.phoneNumber!) },
-    });
+      step = 'auditLog';
+      log('Before audit log');
+      await this.auditLogs.create({
+        merchantId,
+        userId,
+        action: 'payment.stk_push_sent',
+        entity: 'payment',
+        entityId: payment.id,
+        metadata: { checkoutRequestId: pushResult.checkoutRequestId, phoneNumber: this.maskPhone(dto.phoneNumber!) },
+      });
+      log('After audit log');
 
-    return {
-      paymentId: payment.id,
-      provider: 'MPESA' as const,
-      environment: 'SANDBOX' as const,
-      status: 'PENDING' as const,
-      checkoutRequestId: pushResult.checkoutRequestId,
-      message: 'STK push sent -- ask the customer to check their phone, then poll GET /payments/:id/query',
+      return {
+        paymentId: payment.id,
+        provider: 'MPESA' as const,
+        environment: 'SANDBOX' as const,
+        status: 'PENDING' as const,
+        checkoutRequestId: pushResult.checkoutRequestId,
+        message: 'STK push sent -- ask the customer to check their phone, then poll GET /payments/:id/query',
+      };
+    } catch (error) {
+      this.logUnhandledError(correlationId, `createRealMpesaStk (step: ${step})`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Shared, verbose diagnostic dump for an unhandled exception -- logging
+   * only, does not change what gets thrown or how it's handled by callers.
+   */
+  private logUnhandledError(correlationId: string, where: string, error: unknown) {
+    const err = error as Error & {
+      code?: string;
+      meta?: unknown;
+      clientVersion?: string;
+      cause?: unknown;
+      httpStatus?: number;
+      daraja?: unknown;
     };
+
+    this.logger.error(`[correlationId=${correlationId}] Error in ${where}: ${err?.message}`);
+    this.logger.error(`[correlationId=${correlationId}] Stack: ${err?.stack}`);
+    this.logger.error(`[correlationId=${correlationId}] Constructor: ${err?.constructor?.name}`);
+
+    try {
+      this.logger.error(`[correlationId=${correlationId}] Serialized: ${JSON.stringify(err)}`);
+    } catch {
+      this.logger.error(`[correlationId=${correlationId}] Serialized: <not JSON-serializable>`);
+    }
+
+    if (err?.code) {
+      this.logger.error(`[correlationId=${correlationId}] Prisma/error code: ${err.code}`);
+    }
+    if (err?.meta) {
+      this.logger.error(`[correlationId=${correlationId}] Prisma meta: ${JSON.stringify(err.meta)}`);
+    }
+    if (err?.clientVersion) {
+      this.logger.error(`[correlationId=${correlationId}] Prisma clientVersion: ${err.clientVersion}`);
+    }
+    if (err?.daraja) {
+      this.logger.error(`[correlationId=${correlationId}] Provider response body: ${JSON.stringify(err.daraja)}`);
+    }
+    if (err?.httpStatus) {
+      this.logger.error(`[correlationId=${correlationId}] Upstream HTTP status: ${err.httpStatus}`);
+    }
+    if (err?.cause) {
+      this.logger.error(`[correlationId=${correlationId}] Cause: ${JSON.stringify(err.cause)}`);
+    }
   }
 
   private async settlePendingPayment(
