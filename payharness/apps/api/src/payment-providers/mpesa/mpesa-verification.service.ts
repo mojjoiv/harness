@@ -5,6 +5,7 @@ import * as https from 'https';
 import * as http from 'http';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../common/prisma.service';
+import { computeOverallStatus, ProviderVerificationResult } from '../provider-verification.types';
 
 // --------------------------------------------------------------------
 // Interfaces (unchanged)
@@ -710,20 +711,4 @@ export class MpesaVerificationService {
       request.end();
     });
   }
-}
-
-// --------------------------------------------------------------------
-// ProviderVerificationResult type (must be defined somewhere)
-// --------------------------------------------------------------------
-export interface ProviderVerificationResult {
-  provider: string;
-  overallStatus: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'FAILED';
-  oauthVerified: boolean;
-  accountVerified: boolean;
-  webhookVerified: boolean;
-  environmentVerified: boolean;
-  latencyMs: number;
-  verifiedAt: Date | null;
-  errors: string[];
-  warnings: string[];
 }
