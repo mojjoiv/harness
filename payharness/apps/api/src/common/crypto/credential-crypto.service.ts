@@ -26,13 +26,26 @@ export class CredentialCryptoService {
   }
 
   decrypt(payload: EncryptedPayload): Record<string, unknown> {
-    const decipher = createDecipheriv('aes-256-gcm', this.key(), Buffer.from(payload.iv, 'base64'));
-    decipher.setAuthTag(Buffer.from(payload.tag, 'base64'));
-    const decrypted = Buffer.concat([
-      decipher.update(Buffer.from(payload.data, 'base64')),
-      decipher.final(),
-    ]);
-    return JSON.parse(decrypted.toString('utf8'));
+    try {
+      const decipher = createDecipheriv('aes-256-gcm', this.key(), Buffer.from(payload.iv, 'base64'));
+      decipher.setAuthTag(Buffer.from(payload.tag, 'base64'));
+      const decrypted = Buffer.concat([
+        decipher.update(Buffer.from(payload.data, 'base64')),
+        decipher.final(),
+      ]);
+      return JSON.parse(decrypted.toString('utf8'));
+    } catch (error) {
+      // A raw Error/TypeError here (bad IV, auth tag mismatch from a
+      // rotated CREDENTIAL_ENCRYPTION_KEY, malformed stored payload) is
+      // NOT an HttpException, so the global filter was collapsing it to
+      // an opaque 500 with no detail. Wrapping it turns that into a
+      // clear, logged, actionable error instead.
+      throw new InternalServerErrorException(
+        `Stored credentials could not be decrypted (${(error as Error).message}). ` +
+          'This usually means CREDENTIAL_ENCRYPTION_KEY changed since these credentials were saved -- ' +
+          'reconnect the provider to re-save them under the current key.',
+      );
+    }
   }
 
   mask(value: unknown): string {
