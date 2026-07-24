@@ -216,7 +216,20 @@ export class MpesaVerificationService {
     correlationId: string,
   ): Promise<{ oauthVerified: boolean; errors: string[]; warnings: string[] }> {
     try {
-      const token = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
+      this.logger.error({
+  consumerKeyPrefix: input.consumerKey.substring(0, 8),
+  consumerSecretPrefix: input.consumerSecret.substring(0, 8),
+  passkeyPrefix: input.passkey.substring(0, 8),
+  shortcode: input.shortcode,
+  businessType: input.businessType,
+  environment: input.environment,
+});
+
+const token = await this.generateAccessToken(
+    input.consumerKey,
+    input.consumerSecret,
+    input.environment,
+);
       this.logger.log(`[correlationId=${correlationId}] M‑Pesa OAuth succeeded (${input.environment})`);
 
       const warnings: string[] = [];
