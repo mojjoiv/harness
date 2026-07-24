@@ -545,6 +545,22 @@ export class MpesaVerificationService {
     const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
     const amount = Math.max(1, Math.round(input.amountCents / 100));
 
+    this.logger.debug({
+  businessShortCode: input.shortcode,
+  transactionType:
+    input.businessType === 'TILL'
+      ? 'CustomerBuyGoodsOnline'
+      : 'CustomerPayBillOnline',
+  amount,
+  partyA: input.phoneNumber,
+  partyB: input.shortcode,
+  phoneNumber: input.phoneNumber,
+  accountReference: input.accountReference,
+  transactionDesc: input.description,
+  timestamp,
+  callback: input.callbackUrl,
+});
+
     const body = await this.request(
       input.environment,
       'POST',
