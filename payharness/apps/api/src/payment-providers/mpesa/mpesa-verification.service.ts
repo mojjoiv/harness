@@ -575,8 +575,22 @@ export class MpesaVerificationService {
     input: Omit<StkPushInput, 'consumerKey' | 'consumerSecret'> & { consumerKey?: string; consumerSecret?: string },
   ): Promise<StkPushResult> {
     const timestamp = this.timestamp();
-    this.logger.log(`STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`);
-    const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
+
+this.logger.warn(`Passkey Length: ${input.passkey.length}`);
+this.logger.warn(`Passkey Starts: ${input.passkey.substring(0, 12)}`);
+this.logger.warn(
+  `Passkey Ends: ${input.passkey.substring(input.passkey.length - 12)}`,
+);
+
+this.logger.log(
+  `STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`,
+);
+
+const password = this.buildPassword(
+  input.shortcode,
+  input.passkey,
+  timestamp,
+);
     const amount = Math.max(1, Math.round(input.amountCents / 100));
 
     this.logger.log(
