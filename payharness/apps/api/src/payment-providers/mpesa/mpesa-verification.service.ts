@@ -555,6 +555,14 @@ export class MpesaVerificationService {
   ): Promise<StkPushResult> {
     const timestamp = this.timestamp();
     this.logger.log(`STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`);
+
+    this.logger.warn('===== STK CREDENTIALS =====');
+    this.logger.warn(`Shortcode: ${input.shortcode}`);
+    this.logger.warn(`Passkey prefix: ${input.passkey.substring(0, 12)}...`);
+    this.logger.warn(`Consumer Key prefix: ${input.consumerKey?.substring(0, 8) ?? 'undefined'}...`);
+    this.logger.warn(`Timestamp: ${timestamp}`);
+    this.logger.warn('===========================');
+    
     const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
     const amount = Math.max(1, Math.round(input.amountCents / 100));
 
