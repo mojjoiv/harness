@@ -6,6 +6,9 @@ import * as http from 'http';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../common/prisma.service';
 
+// --------------------------------------------------------------------
+// Interfaces (unchanged)
+// --------------------------------------------------------------------
 export interface MpesaVerificationInput {
   credentialId: string;
   merchantId: string;
@@ -72,6 +75,7 @@ export interface ProviderCapabilities {
   supportsRegisterUrls: boolean;
 }
 
+// Result of the enhanced webhook reachability check
 export interface WebhookVerificationResult {
   reachable: boolean;
   statusCode?: number;
@@ -87,6 +91,9 @@ interface MpesaApiError extends Error {
   daraja?: { errorCode?: string; errorMessage?: string };
 }
 
+// --------------------------------------------------------------------
+// Service
+// --------------------------------------------------------------------
 @Injectable()
 export class MpesaVerificationService {
   private readonly logger = new Logger(MpesaVerificationService.name);
@@ -96,6 +103,10 @@ export class MpesaVerificationService {
     private readonly prisma: PrismaService,
   ) {}
 
+  /**
+   * Public verification pipeline.
+   * Generates a correlation ID and passes it through all stages.
+   */
   async verify(input: MpesaVerificationInput): Promise<ProviderVerificationResult> {
     const correlationId = randomUUID();
     const startedAt = Date.now();
@@ -103,17 +114,22 @@ export class MpesaVerificationService {
     this.logger.log(`[correlationId=${correlationId}] Starting M‑Pesa verification`);
     this.emitVerificationEvents('provider.verification.started', input, null, correlationId);
 
+    // Stage 1: Configuration validation
     const configCheck = this.verifyConfiguration(input);
 
+    // Stage 2: OAuth (actual API call)
     const oauthCheck = await this.verifyOAuth(input, correlationId);
 
+    // Stage 3: Webhook reachability (POST with lightweight payload)
     const webhookResult = await this.verifyWebhook(input, correlationId);
     const webhookReachable = webhookResult.reachable;
 
+    // Stage 4: Capability detection (static)
     const capabilities = this.verifyCapabilities(oauthCheck.oauthVerified);
 
     const latencyMs = Date.now() - startedAt;
 
+    // Build errors array with structured provider info
     const errors: any[] = [];
     if (configCheck.errors.length) {
       errors.push({ step: 'configuration', errors: configCheck.errors });
@@ -139,14 +155,18 @@ export class MpesaVerificationService {
     }
     warnings.push({ correlationId });
 
+    // Compute overall status per the new rules:
+    // Only mark PARTIALLY_VERIFIED when an actual verification component fails.
+    // If OAuth, environment, account, and webhook (including 405) pass -> VERIFIED.
     const oauthOk = oauthCheck.oauthVerified;
     const accountOk = configCheck.accountVerified;
-    const environmentVerified = oauthOk;
+    const environmentVerified = oauthOk; // OAuth uses the environment
 
     let overallStatus: ProviderVerificationStatus;
     if (oauthOk && accountOk && webhookReachable && environmentVerified) {
       overallStatus = 'VERIFIED';
     } else {
+      // Any component failure -> PARTIALLY_VERIFIED
       overallStatus = 'PARTIALLY_VERIFIED';
     }
 
@@ -181,6 +201,7 @@ export class MpesaVerificationService {
     return result;
   }
 
+  // ---- Stage: Configuration shape validation ----
   private verifyConfiguration(input: MpesaVerificationInput): { accountVerified: boolean; errors: string[] } {
     const accountVerified = /^\d{5,7}$/.test(input.shortcode) && ['PAYBILL', 'TILL'].includes(input.businessType);
     return {
@@ -189,6 +210,7 @@ export class MpesaVerificationService {
     };
   }
 
+  // ---- Stage: OAuth exchange and smoke test ----
   private async verifyOAuth(
     input: MpesaVerificationInput,
     correlationId: string,
@@ -229,6 +251,7 @@ export class MpesaVerificationService {
     }
   }
 
+  // ---- Stage: Enhanced webhook reachability using POST ----
   private async verifyWebhook(
     input: MpesaVerificationInput,
     correlationId: string,
@@ -240,6 +263,7 @@ export class MpesaVerificationService {
     let currentUrl = targetUrl;
     const startTime = Date.now();
 
+    // Lightweight verification payload
     const payload = JSON.stringify({ verification: true, timestamp: new Date().toISOString() });
 
     const performRequest = (urlToFetch: string): Promise<WebhookVerificationResult> => {
@@ -269,6 +293,11 @@ export class MpesaVerificationService {
             this.logger.log(`Response Body: ${responseBody}`);
             const latencyMs = Date.now() - startTime;
 
+            // Handle redirects (3xx) – follow them with POST? Usually redirects for POST may become GET,
+            // but we'll follow with a GET as per common behavior; we'll just follow the location.
+            // For simplicity, we'll follow with a GET (since many implementations do that).
+            // However, to keep it simple, we'll follow with a POST again? The spec says "follow redirects"
+            // without specifying method. We'll use the same method (POST) on redirect.
             if (statusCode >= 300 && statusCode < 400 && res.headers.location) {
               if (redirectCount >= maxRedirects) {
                 resolve({
@@ -284,11 +313,25 @@ export class MpesaVerificationService {
               redirectCount++;
               const location = res.headers.location;
               const nextUrl = new URL(location, urlToFetch).href;
+              // Recurse with the same POST method, but some servers may not allow POST on redirect.
+              // The requirement is to follow redirects; we'll follow with POST.
               performRequest(nextUrl).then(resolve);
               return;
             }
 
-            const reachable = true;
+            // Determine reachability: treat any HTTP response except network failures as reachable.
+            // According to spec, these status codes are explicitly reachable:
+            // 200, 201, 202, 204, 400, 401, 403, 405, 409.
+            // We'll accept any 2xx or 4xx as reachable; 5xx? Not in list, but maybe we should treat as reachable?
+            // The spec says "only mark verification failed on DNS, TLS, connection refused, timeout, invalid URL."
+            // So any HTTP response (including 500) should be considered reachable, because the server responded.
+            // The explicit list is a subset; we'll consider any HTTP status code (>=100) as reachable.
+            // But we'll also keep the explicit list for clarity.
+            const reachableStatuses = [200, 201, 202, 204, 400, 401, 403, 405, 409];
+            // Actually, the spec says "Consider any HTTP response except network failures as proof that the endpoint exists."
+            // So we should treat any status code as reachable, as long as we get a response.
+            // However, we'll also log the status code.
+            const reachable = true; // Any response means reachable.
 
             resolve({
               reachable,
@@ -348,6 +391,7 @@ export class MpesaVerificationService {
     return result;
   }
 
+  // ---- Stage: Static capability detection ----
   private verifyCapabilities(oauthVerified: boolean): ProviderCapabilities {
     return {
       supportsSTKPush: oauthVerified,
@@ -360,6 +404,7 @@ export class MpesaVerificationService {
     };
   }
 
+  // ---- Stage: Persist verification results with enriched data ----
   private async persistVerification(
     input: MpesaVerificationInput,
     result: ProviderVerificationResult,
@@ -436,6 +481,7 @@ export class MpesaVerificationService {
     });
   }
 
+  // ---- Event stubs (log only) ----
   private emitVerificationEvents(
     event: 'provider.verification.started' | 'provider.verification.completed' | 'provider.verification.failed',
     input: MpesaVerificationInput,
@@ -448,6 +494,7 @@ export class MpesaVerificationService {
     );
   }
 
+  // ---- OAuth token generation (unchanged) ----
   async generateAccessToken(
     consumerKey: string,
     consumerSecret: string,
@@ -468,6 +515,7 @@ export class MpesaVerificationService {
     return body.access_token as string;
   }
 
+  // ---- Smoke test (unchanged) ----
   private async runSmokeTest(
     accessToken: string,
     input: MpesaVerificationInput,
@@ -494,59 +542,20 @@ export class MpesaVerificationService {
     }
   }
 
+  // ---- STK Push methods (unchanged) ----
   async initiateStkPush(input: StkPushInput): Promise<StkPushResult> {
-  this.logger.warn('========== M-PESA CREDENTIALS ==========');
-  this.logger.warn(`Environment: ${input.environment}`);
-  this.logger.warn(`Shortcode: ${input.shortcode}`);
-  this.logger.warn(`BusinessType: ${input.businessType}`);
-  this.logger.warn(`ConsumerKey: ${input.consumerKey}`);
-  this.logger.warn(
-    `ConsumerSecret Prefix: ${input.consumerSecret.substring(0, 12)}...`,
-  );
-  this.logger.warn(
-    `Passkey Prefix: ${input.passkey.substring(0, 30)}...`,
-  );
-  this.logger.warn('========================================');
-
-  const accessToken = await this.generateAccessToken(
-    input.consumerKey,
-    input.consumerSecret,
-    input.environment,
-  );
-
-  this.logger.log(
-    `OAuth Token Preview: ${accessToken.substring(0, 25)}...`,
-  );
-
-  return this.initiateStkPushWithToken(accessToken, input);
-}
+    const accessToken = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
+    this.logger.log(`OAuth Token Preview: ${accessToken.substring(0,25)}...`);
+    return this.initiateStkPushWithToken(accessToken, input);
+  }
 
   private async initiateStkPushWithToken(
     accessToken: string,
     input: Omit<StkPushInput, 'consumerKey' | 'consumerSecret'> & { consumerKey?: string; consumerSecret?: string },
   ): Promise<StkPushResult> {
     const timestamp = this.timestamp();
-
-this.logger.warn(`Passkey Length: ${input.passkey.length}`);
-this.logger.warn(`Passkey Starts: ${input.passkey.substring(0, 12)}`);
-this.logger.warn(
-  `Passkey Ends: ${input.passkey.substring(input.passkey.length - 12)}`,
-);
-
-this.logger.log(
-  `STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`,
-);
-
-    this.logger.warn("========== DECRYPTED CREDENTIALS ==========");
-this.logger.warn(`Shortcode: ${input.shortcode}`);
-this.logger.warn(`Passkey: ${input.passkey}`);
-this.logger.warn("===========================================");
-
-const password = this.buildPassword(
-  input.shortcode,
-  input.passkey,
-  timestamp,
-);
+    this.logger.log(`STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`);
+    const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
     const amount = Math.max(1, Math.round(input.amountCents / 100));
 
     this.logger.log(
@@ -571,6 +580,7 @@ const password = this.buildPassword(
       ),
     );
 
+    // Build the exact STK payload
     const stkPayload = {
       BusinessShortCode: input.shortcode,
       Password: password,
@@ -585,6 +595,7 @@ const password = this.buildPassword(
       TransactionDesc: input.description,
     };
 
+    // ========== FINAL STK PAYLOAD LOGGING ==========
     this.logger.error("========== FINAL STK PAYLOAD ==========");
     this.logger.error(
       JSON.stringify(
@@ -661,6 +672,7 @@ const password = this.buildPassword(
     }
   }
 
+  // ---- Helpers (unchanged) ----
   private buildPassword(shortcode: string, passkey: string, timestamp: string): string {
     return Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
   }
@@ -737,16 +749,19 @@ const password = this.buildPassword(
           let data = '';
           res.on('data', (chunk) => (data += chunk));
           res.on('end', () => {
+            // ========== ADDED DIAGNOSTIC LOGGING ==========
             this.logger.error('========= RAW SAFARICOM RESPONSE =========');
             this.logger.error(`STATUS: ${res.statusCode}`);
             this.logger.error(`HEADERS: ${JSON.stringify(res.headers, null, 2)}`);
             this.logger.error(`BODY: ${data}`);
             this.logger.error('=========================================');
+            // ===============================================
 
             let parsed: Record<string, any> = {};
             try {
               parsed = data ? JSON.parse(data) : {};
             } catch {
+              // Non-JSON response
             }
 
             if ((res.statusCode || 500) >= 300) {
@@ -771,6 +786,9 @@ const password = this.buildPassword(
   }
 }
 
+// --------------------------------------------------------------------
+// ProviderVerificationResult type (must be defined somewhere)
+// --------------------------------------------------------------------
 export interface ProviderVerificationResult {
   provider: string;
   overallStatus: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'FAILED';
