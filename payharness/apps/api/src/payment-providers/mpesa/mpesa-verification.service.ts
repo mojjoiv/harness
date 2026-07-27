@@ -586,6 +586,11 @@ this.logger.log(
   `STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`,
 );
 
+    this.logger.warn("========== DECRYPTED CREDENTIALS ==========");
+this.logger.warn(`Shortcode: ${input.shortcode}`);
+this.logger.warn(`Passkey: ${input.passkey}`);
+this.logger.warn("===========================================");
+
 const password = this.buildPassword(
   input.shortcode,
   input.passkey,
