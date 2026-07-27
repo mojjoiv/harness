@@ -588,6 +588,42 @@ export class MpesaVerificationService {
       ),
     );
 
+    // Build the exact payload for Safaricom
+    const payload = {
+      BusinessShortCode: input.shortcode,
+      Password: password,
+      Timestamp: timestamp,
+      TransactionType: input.businessType === 'TILL' ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline',
+      Amount: amount,
+      PartyA: input.phoneNumber,
+      PartyB: input.shortcode,
+      PhoneNumber: input.phoneNumber,
+      CallBackURL: input.callbackUrl,
+      AccountReference: input.accountReference,
+      TransactionDesc: input.description,
+    };
+
+    // ========== ADDED FINAL STK PAYLOAD LOGGING ==========
+    this.logger.error("========== FINAL STK PAYLOAD ==========");
+    this.logger.error(
+      JSON.stringify(
+        {
+          BusinessShortCode: payload.BusinessShortCode,
+          PartyA: payload.PartyA,
+          PartyB: payload.PartyB,
+          PhoneNumber: payload.PhoneNumber,
+          TransactionType: payload.TransactionType,
+          AccountReference: payload.AccountReference,
+          Timestamp: payload.Timestamp,
+          PasswordPrefix: payload.Password.substring(0, 20),
+        },
+        null,
+        2,
+      ),
+    );
+    this.logger.error("=======================================");
+    // =====================================================
+
     this.logger.log('Sending STK request to Safaricom...');
 
     const body = await this.request(
@@ -595,19 +631,7 @@ export class MpesaVerificationService {
       'POST',
       '/mpesa/stkpush/v1/processrequest',
       { Authorization: `Bearer ${accessToken}` },
-      {
-        BusinessShortCode: input.shortcode,
-        Password: password,
-        Timestamp: timestamp,
-        TransactionType: input.businessType === 'TILL' ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline',
-        Amount: amount,
-        PartyA: input.phoneNumber,
-        PartyB: input.shortcode,
-        PhoneNumber: input.phoneNumber,
-        CallBackURL: input.callbackUrl,
-        AccountReference: input.accountReference,
-        TransactionDesc: input.description,
-      },
+      payload,
     );
 
     if (!body.CheckoutRequestID) {
