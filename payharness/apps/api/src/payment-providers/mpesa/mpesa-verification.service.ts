@@ -217,19 +217,19 @@ export class MpesaVerificationService {
   ): Promise<{ oauthVerified: boolean; errors: string[]; warnings: string[] }> {
     try {
       this.logger.error({
-  consumerKeyPrefix: input.consumerKey.substring(0, 8),
-  consumerSecretPrefix: input.consumerSecret.substring(0, 8),
-  passkeyPrefix: input.passkey.substring(0, 8),
-  shortcode: input.shortcode,
-  businessType: input.businessType,
-  environment: input.environment,
-});
+        consumerKeyPrefix: input.consumerKey.substring(0, 8),
+        consumerSecretPrefix: input.consumerSecret.substring(0, 8),
+        passkeyPrefix: input.passkey.substring(0, 8),
+        shortcode: input.shortcode,
+        businessType: input.businessType,
+        environment: input.environment,
+      });
 
-const token = await this.generateAccessToken(
-    input.consumerKey,
-    input.consumerSecret,
-    input.environment,
-);
+      const token = await this.generateAccessToken(
+        input.consumerKey,
+        input.consumerSecret,
+        input.environment,
+      );
       this.logger.log(`[correlationId=${correlationId}] M‑Pesa OAuth succeeded (${input.environment})`);
 
       const warnings: string[] = [];
@@ -290,8 +290,8 @@ const token = await this.generateAccessToken(
           res.on('data', (chunk) => { responseBody += chunk; });
           res.on('end', () => {
             this.logger.log(`Response Status: ${res.statusCode}`);
-            this.logger.log(`Response Body: ${responseBody}`);           
-             const latencyMs = Date.now() - startTime;
+            this.logger.log(`Response Body: ${responseBody}`);
+            const latencyMs = Date.now() - startTime;
 
             // Handle redirects (3xx) – follow them with POST? Usually redirects for POST may become GET,
             // but we'll follow with a GET as per common behavior; we'll just follow the location.
@@ -558,27 +558,27 @@ const token = await this.generateAccessToken(
     const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
     const amount = Math.max(1, Math.round(input.amountCents / 100));
 
-   this.logger.log(
-  JSON.stringify(
-    {
-      businessShortCode: input.shortcode,
-      transactionType:
-        input.businessType === 'TILL'
-          ? 'CustomerBuyGoodsOnline'
-          : 'CustomerPayBillOnline',
-      amount,
-      partyA: input.phoneNumber,
-      partyB: input.shortcode,
-      phoneNumber: input.phoneNumber,
-      accountReference: input.accountReference,
-      transactionDesc: input.description,
-      timestamp,
-      callback: input.callbackUrl,
-    },
-    null,
-    2,
-  ),
-);
+    this.logger.log(
+      JSON.stringify(
+        {
+          businessShortCode: input.shortcode,
+          transactionType:
+            input.businessType === 'TILL'
+              ? 'CustomerBuyGoodsOnline'
+              : 'CustomerPayBillOnline',
+          amount,
+          partyA: input.phoneNumber,
+          partyB: input.shortcode,
+          phoneNumber: input.phoneNumber,
+          accountReference: input.accountReference,
+          transactionDesc: input.description,
+          timestamp,
+          callback: input.callbackUrl,
+        },
+        null,
+        2,
+      ),
+    );
 
     this.logger.log('Sending STK request to Safaricom...');
 
@@ -726,6 +726,14 @@ const token = await this.generateAccessToken(
           let data = '';
           res.on('data', (chunk) => (data += chunk));
           res.on('end', () => {
+            // ========== ADDED DIAGNOSTIC LOGGING ==========
+            this.logger.error('========= RAW SAFARICOM RESPONSE =========');
+            this.logger.error(`STATUS: ${res.statusCode}`);
+            this.logger.error(`HEADERS: ${JSON.stringify(res.headers, null, 2)}`);
+            this.logger.error(`BODY: ${data}`);
+            this.logger.error('=========================================');
+            // ===============================================
+
             let parsed: Record<string, any> = {};
             try {
               parsed = data ? JSON.parse(data) : {};
