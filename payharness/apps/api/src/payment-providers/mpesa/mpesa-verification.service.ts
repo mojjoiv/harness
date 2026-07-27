@@ -580,25 +580,40 @@ export class MpesaVerificationService {
       ),
     );
 
-this.logger.error("========== FINAL STK PAYLOAD ==========");
-this.logger.error(
-  JSON.stringify(
-    {
-      BusinessShortCode: payload.BusinessShortCode,
-      PartyA: payload.PartyA,
-      PartyB: payload.PartyB,
-      PhoneNumber: payload.PhoneNumber,
-      TransactionType: payload.TransactionType,
-      AccountReference: payload.AccountReference,
-      Timestamp: payload.Timestamp,
-      PasswordPrefix: payload.Password.substring(0, 20),
-    },
-    null,
-    2,
-  ),
-);
-this.logger.error("=======================================");
-// =====================================================
+    // Build the exact STK payload
+    const stkPayload = {
+      BusinessShortCode: input.shortcode,
+      Password: password,
+      Timestamp: timestamp,
+      TransactionType: input.businessType === 'TILL' ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline',
+      Amount: amount,
+      PartyA: input.phoneNumber,
+      PartyB: input.shortcode,
+      PhoneNumber: input.phoneNumber,
+      CallBackURL: input.callbackUrl,
+      AccountReference: input.accountReference,
+      TransactionDesc: input.description,
+    };
+
+    // ========== FINAL STK PAYLOAD LOGGING ==========
+    this.logger.error("========== FINAL STK PAYLOAD ==========");
+    this.logger.error(
+      JSON.stringify(
+        {
+          BusinessShortCode: stkPayload.BusinessShortCode,
+          PartyA: stkPayload.PartyA,
+          PartyB: stkPayload.PartyB,
+          PhoneNumber: stkPayload.PhoneNumber,
+          TransactionType: stkPayload.TransactionType,
+          AccountReference: stkPayload.AccountReference,
+          Timestamp: stkPayload.Timestamp,
+          PasswordPrefix: stkPayload.Password.substring(0, 20),
+        },
+        null,
+        2,
+      ),
+    );
+    this.logger.error("=======================================");
 
     this.logger.log('Sending STK request to Safaricom...');
 
@@ -607,19 +622,7 @@ this.logger.error("=======================================");
       'POST',
       '/mpesa/stkpush/v1/processrequest',
       { Authorization: `Bearer ${accessToken}` },
-      {
-        BusinessShortCode: input.shortcode,
-        Password: password,
-        Timestamp: timestamp,
-        TransactionType: input.businessType === 'TILL' ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline',
-        Amount: amount,
-        PartyA: input.phoneNumber,
-        PartyB: input.shortcode,
-        PhoneNumber: input.phoneNumber,
-        CallBackURL: input.callbackUrl,
-        AccountReference: input.accountReference,
-        TransactionDesc: input.description,
-      },
+      stkPayload,
     );
 
     if (!body.CheckoutRequestID) {
