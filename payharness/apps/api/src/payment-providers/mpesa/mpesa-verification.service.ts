@@ -580,6 +580,26 @@ export class MpesaVerificationService {
       ),
     );
 
+this.logger.error("========== FINAL STK PAYLOAD ==========");
+this.logger.error(
+  JSON.stringify(
+    {
+      BusinessShortCode: payload.BusinessShortCode,
+      PartyA: payload.PartyA,
+      PartyB: payload.PartyB,
+      PhoneNumber: payload.PhoneNumber,
+      TransactionType: payload.TransactionType,
+      AccountReference: payload.AccountReference,
+      Timestamp: payload.Timestamp,
+      PasswordPrefix: payload.Password.substring(0, 20),
+    },
+    null,
+    2,
+  ),
+);
+this.logger.error("=======================================");
+// =====================================================
+
     this.logger.log('Sending STK request to Safaricom...');
 
     const body = await this.request(
