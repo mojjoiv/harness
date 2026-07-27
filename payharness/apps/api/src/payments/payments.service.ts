@@ -122,6 +122,11 @@ export class PaymentsService {
 
       const credential = await this.getActiveCredential(merchantId, 'MPESA', payment.environment);
       const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(credential);
+      this.logger.error("===== DECRYPTED SECRETS =====");
+this.logger.error(`ConsumerKey: ${secrets.consumerKey}`);
+this.logger.error(`ConsumerSecret: ${secrets.consumerSecret.substring(0,12)}...`);
+this.logger.error(`Passkey: ${secrets.passkey}`);
+this.logger.error("============================");
       const publicConfig = credential.publicConfig as { shortcode: string };
 
       // Pass correlation ID to the verification service (if it accepts it)
