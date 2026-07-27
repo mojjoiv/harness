@@ -177,7 +177,11 @@ this.logger.error("============================");
       this.logger.log(`[correlationId=${correlationId}] decryptSecrets() - done`);
 
       this.logger.log(`[correlationId=${correlationId}] Loading publicConfig`);
-      const publicConfig = credential.publicConfig as { shortcode: string; businessType: 'PAYBILL' | 'TILL' };
+      const publicConfig = credential.publicConfig as {
+        shortcode: string;
+        businessType: 'PAYBILL' | 'TILL';
+        accountReference?: string;
+      };
       this.logger.log(`[correlationId=${correlationId}] publicConfig: shortcode=${publicConfig.shortcode}, type=${publicConfig.businessType}`);
 
       this.logger.log(`[correlationId=${correlationId}] webhookUrl() - start`);
@@ -198,7 +202,8 @@ this.logger.error("============================");
           callbackUrl,
           amountCents: dto.amountCents,
           phoneNumber: dto.phoneNumber!,
-          accountReference: (dto.metadata?.accountReference as string) || 'PayHarness',
+          accountReference:
+            (dto.metadata?.accountReference as string) || publicConfig.accountReference || 'PayHarness',
           description: (dto.metadata?.description as string) || 'Payment',
           // correlationId, // if we extend the interface
         });
@@ -454,6 +459,7 @@ this.logger.error("============================");
   ) {
     const credential = await this.prisma.providerCredential.findFirst({
       where: { merchantId, provider, environment, status: 'ACTIVE' },
+      orderBy: [{ isDefault: 'desc' }, { lastVerifiedAt: 'desc' }, { updatedAt: 'desc' }],
     });
     if (!credential) {
       throw new NotFoundException(`Active ${provider} ${environment} credentials were not found`);
