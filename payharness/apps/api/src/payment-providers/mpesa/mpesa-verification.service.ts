@@ -544,18 +544,58 @@ export class MpesaVerificationService {
 
   // ---- STK Push methods (unchanged) ----
   async initiateStkPush(input: StkPushInput): Promise<StkPushResult> {
-    const accessToken = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
-    this.logger.log(`OAuth Token Preview: ${accessToken.substring(0,25)}...`);
-    return this.initiateStkPushWithToken(accessToken, input);
-  }
+  this.logger.warn('========== M-PESA CREDENTIALS ==========');
+  this.logger.warn(`Environment: ${input.environment}`);
+  this.logger.warn(`Shortcode: ${input.shortcode}`);
+  this.logger.warn(`BusinessType: ${input.businessType}`);
+  this.logger.warn(`ConsumerKey: ${input.consumerKey}`);
+  this.logger.warn(
+    `ConsumerSecret Prefix: ${input.consumerSecret.substring(0, 12)}...`,
+  );
+  this.logger.warn(
+    `Passkey Prefix: ${input.passkey.substring(0, 30)}...`,
+  );
+  this.logger.warn('========================================');
+
+  const accessToken = await this.generateAccessToken(
+    input.consumerKey,
+    input.consumerSecret,
+    input.environment,
+  );
+
+  this.logger.log(
+    `OAuth Token Preview: ${accessToken.substring(0, 25)}...`,
+  );
+
+  return this.initiateStkPushWithToken(accessToken, input);
+}
 
   private async initiateStkPushWithToken(
     accessToken: string,
     input: Omit<StkPushInput, 'consumerKey' | 'consumerSecret'> & { consumerKey?: string; consumerSecret?: string },
   ): Promise<StkPushResult> {
     const timestamp = this.timestamp();
-    this.logger.log(`STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`);
-    const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
+
+this.logger.warn(`Passkey Length: ${input.passkey.length}`);
+this.logger.warn(`Passkey Starts: ${input.passkey.substring(0, 12)}`);
+this.logger.warn(
+  `Passkey Ends: ${input.passkey.substring(input.passkey.length - 12)}`,
+);
+
+this.logger.log(
+  `STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`,
+);
+
+    this.logger.warn("========== DECRYPTED CREDENTIALS ==========");
+this.logger.warn(`Shortcode: ${input.shortcode}`);
+this.logger.warn(`Passkey: ${input.passkey}`);
+this.logger.warn("===========================================");
+
+const password = this.buildPassword(
+  input.shortcode,
+  input.passkey,
+  timestamp,
+);
     const amount = Math.max(1, Math.round(input.amountCents / 100));
 
     this.logger.log(
