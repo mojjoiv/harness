@@ -544,10 +544,31 @@ export class MpesaVerificationService {
 
   // ---- STK Push methods (unchanged) ----
   async initiateStkPush(input: StkPushInput): Promise<StkPushResult> {
-    const accessToken = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
-    this.logger.log(`OAuth Token Preview: ${accessToken.substring(0,25)}...`);
-    return this.initiateStkPushWithToken(accessToken, input);
-  }
+  this.logger.warn('========== M-PESA CREDENTIALS ==========');
+  this.logger.warn(`Environment: ${input.environment}`);
+  this.logger.warn(`Shortcode: ${input.shortcode}`);
+  this.logger.warn(`BusinessType: ${input.businessType}`);
+  this.logger.warn(`ConsumerKey: ${input.consumerKey}`);
+  this.logger.warn(
+    `ConsumerSecret Prefix: ${input.consumerSecret.substring(0, 12)}...`,
+  );
+  this.logger.warn(
+    `Passkey Prefix: ${input.passkey.substring(0, 30)}...`,
+  );
+  this.logger.warn('========================================');
+
+  const accessToken = await this.generateAccessToken(
+    input.consumerKey,
+    input.consumerSecret,
+    input.environment,
+  );
+
+  this.logger.log(
+    `OAuth Token Preview: ${accessToken.substring(0, 25)}...`,
+  );
+
+  return this.initiateStkPushWithToken(accessToken, input);
+}
 
   private async initiateStkPushWithToken(
     accessToken: string,
