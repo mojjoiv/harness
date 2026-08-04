@@ -8,6 +8,7 @@ import { CredentialCryptoService } from '../common/crypto/credential-crypto.serv
 import { PrismaService } from '../common/prisma.service';
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
 import { computeOverallStatus, ProviderVerificationResult } from '../payment-providers/provider-verification.types';
+import { StripeVerificationService } from '../payment-providers/stripe/stripe-verification.service';
 import { PlatformGatewaysService } from '../platform/platform-gateways/platform-gateways.service';
 import { ProviderAvailabilityService } from '../provider-availability/provider-availability.service';
 import { SaveProviderCredentialDto } from './dto/provider-credential.dto';
