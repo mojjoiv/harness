@@ -2,7 +2,7 @@ services:
   - type: web
     name: payharness-api
     runtime: node
-    rootDir: .
+    rootDir: payharness
     buildCommand: npm install && npm run build:api
     startCommand: npm run db:setup && npm run start:prod
     envVars:
@@ -21,4 +21,12 @@ services:
       - key: APP_URL
         sync: false
       - key: CHECKOUT_URL
+        sync: false
+      - key: GMAIL_CLIENT_ID
+        sync: false
+      - key: GMAIL_CLIENT_SECRET
+        sync: false
+      - key: GMAIL_REDIRECT_URI
+        sync: false
+      - key: GMAIL_REFRESH_TOKEN
         sync: false
