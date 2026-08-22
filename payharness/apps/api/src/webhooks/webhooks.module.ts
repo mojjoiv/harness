@@ -8,6 +8,6 @@ import { WebhooksService } from './webhooks.service';
   imports: [AuditLogsModule],
   controllers: [WebhooksController],
   providers: [WebhooksService, WebhookDeliveryService],
-  exports: [WebhookDeliveryService],
+  exports: [WebhookDeliveryService, WebhooksService],
 })
 export class WebhooksModule {}
