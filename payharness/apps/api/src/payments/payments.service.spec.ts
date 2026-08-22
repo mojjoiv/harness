@@ -34,7 +34,7 @@ describe('PaymentsService', () => {
       id: 'credential-1',
       provider: 'MPESA',
       environment: 'SANDBOX',
-      publicConfig: {},
+      publicConfig: { shortcode: '174379' },
       encryptedSecretConfig: {},
     });
   });
@@ -68,5 +68,39 @@ describe('PaymentsService', () => {
       expect.objectContaining({ environment: 'SANDBOX', amountCents: 1000 }),
       expect.any(Function),
     );
+  });
+
+  it('never logs decrypted M-Pesa credentials', async () => {
+    const secrets = {
+      consumerKey: 'consumer-key-secret',
+      consumerSecret: 'consumer-secret-secret',
+      passkey: 'passkey-secret',
+    };
+    crypto.decrypt.mockReturnValue(secrets);
+    prisma.payment.findFirst.mockResolvedValue({
+      id: 'payment-1',
+      merchantId: 'merchant-1',
+      provider: 'MPESA',
+      environment: 'SANDBOX',
+      status: 'PENDING',
+      providerReference: 'ws_CO_123',
+    });
+    mpesaVerification.queryStkStatus.mockResolvedValue({ status: 'PENDING' });
+
+    const loggerLogSpy = jest.spyOn((service as any).logger, 'log');
+    const loggerErrorSpy = jest.spyOn((service as any).logger, 'error');
+
+    await service.queryPayment('merchant-1', 'user-1', 'payment-1');
+
+    const loggedText = loggerLogSpy.mock.calls.flat().join(' ');
+    const errorText = loggerErrorSpy.mock.calls.flat().join(' ');
+
+    expect(loggedText).toContain('M-Pesa credentials decrypted successfully (values redacted)');
+    expect(loggedText).not.toContain(secrets.consumerKey);
+    expect(loggedText).not.toContain(secrets.consumerSecret);
+    expect(loggedText).not.toContain(secrets.passkey);
+    expect(errorText).not.toContain(secrets.consumerKey);
+    expect(errorText).not.toContain(secrets.consumerSecret);
+    expect(errorText).not.toContain(secrets.passkey);
   });
 });
