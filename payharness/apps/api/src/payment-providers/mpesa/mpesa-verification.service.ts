@@ -184,15 +184,6 @@ export class MpesaVerificationService {
     correlationId: string,
   ): Promise<{ oauthVerified: boolean; errors: string[]; warnings: string[] }> {
     try {
-      this.logger.error({
-        consumerKeyPrefix: input.consumerKey.substring(0, 8),
-        consumerSecretPrefix: input.consumerSecret.substring(0, 8),
-        passkeyPrefix: input.passkey.substring(0, 8),
-        shortcode: input.shortcode,
-        businessType: input.businessType,
-        environment: input.environment,
-      });
-
       const token = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
       this.logger.log(`[correlationId=${correlationId}] M‑Pesa OAuth succeeded (${input.environment})`);
 
@@ -477,13 +468,9 @@ export class MpesaVerificationService {
     this.logger.warn(`Environment: ${input.environment}`);
     this.logger.warn(`Shortcode: ${input.shortcode}`);
     this.logger.warn(`BusinessType: ${input.businessType}`);
-    this.logger.warn(`ConsumerKey: ${input.consumerKey}`);
-    this.logger.warn(`ConsumerSecret Prefix: ${input.consumerSecret.substring(0, 12)}...`);
-    this.logger.warn(`Passkey Prefix: ${input.passkey.substring(0, 30)}...`);
     this.logger.warn('========================================');
 
     const accessToken = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
-    this.logger.log(`OAuth Token Preview: ${accessToken.substring(0, 25)}...`);
     return this.initiateStkPushWithToken(accessToken, input);
   }
 
@@ -493,9 +480,6 @@ export class MpesaVerificationService {
   ): Promise<StkPushResult> {
     const timestamp = this.timestamp();
 
-    this.logger.warn(`Passkey Length: ${input.passkey.length}`);
-    this.logger.warn(`Passkey Starts: ${input.passkey.substring(0, 12)}`);
-    this.logger.warn(`Passkey Ends: ${input.passkey.substring(input.passkey.length - 12)}`);
     this.logger.log(`STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`);
 
     const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
@@ -545,7 +529,6 @@ export class MpesaVerificationService {
           TransactionType: stkPayload.TransactionType,
           AccountReference: stkPayload.AccountReference,
           Timestamp: stkPayload.Timestamp,
-          PasswordPrefix: stkPayload.Password.substring(0, 20),
         },
         null,
         2,
