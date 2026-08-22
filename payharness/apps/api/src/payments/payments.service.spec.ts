@@ -7,14 +7,8 @@ describe('PaymentsService', () => {
     },
   } as any;
 
-  const config = {
-    get: jest.fn(),
-  } as any;
-
-  const crypto = {
-    decrypt: jest.fn(),
-  } as any;
-
+  const config = { get: jest.fn() } as any;
+  const crypto = { decrypt: jest.fn() } as any;
   const mpesa = { createStkPush: jest.fn() } as any;
   const mpesaVerification = { queryStkStatus: jest.fn() } as any;
   const stripe = { createPaymentIntent: jest.fn() } as any;
@@ -36,9 +30,18 @@ describe('PaymentsService', () => {
       paypal,
       auditLogs,
     );
+    jest.spyOn(service as any, 'getActiveCredential').mockResolvedValue({
+      id: 'credential-1',
+      provider: 'MPESA',
+      environment: 'SANDBOX',
+      publicConfig: {},
+      encryptedSecretConfig: {},
+    });
   });
 
   it('blocks LIVE M-Pesa STK requests before loading credentials', async () => {
+    const credentialSpy = jest.spyOn(service as any, 'getActiveCredential');
+
     await expect(
       service.createMpesaStk('merchant-1', 'user-1', {
         environment: 'LIVE',
@@ -47,12 +50,10 @@ describe('PaymentsService', () => {
       } as any),
     ).rejects.toThrow();
 
-    expect(prisma.payment.findFirst).not.toHaveBeenCalled();
+    expect(credentialSpy).not.toHaveBeenCalled();
   });
 
   it('uses the simulated path when no phone number is supplied', async () => {
-    mpesa.createStkPush.mockResolvedValue({ checkoutRequestId: 'simulated' });
-
     const processSpy = jest.spyOn(service as any, 'process').mockResolvedValue({ status: 'PENDING' });
 
     await service.createMpesaStk('merchant-1', undefined, {
@@ -60,6 +61,12 @@ describe('PaymentsService', () => {
       amountCents: 1000,
     } as any);
 
-    expect(processSpy).toHaveBeenCalled();
+    expect(processSpy).toHaveBeenCalledWith(
+      'merchant-1',
+      undefined,
+      'MPESA',
+      expect.objectContaining({ environment: 'SANDBOX', amountCents: 1000 }),
+      expect.any(Function),
+    );
   });
 });
