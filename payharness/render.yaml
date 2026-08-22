@@ -7,7 +7,7 @@ services:
     startCommand: npm run db:setup && npm run start:prod
     envVars:
       - key: NODE_VERSION
-        value: 16.20.2
+        value: 20.19.1
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
