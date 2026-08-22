@@ -27,7 +27,6 @@ export class PaymentsService {
     private readonly paypal: PaypalProviderService,
     private readonly auditLogs: AuditLogsService,
   ) {
-    // ----- Startup logging (Task 5) -----
     this.logStartupInfo();
   }
 
@@ -49,10 +48,7 @@ export class PaymentsService {
       createRealMpesaStk instrumentation enabled ✅`);
   }
 
-  // ----- Public methods (unchanged signatures) -----
-
   async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
-    // Generate correlation ID for this request
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] Entering createMpesaStk`, {
       merchantId,
@@ -63,19 +59,15 @@ export class PaymentsService {
     });
 
     try {
-      if (dto.environment === 'LIVE') {
-        this.blockLive('MPESA');
-      }
-
       const credential = await this.getActiveCredential(merchantId, 'MPESA', dto.environment);
+      this.assertLiveSupported('MPESA', dto.environment, credential);
+
       this.logger.log(`[correlationId=${correlationId}] Credential loaded`, {
         credentialId: credential.id,
         provider: credential.provider,
         environment: credential.environment,
       });
 
-      // Real push only when the caller gave us a phone to prompt and isn't
-      // asking for the instant simulated path
       if (!dto.phoneNumber || dto.simulateOutcome) {
         this.logger.log(`[correlationId=${correlationId}] Using simulated flow (no phone or simulateOutcome set)`);
         return this.process(merchantId, userId, 'MPESA', dto, (input) => this.mpesa.createStkPush(input));
@@ -107,28 +99,14 @@ export class PaymentsService {
 
     try {
       const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, merchantId } });
-      if (!payment) {
-        throw new NotFoundException('Payment not found');
-      }
-      if (payment.provider !== 'MPESA') {
-        throw new BadRequestException('Only M-Pesa payments support status queries right now');
-      }
-      if (payment.status !== 'PENDING') {
-        return { paymentId: payment.id, status: payment.status };
-      }
-      if (!payment.providerReference) {
-        throw new BadRequestException('This payment has no Safaricom CheckoutRequestID to query');
-      }
+      if (!payment) throw new NotFoundException('Payment not found');
+      if (payment.provider !== 'MPESA') throw new BadRequestException('Only M-Pesa payments support status queries right now');
+      if (payment.status !== 'PENDING') return { paymentId: payment.id, status: payment.status };
+      if (!payment.providerReference) throw new BadRequestException('This payment has no Safaricom CheckoutRequestID to query');
 
       const credential = await this.getActiveCredential(merchantId, 'MPESA', payment.environment);
       const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(credential);
-      this.logger.log(`[correlationId=${correlationId}] M-Pesa credentials decrypted successfully (values redacted)`);
       const publicConfig = credential.publicConfig as { shortcode: string };
-
-      // Pass correlation ID to the verification service (if it accepts it)
-      // We'll assume it logs it internally; we pass as extra param if possible.
-      // For now we just log our correlation ID.
-      this.logger.log(`[correlationId=${correlationId}] Querying STK status for ${payment.providerReference}`);
 
       const result = await this.mpesaVerification.queryStkStatus({
         consumerKey: secrets.consumerKey,
@@ -137,12 +115,9 @@ export class PaymentsService {
         passkey: secrets.passkey,
         environment: payment.environment,
         checkoutRequestId: payment.providerReference,
-        // optionally: correlationId, // if we extend the interface
       });
 
-      if (result.status === 'PENDING') {
-        return { paymentId: payment.id, status: 'PENDING' as const };
-      }
+      if (result.status === 'PENDING') return { paymentId: payment.id, status: 'PENDING' as const };
 
       await this.settlePendingPayment(merchantId, userId, payment, result.status, result.resultDesc, correlationId);
       return { paymentId: payment.id, status: result.status };
@@ -152,10 +127,6 @@ export class PaymentsService {
     }
   }
 
-  // ------------------------------------------------------------------
-  // Private methods with instrumentation
-  // ------------------------------------------------------------------
-
   private async createRealMpesaStk(
     merchantId: string,
     userId: string | undefined,
@@ -164,87 +135,55 @@ export class PaymentsService {
     correlationId: string,
   ) {
     try {
-      this.logger.log(`[correlationId=${correlationId}] getAndValidateSession() - start`);
       const session = await this.getAndValidateSession(merchantId, dto.checkoutSessionId);
-      this.logger.log(`[correlationId=${correlationId}] getAndValidateSession() - done`);
-
-      this.logger.log(`[correlationId=${correlationId}] decryptSecrets() - start`);
       const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(credential);
-      this.logger.log(`[correlationId=${correlationId}] decryptSecrets() - done`);
-
-      this.logger.log(`[correlationId=${correlationId}] Loading publicConfig`);
       const publicConfig = credential.publicConfig as {
         shortcode: string;
         businessType: 'PAYBILL' | 'TILL';
         accountReference?: string;
       };
-      this.logger.log(`[correlationId=${correlationId}] publicConfig: shortcode=${publicConfig.shortcode}, type=${publicConfig.businessType}`);
-
-      this.logger.log(`[correlationId=${correlationId}] webhookUrl() - start`);
       const callbackUrl = this.webhookUrl('MPESA', merchantId);
-      this.logger.log(`[correlationId=${correlationId}] webhookUrl: ${callbackUrl}`);
 
-      this.logger.log(`[correlationId=${correlationId}] Before initiateStkPush - amount=${dto.amountCents}, phone=${this.maskPhone(dto.phoneNumber!)}`);
+      const pushResult = await this.mpesaVerification.initiateStkPush({
+        consumerKey: secrets.consumerKey,
+        consumerSecret: secrets.consumerSecret,
+        shortcode: publicConfig.shortcode,
+        passkey: secrets.passkey,
+        businessType: publicConfig.businessType,
+        environment: dto.environment,
+        callbackUrl,
+        amountCents: dto.amountCents,
+        phoneNumber: dto.phoneNumber!,
+        accountReference: (dto.metadata?.accountReference as string) || publicConfig.accountReference || 'PayHarness',
+        description: (dto.metadata?.description as string) || 'Payment',
+      });
 
-      let pushResult;
-      try {
-        pushResult = await this.mpesaVerification.initiateStkPush({
-          consumerKey: secrets.consumerKey,
-          consumerSecret: secrets.consumerSecret,
-          shortcode: publicConfig.shortcode,
-          passkey: secrets.passkey,
-          businessType: publicConfig.businessType,
+      const payment = await this.prisma.payment.create({
+        data: {
+          merchantId,
+          provider: 'MPESA',
           environment: dto.environment,
-          callbackUrl,
           amountCents: dto.amountCents,
-          phoneNumber: dto.phoneNumber!,
-          accountReference:
-            (dto.metadata?.accountReference as string) || publicConfig.accountReference || 'PayHarness',
-          description: (dto.metadata?.description as string) || 'Payment',
-          // correlationId, // if we extend the interface
-        });
-        this.logger.log(`[correlationId=${correlationId}] After initiateStkPush - success, checkoutRequestId=${pushResult.checkoutRequestId}`);
-      } catch (error) {
-        this.logger.error(`[correlationId=${correlationId}] initiateStkPush failed:`, this.serializeError(error));
-        // Rethrow after logging
-        throw error;
-      }
-
-      this.logger.log(`[correlationId=${correlationId}] Before prisma.payment.create()`);
-      let payment;
-      try {
-        payment = await this.prisma.payment.create({
-          data: {
-            merchantId,
-            provider: 'MPESA',
-            environment: dto.environment,
-            amountCents: dto.amountCents,
-            currency: dto.currency,
-            status: 'PENDING',
-            customerId: dto.customerId,
-            checkoutSessionId: session?.id,
-            providerReference: pushResult.checkoutRequestId,
-            metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
-            transactions: {
-              create: {
-                merchantId,
-                type: 'PAYMENT',
-                amountCents: dto.amountCents,
-                currency: dto.currency,
-                status: 'PENDING',
-                reference: pushResult.checkoutRequestId,
-                metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
-              },
+          currency: dto.currency,
+          status: 'PENDING',
+          customerId: dto.customerId,
+          checkoutSessionId: session?.id,
+          providerReference: pushResult.checkoutRequestId,
+          metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+          transactions: {
+            create: {
+              merchantId,
+              type: 'PAYMENT',
+              amountCents: dto.amountCents,
+              currency: dto.currency,
+              status: 'PENDING',
+              reference: pushResult.checkoutRequestId,
+              metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
             },
           },
-        });
-        this.logger.log(`[correlationId=${correlationId}] After prisma.payment.create() - paymentId=${payment.id}`);
-      } catch (error) {
-        this.logger.error(`[correlationId=${correlationId}] prisma.payment.create() failed:`, this.serializePrismaError(error));
-        throw error;
-      }
+        },
+      });
 
-      this.logger.log(`[correlationId=${correlationId}] Before audit log`);
       try {
         await this.auditLogs.create({
           merchantId,
@@ -254,16 +193,14 @@ export class PaymentsService {
           entityId: payment.id,
           metadata: { checkoutRequestId: pushResult.checkoutRequestId, phoneNumber: this.maskPhone(dto.phoneNumber!) },
         });
-        this.logger.log(`[correlationId=${correlationId}] After audit log`);
       } catch (error) {
         this.logger.error(`[correlationId=${correlationId}] Audit log creation failed:`, this.serializeError(error));
-        // Continue – audit failure shouldn't break the flow
       }
 
       return {
         paymentId: payment.id,
         provider: 'MPESA' as const,
-        environment: 'SANDBOX' as const,
+        environment: dto.environment,
         status: 'PENDING' as const,
         checkoutRequestId: pushResult.checkoutRequestId,
         message: 'STK push sent -- ask the customer to check their phone, then poll GET /payments/:id/query',
@@ -283,15 +220,9 @@ export class PaymentsService {
     correlationId?: string,
   ) {
     const cid = correlationId || randomUUID();
-    this.logger.log(`[correlationId=${cid}] settlePendingPayment - paymentId=${payment.id}, status=${finalStatus}`);
-
     try {
       await this.prisma.payment.update({ where: { id: payment.id }, data: { status: finalStatus } });
-      await this.prisma.transaction.updateMany({
-        where: { paymentId: payment.id },
-        data: { status: finalStatus },
-      });
-
+      await this.prisma.transaction.updateMany({ where: { paymentId: payment.id }, data: { status: finalStatus } });
       await this.auditLogs.create({
         merchantId,
         userId,
@@ -302,10 +233,7 @@ export class PaymentsService {
       });
 
       if (payment.checkoutSessionId) {
-        const session = await this.prisma.checkoutSession.update({
-          where: { id: payment.checkoutSessionId },
-          data: { status: finalStatus },
-        });
+        const session = await this.prisma.checkoutSession.update({ where: { id: payment.checkoutSessionId }, data: { status: finalStatus } });
         await this.forwardWebhook(merchantId, {
           event: finalStatus === 'SUCCEEDED' ? 'payment.succeeded' : 'payment.failed',
           checkoutSessionId: session.id,
@@ -317,7 +245,6 @@ export class PaymentsService {
           status: finalStatus,
         });
       }
-      this.logger.log(`[correlationId=${cid}] settlePendingPayment completed`);
     } catch (error) {
       this.logger.error(`[correlationId=${cid}] settlePendingPayment failed:`, this.serializeError(error));
       throw error;
@@ -332,14 +259,9 @@ export class PaymentsService {
     callAdapter: (input: Record<string, unknown>) => Promise<{ providerReference: string }>,
   ) {
     const correlationId = randomUUID();
-    this.logger.log(`[correlationId=${correlationId}] process - ${provider}, env=${dto.environment}`);
-
     try {
-      if (dto.environment === 'LIVE') {
-        this.blockLive(provider);
-      }
-
-      await this.getActiveCredential(merchantId, provider, dto.environment);
+      const credential = await this.getActiveCredential(merchantId, provider, dto.environment);
+      this.assertLiveSupported(provider, dto.environment, credential);
       const session = await this.getAndValidateSession(merchantId, dto.checkoutSessionId);
 
       const result = await callAdapter({
@@ -349,7 +271,6 @@ export class PaymentsService {
       });
 
       const finalStatus: PaymentStatus = dto.simulateOutcome === 'FAILED' ? 'FAILED' : 'SUCCEEDED';
-
       const payment = await this.prisma.payment.create({
         data: {
           merchantId,
@@ -402,7 +323,6 @@ export class PaymentsService {
         });
       }
 
-      this.logger.log(`[correlationId=${correlationId}] process completed - paymentId=${payment.id}`);
       return {
         paymentId: payment.id,
         provider,
@@ -417,34 +337,34 @@ export class PaymentsService {
     }
   }
 
-  // ------------------------------------------------------------------
-  // Helpers (unchanged except for added logging)
-  // ------------------------------------------------------------------
+  private assertLiveSupported(
+    provider: Provider,
+    environment: CreateProviderPaymentDto['environment'],
+    credential: { verificationStatus?: string; oauthVerified?: boolean; accountVerified?: boolean; webhookVerified?: boolean; environmentVerified?: boolean },
+  ) {
+    if (environment !== 'LIVE') return;
 
-  private blockLive(provider: Provider): never {
-    throw new BadRequestException(
-      `Live ${provider} payment processing isn't available yet -- this provider isn't connected to a real ` +
-        'payment API. Use SANDBOX to test your integration.',
-    );
+    if (provider !== 'MPESA') {
+      throw new BadRequestException(`Live ${provider} processing is not enabled yet because the ${provider} adapter is still sandbox/mock-only.`);
+    }
+
+    if (
+      credential.verificationStatus !== 'VERIFIED' ||
+      credential.oauthVerified !== true ||
+      credential.accountVerified !== true ||
+      credential.webhookVerified !== true ||
+      credential.environmentVerified !== true
+    ) {
+      throw new BadRequestException('Live M-Pesa processing requires a fully verified provider credential before payments can be initiated.');
+    }
   }
 
   private async getAndValidateSession(merchantId: string, checkoutSessionId?: string) {
-    if (!checkoutSessionId) {
-      return null;
-    }
-
-    const session = await this.prisma.checkoutSession.findFirst({
-      where: { id: checkoutSessionId, merchantId },
-    });
-    if (!session) {
-      throw new NotFoundException('Checkout session not found');
-    }
-    if (session.status !== 'PENDING') {
-      throw new BadRequestException(`This checkout session is already ${session.status.toLowerCase()}`);
-    }
-    if (session.expiresAt < new Date()) {
-      throw new BadRequestException('This checkout session has expired');
-    }
+    if (!checkoutSessionId) return null;
+    const session = await this.prisma.checkoutSession.findFirst({ where: { id: checkoutSessionId, merchantId } });
+    if (!session) throw new NotFoundException('Checkout session not found');
+    if (session.status !== 'PENDING') throw new BadRequestException(`This checkout session is already ${session.status.toLowerCase()}`);
+    if (session.expiresAt < new Date()) throw new BadRequestException('This checkout session has expired');
     return session;
   }
 
@@ -457,9 +377,7 @@ export class PaymentsService {
       where: { merchantId, provider, environment, status: 'ACTIVE' },
       orderBy: [{ isDefault: 'desc' }, { lastVerifiedAt: 'desc' }, { updatedAt: 'desc' }],
     });
-    if (!credential) {
-      throw new NotFoundException(`Active ${provider} ${environment} credentials were not found`);
-    }
+    if (!credential) throw new NotFoundException(`Active ${provider} ${environment} credentials were not found`);
     return credential;
   }
 
@@ -479,9 +397,7 @@ export class PaymentsService {
   private async forwardWebhook(merchantId: string, payload: Record<string, unknown>) {
     const settings = await this.prisma.merchantSettings.findUnique({ where: { merchantId } });
     const url = settings?.webhookForwardingUrl;
-    if (!url) {
-      return;
-    }
+    if (!url) return;
 
     try {
       await this.postJson(url, payload);
@@ -521,20 +437,10 @@ export class PaymentsService {
     });
   }
 
-  // ------------------------------------------------------------------
-  // Serialization helpers for error logging (Task 4)
-  // ------------------------------------------------------------------
-
   private serializeError(error: unknown): Record<string, any> {
     if (!error) return { message: 'Unknown error' };
     if (error instanceof Error) {
-      return {
-        name: error.constructor.name,
-        message: error.message,
-        stack: error.stack,
-        // Include additional properties like response body if any
-        ...(error as any),
-      };
+      return { name: error.constructor.name, message: error.message, stack: error.stack, ...(error as any) };
     }
     try {
       return { error: JSON.stringify(error) };
@@ -545,14 +451,8 @@ export class PaymentsService {
 
   private serializePrismaError(error: unknown): Record<string, any> {
     const base = this.serializeError(error);
-    // Prisma errors have code, meta, clientVersion
     if (error && typeof error === 'object' && 'code' in error) {
-      return {
-        ...base,
-        prismaCode: (error as any).code,
-        prismaMeta: (error as any).meta,
-        clientVersion: (error as any).clientVersion,
-      };
+      return { ...base, prismaCode: (error as any).code, prismaMeta: (error as any).meta, clientVersion: (error as any).clientVersion };
     }
     return base;
   }
