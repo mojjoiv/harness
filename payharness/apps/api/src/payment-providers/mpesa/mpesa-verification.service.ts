@@ -1,14 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, Provider, ProviderVerificationStatus } from '@prisma/client';
-import * as https from 'https';
-import * as http from 'http';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../common/prisma.service';
+import { MpesaWebhookVerifierService, MpesaWebhookVerificationResult } from './mpesa-webhook-verifier.service';
 
-// --------------------------------------------------------------------
-// Interfaces (unchanged)
-// --------------------------------------------------------------------
 export interface MpesaVerificationInput {
   credentialId: string;
   merchantId: string;
@@ -75,15 +71,7 @@ export interface ProviderCapabilities {
   supportsRegisterUrls: boolean;
 }
 
-export interface WebhookVerificationResult {
-  reachable: boolean;
-  statusCode?: number;
-  latencyMs?: number;
-  error?: string;
-  networkError?: string;
-  requestUrl: string;
-  responseBody?: string;
-}
+export interface WebhookVerificationResult extends MpesaWebhookVerificationResult {}
 
 interface MpesaApiError extends Error {
   httpStatus?: number;
@@ -93,6 +81,7 @@ interface MpesaApiError extends Error {
 @Injectable()
 export class MpesaVerificationService {
   private readonly logger = new Logger(MpesaVerificationService.name);
+  private readonly webhookVerifier = new MpesaWebhookVerifierService();
 
   constructor(
     private readonly config: ConfigService,
@@ -208,114 +197,7 @@ export class MpesaVerificationService {
     input: MpesaVerificationInput,
     correlationId: string,
   ): Promise<WebhookVerificationResult> {
-    const targetUrl = input.callbackUrl;
-    const timeoutMs = 5000;
-    const maxRedirects = 5;
-    let redirectCount = 0;
-    const startTime = Date.now();
-    const payload = JSON.stringify({ verification: true, timestamp: new Date().toISOString() });
-
-    const performRequest = (urlToFetch: string): Promise<WebhookVerificationResult> => {
-      return new Promise((resolve) => {
-        const parsed = new URL(urlToFetch);
-        const options: https.RequestOptions = {
-          hostname: parsed.hostname,
-          port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-          path: parsed.pathname + parsed.search,
-          method: 'POST',
-          headers: {
-            'User-Agent': 'PayHarness-Verification/1.0',
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(payload),
-            Accept: '*/*',
-          },
-          timeout: timeoutMs,
-        };
-
-        const protocol = parsed.protocol === 'https:' ? https : http;
-        const req = protocol.request(options, (res) => {
-          const statusCode = res.statusCode || 0;
-          let responseBody = '';
-          res.on('data', (chunk) => { responseBody += chunk; });
-          res.on('end', () => {
-            this.logger.log(`Response Status: ${res.statusCode}`);
-            this.logger.log(`Response Body: ${responseBody}`);
-            const latencyMs = Date.now() - startTime;
-
-            if (statusCode >= 300 && statusCode < 400 && res.headers.location) {
-              if (redirectCount >= maxRedirects) {
-                resolve({
-                  reachable: false,
-                  statusCode,
-                  latencyMs,
-                  error: `Too many redirects (max ${maxRedirects})`,
-                  requestUrl: urlToFetch,
-                  responseBody: responseBody.slice(0, 500),
-                });
-                return;
-              }
-              redirectCount++;
-              const nextUrl = new URL(res.headers.location, urlToFetch).href;
-              performRequest(nextUrl).then(resolve);
-              return;
-            }
-
-            resolve({
-              reachable: true,
-              statusCode,
-              latencyMs,
-              requestUrl: urlToFetch,
-              responseBody: responseBody.slice(0, 1000),
-            });
-          });
-        });
-
-        req.on('error', (err: NodeJS.ErrnoException) => {
-          const latencyMs = Date.now() - startTime;
-          let errorMsg = err.message;
-          const networkError = err.code || 'UNKNOWN';
-
-          if (err.code === 'ENOTFOUND') {
-            errorMsg = `DNS resolution failed for ${parsed.hostname}`;
-          } else if (err.code === 'ECONNREFUSED') {
-            errorMsg = `Connection refused by ${parsed.hostname}`;
-          } else if (err.code === 'ETIMEDOUT') {
-            errorMsg = `Request timed out after ${timeoutMs}ms`;
-          } else if (err.code === 'CERT_HAS_EXPIRED' || err.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE') {
-            errorMsg = `TLS/SSL error: ${err.message}`;
-          }
-
-          resolve({
-            reachable: false,
-            latencyMs,
-            error: errorMsg,
-            networkError: `${networkError}: ${err.message}`,
-            requestUrl: urlToFetch,
-          });
-        });
-
-        req.on('timeout', () => {
-          req.destroy();
-          const latencyMs = Date.now() - startTime;
-          resolve({
-            reachable: false,
-            latencyMs,
-            error: `Request timed out after ${timeoutMs}ms`,
-            networkError: 'ETIMEDOUT',
-            requestUrl: urlToFetch,
-          });
-        });
-
-        req.write(payload);
-        req.end();
-      });
-    };
-
-    const result = await performRequest(targetUrl);
-    this.logger.debug(
-      `[correlationId=${correlationId}] Webhook reachability: ${result.reachable} (status ${result.statusCode}, latency ${result.latencyMs}ms)`,
-    );
-    return result;
+    return this.webhookVerifier.verify(input.callbackUrl, correlationId);
   }
 
   private verifyCapabilities(oauthVerified: boolean): ProviderCapabilities {
@@ -423,7 +305,6 @@ export class MpesaVerificationService {
     environment: 'SANDBOX' | 'LIVE',
   ): Promise<string> {
     const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
-    this.logger.log(`Sending STK Push request`);
     const body = await this.request(
       environment,
       'GET',
@@ -464,11 +345,7 @@ export class MpesaVerificationService {
   }
 
   async initiateStkPush(input: StkPushInput): Promise<StkPushResult> {
-    this.logger.warn('========== M-PESA CREDENTIALS ==========');
-    this.logger.warn(`Environment: ${input.environment}`);
-    this.logger.warn(`Shortcode: ${input.shortcode}`);
-    this.logger.warn(`BusinessType: ${input.businessType}`);
-    this.logger.warn('========================================');
+    this.logger.log(`M-Pesa STK request environment=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType}`);
 
     const accessToken = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
     return this.initiateStkPushWithToken(accessToken, input);
@@ -480,29 +357,10 @@ export class MpesaVerificationService {
   ): Promise<StkPushResult> {
     const timestamp = this.timestamp();
 
-    this.logger.log(`STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`);
+    this.logger.log(`STK request env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp}`);
 
     const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
     const amount = Math.max(1, Math.round(input.amountCents / 100));
-
-    this.logger.log(
-      JSON.stringify(
-        {
-          businessShortCode: input.shortcode,
-          transactionType: input.businessType === 'TILL' ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline',
-          amount,
-          partyA: input.phoneNumber,
-          partyB: input.shortcode,
-          phoneNumber: input.phoneNumber,
-          accountReference: input.accountReference,
-          transactionDesc: input.description,
-          timestamp,
-          callback: input.callbackUrl,
-        },
-        null,
-        2,
-      ),
-    );
 
     const stkPayload = {
       BusinessShortCode: input.shortcode,
@@ -518,24 +376,7 @@ export class MpesaVerificationService {
       TransactionDesc: input.description,
     };
 
-    this.logger.error('========== FINAL STK PAYLOAD ==========');
-    this.logger.error(
-      JSON.stringify(
-        {
-          BusinessShortCode: stkPayload.BusinessShortCode,
-          PartyA: stkPayload.PartyA,
-          PartyB: stkPayload.PartyB,
-          PhoneNumber: stkPayload.PhoneNumber,
-          TransactionType: stkPayload.TransactionType,
-          AccountReference: stkPayload.AccountReference,
-          Timestamp: stkPayload.Timestamp,
-        },
-        null,
-        2,
-      ),
-    );
-    this.logger.error('=======================================');
-    this.logger.log('Sending STK request to Safaricom...');
+    this.logger.log(`Sending STK request to Safaricom environment=${input.environment}`);
 
     const body = await this.request(
       input.environment,
@@ -635,11 +476,11 @@ export class MpesaVerificationService {
     body?: Record<string, unknown>,
   ): Promise<Record<string, any>> {
     const url = new URL(`${this.baseUrl(environment)}${path}`);
-    this.logger.log(`HTTP ${method} ${url.href}`);
+    this.logger.log(`HTTP ${method} ${url.origin}${url.pathname}${url.search}`);
     const payload = body ? JSON.stringify(body) : undefined;
 
     return new Promise((resolve, reject) => {
-      const request = https.request(
+      const request = require('https').request(
         {
           hostname: url.hostname,
           path: `${url.pathname}${url.search}`,
@@ -650,15 +491,11 @@ export class MpesaVerificationService {
           },
           timeout: 10000,
         },
-        (res) => {
+        (res: any) => {
           let data = '';
-          res.on('data', (chunk) => (data += chunk));
+          res.on('data', (chunk: Buffer | string) => (data += chunk));
           res.on('end', () => {
-            this.logger.error('========= RAW SAFARICOM RESPONSE =========');
-            this.logger.error(`STATUS: ${res.statusCode}`);
-            this.logger.error(`HEADERS: ${JSON.stringify(res.headers, null, 2)}`);
-            this.logger.error(`BODY: ${data}`);
-            this.logger.error('=========================================');
+            this.logger.log(`Safaricom response status=${res.statusCode}`);
 
             let parsed: Record<string, any> = {};
             try {
@@ -675,7 +512,7 @@ export class MpesaVerificationService {
           });
         },
       );
-      request.on('error', (err) => reject(this.apiError(err.message)));
+      request.on('error', (err: Error) => reject(this.apiError(err.message)));
       request.on('timeout', () => request.destroy(this.apiError('Request to Safaricom timed out')));
       if (payload) request.write(payload);
       request.end();
