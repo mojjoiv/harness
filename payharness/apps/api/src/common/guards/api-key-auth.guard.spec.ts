@@ -31,7 +31,7 @@ describe('ApiKeyAuthGuard', () => {
   });
 
   it('authenticates a valid key, updates lastUsedAt, and populates merchant context', async () => {
-    const request = { headers: { authorization: 'Bearer ph_live_123456789' } };
+    const request: any = { headers: { authorization: 'Bearer ph_live_123456789' } };
     prisma.apiKey.findMany.mockResolvedValue([{ id: 'key-1', prefix: 'ph_live_1234567', keyHash: 'hash', merchantId: 'm-1', environment: 'LIVE' }]);
     prisma.apiKey.update.mockResolvedValue({});
     jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
