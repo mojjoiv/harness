@@ -1,3 +1,4 @@
+import * as http from 'http';
 import { MpesaWebhookVerifierService } from './mpesa-webhook-verifier.service';
 
 describe('MpesaWebhookVerifierService', () => {
@@ -18,7 +19,6 @@ describe('MpesaWebhookVerifierService', () => {
   });
 
   it('reports a reachable HTTP endpoint and preserves the response body', async () => {
-    const http = require('http') as typeof import('http');
     const server = http.createServer((_req, res) => {
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
