@@ -1,45 +1,48 @@
 # PayHarness
 
-Payment aggregator SaaS monorepo for the first backend MVP.
+Payment aggregator SaaS monorepo for the backend MVP.
 
 ## Structure
 
-- `apps/api` - NestJS 10 API with Prisma and PostgreSQL
-- `apps/dashboard` - Next.js merchant dashboard plus separate platform dashboard
-- `packages/sdk-js` - placeholder JavaScript SDK package
+- `apps/api` - NestJS API with Prisma and PostgreSQL
+- `apps/dashboard` - Next.js merchant/platform dashboard
+- `packages/sdk-js` - JavaScript SDK package
 - `packages/shared-types` - shared TypeScript types
 - `docs` - API and deployment notes
 
 ## Requirements
 
-- Node.js `16.20.2`
-- PostgreSQL
+- Node.js `>=20.11.1` (matches the root `package.json` engine requirement)
 - npm
+- PostgreSQL (local or hosted, such as Neon)
+
+Check your versions before installing:
+
+```bash
+node --version
+npm --version
+```
 
 ## Local Setup
 
-Install dependencies from the monorepo root:
+Install dependencies from the monorepo root. The root lockfile covers the workspaces, so use `npm ci` for a reproducible fresh clone:
 
 ```bash
 cd payharness
-npm install
+npm ci
 ```
 
-Run the dashboard locally:
-
-```bash
-npm --workspace apps/dashboard run dev
-```
-
-Create API environment variables:
+Create the API environment file:
 
 ```bash
 cp apps/api/.env.example apps/api/.env
 ```
 
-Set at least:
+Set the required values in `apps/api/.env`. At minimum:
 
 ```env
+NODE_ENV=development
+PORT=3000
 DATABASE_URL=postgresql://user:password@localhost:5432/payharness
 JWT_SECRET=replace-with-a-strong-secret
 CREDENTIAL_ENCRYPTION_KEY=<base64 encoded 32-byte key>
@@ -48,15 +51,17 @@ SUPERADMIN_PASSWORD=replace-with-a-strong-password
 SUPERADMIN_NAME=Platform Admin
 ```
 
-For Neon, use the PostgreSQL connection string from your Neon project and keep it in `DATABASE_URL`. The app expects a normal PostgreSQL URL and does not need Docker.
-
-Generate an encryption key:
+Generate an encryption key with:
 
 ```bash
 openssl rand -base64 32
 ```
 
-Prepare Prisma:
+The `.env.example` file also documents optional email and M-Pesa smoke-test configuration. Never commit a populated `.env` file or real provider credentials.
+
+### Prepare Prisma
+
+For local development:
 
 ```bash
 npm --workspace apps/api run prisma:generate
@@ -64,58 +69,70 @@ npm --workspace apps/api run prisma:migrate
 npm --workspace apps/api run seed
 ```
 
-Local development uses Prisma migrations. Create migrations with:
+Create a new migration when the Prisma schema changes:
 
 ```bash
 npm --workspace apps/api run prisma:migrate
 ```
 
-Deployment uses:
+Deployment uses committed migrations only:
 
 ```bash
 npm run db:setup
 ```
 
-`db:setup` runs `prisma generate`, `prisma migrate deploy`, and the seed script. Do not use `prisma db push` for PayHarness deploys.
+`db:setup` runs `prisma generate`, `prisma migrate deploy`, and the seed script. Do not use `prisma db push` for PayHarness deployments.
 
-Start development server:
+## Development
+
+Start the API:
 
 ```bash
 npm --workspace apps/api run start:dev
 ```
 
-Build:
+Start the dashboard in a second terminal:
+
+```bash
+npm --workspace apps/dashboard run dev
+```
+
+The API listens on `http://localhost:3000` by default and the dashboard on `http://localhost:3001`.
+
+Build everything:
 
 ```bash
 npm run build
 ```
 
-Local smoke test flow:
+## Verification
+
+Run the same quality checks used by CI before opening a PR:
 
 ```bash
-npm --workspace apps/api run prisma:migrate
-npm --workspace apps/api run start:dev
-curl -X POST http://localhost:3000/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"owner@example.com","name":"Owner","merchantName":"Demo Merchant","password":"password123"}'
-curl -X POST http://localhost:3000/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"owner@example.com","password":"password123"}'
-curl http://localhost:3000/dashboard -H "Authorization: Bearer <token>"
+npm run typecheck
+npm run lint
+npm test
+npm run test:cov
+npm run format:check
+npm audit --audit-level=high
 ```
 
-Platform login uses the separately seeded `PlatformUser` account:
+For a quick API smoke test after starting the API:
 
 ```bash
-curl -X POST http://localhost:3000/platform/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"admin@example.com","password":"password123"}'
-curl http://localhost:3000/platform/auth/profile -H "Authorization: Bearer <platform-token>"
+curl http://localhost:3000/health
+```
+
+Swagger API documentation is available at:
+
+```text
+http://localhost:3000/docs
 ```
 
 ## Architecture
 
-PayHarness is split into a SaaS platform layer and merchant layer:
+PayHarness is split into a platform layer and merchant layer:
 
 ```text
 Platform
@@ -125,74 +142,49 @@ Merchants
 Merchant Users
 ```
 
-Platform users are stored in `PlatformUser` and authenticate through `/platform/auth/login`. They represent PayHarness operators such as `SUPERADMIN`, `PLATFORM_ADMIN`, `SUPPORT`, `FINANCE`, and `COMPLIANCE`. A platform user never belongs to a merchant.
-
-Merchant users are stored as `User` records attached to merchants through `MerchantUser`. Merchant roles are `OWNER`, `ADMIN`, `DEVELOPER`, and `VIEWER`. Merchant users authenticate through `/auth/login` or `/auth/register`.
+Platform users are stored in `PlatformUser` and authenticate through `/platform/auth/login`. Merchant users are stored in `User`/`MerchantUser` records and authenticate through `/auth/login` or `/auth/register`.
 
 JWTs are intentionally separated:
 
 - Platform JWT: `userId`, `role`, `type=platform`
 - Merchant JWT: `userId`, `merchantId`, `role`, `type=merchant`
 
-Platform routes require platform JWTs. Merchant dashboard routes require merchant JWTs, so platform users cannot enter merchant dashboards and merchant users cannot enter platform routes.
+Platform routes require platform JWTs. Merchant routes require merchant JWTs. API-key authentication is used for programmatic merchant access.
 
 ## Render Deployment
 
-Use the root blueprint at `payharness/render.yaml`. The older `apps/api/render.yaml` is kept for reference, but new Render blueprint deploys should point at `payharness/render.yaml`.
+Use `payharness/render.yaml` as the canonical Render blueprint. The older `apps/api/render.yaml` is reference-only.
+
+Backend settings:
 
 - Runtime: Node
 - Root Directory: `payharness`
-- Build Command: `npm install && npm run build:api`
+- Build Command: `npm ci && npm run build:api`
 - Start Command: `npm run db:setup && npm run start:prod`
-- `NODE_VERSION=16.20.2`
+- `NODE_VERSION=20.11.1`
 - `NODE_ENV=production`
-- `DATABASE_URL=<Render PostgreSQL URL>`
+- `DATABASE_URL=<PostgreSQL connection string>`
 - `JWT_SECRET=<strong secret>`
 - `JWT_EXPIRES_IN=7d`
 - `CREDENTIAL_ENCRYPTION_KEY=<base64 encoded 32-byte key>`
-- `APP_URL=https://your-api.onrender.com`
-- `CHECKOUT_URL=https://your-checkout-app.example`
-- `FRONTEND_URL=<your frontend Render URL>`
+- `APP_URL=<public API URL>`
+- `CHECKOUT_URL=<checkout URL>`
+- `FRONTEND_URL=<dashboard URL>`
 - `SUPERADMIN_EMAIL=<platform superadmin email>`
 - `SUPERADMIN_PASSWORD=<platform superadmin password>`
 - `SUPERADMIN_NAME=<platform superadmin name>`
 
-Frontend Render environment:
+Frontend settings:
 
-- `NODE_VERSION=16.20.2`
-- `NEXT_PUBLIC_API_URL=https://harness-m6qs.onrender.com`
+- Root Directory: `payharness/apps/dashboard`
+- Build Command: `npm install && npm run build`
+- Start Command: `npm run start`
+- `NODE_VERSION=20.11.1`
+- `NEXT_PUBLIC_API_URL=<public API URL>`
 
-Backend Render environment:
+After changing `NEXT_PUBLIC_API_URL`, redeploy the dashboard because Next.js embeds this value during its build.
 
-- `FRONTEND_URL=<your frontend Render URL>`
-- `APP_URL=https://harness-m6qs.onrender.com`
-- `CHECKOUT_URL=<your frontend Render URL>`
-
-After changing `NEXT_PUBLIC_API_URL` on Render, redeploy the frontend because Next.js bakes it in at build time.
-
-No Docker setup is required.
-
-Run database migrations before or during deployment:
-
-```bash
-npm run prisma:migrate:deploy
-```
-
-Render uses `npm run db:setup`, which applies committed migrations with `prisma migrate deploy` and then runs the seed script.
-
-The root Render blueprint at [render.yaml](/workspaces/harness/payharness/render.yaml) is the one to use. The older [apps/api/render.yaml](/workspaces/harness/payharness/apps/api/render.yaml) is kept only for reference.
-
-Smoke test steps are documented in [docs/smoke-test.md](/workspaces/harness/payharness/docs/smoke-test.md).
-
-The dashboard can be deployed later as a separate Render web service using `apps/dashboard` as the root directory and `npm --workspace apps/dashboard run build` / `npm --workspace apps/dashboard run start`.
-
-## API Docs
-
-Swagger UI is available at:
-
-```text
-/docs
-```
+## API Response Format
 
 Successful API responses, except `/health`, are wrapped as:
 
@@ -217,35 +209,23 @@ Errors use:
 }
 ```
 
-## Merchant Dashboard Endpoints
+## Main API Areas
 
-All dashboard endpoints require `Authorization: Bearer <token>` and use the merchant ID from the JWT.
+Merchant dashboard endpoints include:
 
-- `GET /merchant/profile`
-- `PATCH /merchant/profile`
-- `GET /merchant/branding`
-- `PATCH /merchant/branding`
-- `GET /merchant/settings`
-- `PATCH /merchant/settings`
+- `GET/PATCH /merchant/profile`
+- `GET/PATCH /merchant/branding`
+- `GET/PATCH /merchant/settings`
 - `GET /dashboard`
-- `GET /analytics/revenue?period=daily|weekly|monthly|custom&from=YYYY-MM-DD&to=YYYY-MM-DD`
-- `GET /analytics/providers?period=daily|weekly|monthly|custom&from=YYYY-MM-DD&to=YYYY-MM-DD`
-- `GET /analytics/payments?period=daily|weekly|monthly|custom&from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `GET /analytics/*`
 - `GET /providers/status`
-- `GET /usage?page=1&limit=20&method=GET&endpoint=/dashboard&from=YYYY-MM-DD&to=YYYY-MM-DD`
-- `GET /audit-logs?page=1&limit=20`
-
-These existing list endpoints now support pagination with `page`, `limit`, `sort`, and `order`:
-
+- `GET /usage`
+- `GET /audit-logs`
 - `GET /transactions`
 - `GET /checkout-sessions`
 - `GET /webhooks/endpoints`
-- `GET /usage`
-- `GET /audit-logs`
 
-## Platform Endpoints
-
-Platform endpoints require `Authorization: Bearer <platform-token>`.
+Platform endpoints include:
 
 - `POST /platform/auth/login`
 - `GET /platform/auth/profile`
@@ -255,8 +235,10 @@ Platform endpoints require `Authorization: Bearer <platform-token>`.
 - `GET /platform/subscriptions`
 - `GET /platform/users`
 
-The platform dashboard lives at `/platform`. Merchant dashboard routes remain unchanged.
+See Swagger at `/docs` for the complete current API contract.
 
-## MVP Notes
+## Pull Requests and CI
 
-Provider integrations are mocked in this version. M-Pesa, Stripe, and PayPal payment endpoints create local `payments` and `transactions` records and return fake provider references and next actions.
+Create focused branches for changes and open a pull request against `main`. CI runs typechecking, linting, tests, dependency audit, and secret scanning. Do not merge a PR with a failing quality or security check.
+
+For development conventions and the contribution workflow, see `CONTRIBUTING.md`.
