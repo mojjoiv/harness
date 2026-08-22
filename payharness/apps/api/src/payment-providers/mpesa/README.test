@@ -1,0 +1,1 @@
+Payment provider tests cover VERIFIED and PARTIALLY_VERIFIED verification outcomes, webhook reachability, configuration validation, and capability detection.
