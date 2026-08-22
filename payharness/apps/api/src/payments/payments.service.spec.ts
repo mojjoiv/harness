@@ -4,13 +4,17 @@ describe('PaymentsService', () => {
   const prisma = {
     payment: {
       findFirst: jest.fn(),
+      create: jest.fn(),
     },
   } as any;
 
   const config = { get: jest.fn() } as any;
   const crypto = { decrypt: jest.fn() } as any;
   const mpesa = { createStkPush: jest.fn() } as any;
-  const mpesaVerification = { queryStkStatus: jest.fn() } as any;
+  const mpesaVerification = {
+    queryStkStatus: jest.fn(),
+    initiateStkPush: jest.fn(),
+  } as any;
   const stripe = { createPaymentIntent: jest.fn() } as any;
   const paypal = { createOrder: jest.fn() } as any;
   const auditLogs = { create: jest.fn() } as any;
@@ -105,8 +109,24 @@ describe('PaymentsService', () => {
   });
 
   it('returns the provider response from the STK processing path', async () => {
-    const expected = { status: 'PENDING', providerReference: 'ws_CO_456' };
-    jest.spyOn(service as any, 'process').mockResolvedValue(expected);
+    const secrets = {
+      consumerKey: 'test-key',
+      consumerSecret: 'test-secret',
+      passkey: 'test-passkey',
+    };
+
+    jest.spyOn(service as any, 'getAndValidateSession').mockResolvedValue({
+      id: 'session-1',
+      merchantId: 'merchant-1',
+    } as any);
+    crypto.decrypt.mockReturnValue(secrets);
+    mpesaVerification.initiateStkPush.mockResolvedValue({
+      checkoutRequestId: 'ws_CO_456',
+    });
+    prisma.payment.create.mockResolvedValue({
+      id: 'payment-1',
+      status: 'PENDING',
+    });
 
     const result = await service.createMpesaStk('merchant-1', 'user-1', {
       environment: 'SANDBOX',
@@ -114,12 +134,28 @@ describe('PaymentsService', () => {
       phoneNumber: '254711111111',
     } as any);
 
-    expect(result).toEqual(expected);
+    expect(result).toEqual(expect.objectContaining({
+      paymentId: 'payment-1',
+      provider: 'MPESA',
+      environment: 'SANDBOX',
+      status: 'PENDING',
+      checkoutRequestId: 'ws_CO_456',
+    }));
+    expect(mpesaVerification.initiateStkPush).toHaveBeenCalled();
   });
 
   it('propagates a processing failure instead of masking it', async () => {
     const failure = new Error('M-Pesa provider unavailable');
-    jest.spyOn(service as any, 'process').mockRejectedValue(failure);
+    jest.spyOn(service as any, 'getAndValidateSession').mockResolvedValue({
+      id: 'session-1',
+      merchantId: 'merchant-1',
+    } as any);
+    crypto.decrypt.mockReturnValue({
+      consumerKey: 'test-key',
+      consumerSecret: 'test-secret',
+      passkey: 'test-passkey',
+    });
+    mpesaVerification.initiateStkPush.mockRejectedValue(failure);
 
     await expect(
       service.createMpesaStk('merchant-1', 'user-1', {
