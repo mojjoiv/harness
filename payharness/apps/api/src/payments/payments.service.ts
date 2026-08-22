@@ -1,8 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Payment, PaymentStatus, Prisma, Provider } from '@prisma/client';
-import * as http from 'http';
-import * as https from 'https';
 import { randomUUID } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
@@ -11,6 +9,7 @@ import { MpesaProviderService } from '../payment-providers/mpesa/mpesa-provider.
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
 import { PaypalProviderService } from '../payment-providers/paypal/paypal-provider.service';
 import { StripeProviderService } from '../payment-providers/stripe/stripe-provider.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
 
 @Injectable()
@@ -26,6 +25,7 @@ export class PaymentsService {
     private readonly stripe: StripeProviderService,
     private readonly paypal: PaypalProviderService,
     private readonly auditLogs: AuditLogsService,
+    private readonly webhooks: WebhooksService,
   ) {
     this.logStartupInfo();
   }
@@ -399,42 +399,14 @@ export class PaymentsService {
     const url = settings?.webhookForwardingUrl;
     if (!url) return;
 
-    try {
-      await this.postJson(url, payload);
-    } catch (error) {
-      this.logger.warn(`Webhook forwarding to ${url} failed: ${(error as Error).message}`);
+    const result = await this.webhooks.forwardToUrl(
+      url,
+      String(payload.event || 'payment.event'),
+      payload,
+    );
+    if (!result.delivered) {
+      this.logger.warn(`Webhook forwarding to ${url} exhausted retries: ${result.error}`);
     }
-  }
-
-  private postJson(targetUrl: string, payload: unknown): Promise<void> {
-    const body = JSON.stringify(payload);
-    const parsed = new URL(targetUrl);
-    const client = parsed.protocol === 'http:' ? http : https;
-
-    return new Promise((resolve, reject) => {
-      const request = client.request(
-        {
-          hostname: parsed.hostname,
-          port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
-          path: `${parsed.pathname}${parsed.search}`,
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-          timeout: 8000,
-        },
-        (res) => {
-          res.resume();
-          if ((res.statusCode || 500) >= 300) {
-            reject(new Error(`Webhook endpoint responded with ${res.statusCode}`));
-            return;
-          }
-          resolve();
-        },
-      );
-      request.on('error', reject);
-      request.on('timeout', () => request.destroy(new Error('Webhook request timed out')));
-      request.write(body);
-      request.end();
-    });
   }
 
   private serializeError(error: unknown): Record<string, any> {

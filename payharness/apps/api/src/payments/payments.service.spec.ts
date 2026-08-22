@@ -18,6 +18,7 @@ describe('PaymentsService', () => {
   const stripe = { createPaymentIntent: jest.fn() } as any;
   const paypal = { createOrder: jest.fn() } as any;
   const auditLogs = { create: jest.fn() } as any;
+  const webhooks = { forwardToUrl: jest.fn() } as any;
 
   let service: PaymentsService;
 
@@ -33,6 +34,7 @@ describe('PaymentsService', () => {
       stripe,
       paypal,
       auditLogs,
+      webhooks,
     );
     jest.spyOn(service as any, 'getActiveCredential').mockResolvedValue({
       id: 'credential-1',
