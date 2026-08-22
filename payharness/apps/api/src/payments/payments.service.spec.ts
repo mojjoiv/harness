@@ -103,4 +103,30 @@ describe('PaymentsService', () => {
     expect(errorText).not.toContain(secrets.consumerSecret);
     expect(errorText).not.toContain(secrets.passkey);
   });
+
+  it('returns the provider response from the STK processing path', async () => {
+    const expected = { status: 'PENDING', providerReference: 'ws_CO_456' };
+    jest.spyOn(service as any, 'process').mockResolvedValue(expected);
+
+    const result = await service.createMpesaStk('merchant-1', 'user-1', {
+      environment: 'SANDBOX',
+      amountCents: 2500,
+      phoneNumber: '254711111111',
+    } as any);
+
+    expect(result).toEqual(expected);
+  });
+
+  it('propagates a processing failure instead of masking it', async () => {
+    const failure = new Error('M-Pesa provider unavailable');
+    jest.spyOn(service as any, 'process').mockRejectedValue(failure);
+
+    await expect(
+      service.createMpesaStk('merchant-1', 'user-1', {
+        environment: 'SANDBOX',
+        amountCents: 2500,
+        phoneNumber: '254711111111',
+      } as any),
+    ).rejects.toThrow('M-Pesa provider unavailable');
+  });
 });
