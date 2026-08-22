@@ -16,7 +16,6 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/apps/dashboard/package*.json ./apps/dashboard/
 COPY --from=build /app/apps/dashboard/.next ./apps/dashboard/.next
-COPY --from=build /app/apps/dashboard/public ./apps/dashboard/public
 
 WORKDIR /app/apps/dashboard
 ENV PORT=3001
