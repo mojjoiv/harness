@@ -25,7 +25,6 @@ export interface StkQueryInput { consumerKey: string; consumerSecret: string; sh
 export type StkQueryStatus = 'SUCCEEDED' | 'FAILED' | 'PENDING';
 export interface StkQueryResult { status: StkQueryStatus; resultCode?: string; resultDesc?: string; }
 export interface ProviderCapabilities { supportsSTKPush: boolean; supportsC2B: boolean; supportsB2C: boolean; supportsTransactionStatus: boolean; supportsReversal: boolean; supportsBalance: boolean; supportsRegisterUrls: boolean; }
-export interface WebhookVerificationResult extends MpesaWebhookVerificationResult {}
 interface MpesaApiError extends Error { httpStatus?: number; daraja?: { errorCode?: string; errorMessage?: string }; }
 
 @Injectable()
@@ -88,7 +87,7 @@ export class MpesaVerificationService {
     }
   }
 
-  private verifyWebhook(input: MpesaVerificationInput, correlationId: string): Promise<WebhookVerificationResult> {
+  private verifyWebhook(input: MpesaVerificationInput, correlationId: string): Promise<MpesaWebhookVerificationResult> {
     return this.webhookVerifier.verify(input.callbackUrl, correlationId);
   }
 
@@ -96,7 +95,7 @@ export class MpesaVerificationService {
     return { supportsSTKPush: oauthVerified, supportsC2B: false, supportsB2C: false, supportsTransactionStatus: oauthVerified, supportsReversal: false, supportsBalance: false, supportsRegisterUrls: false };
   }
 
-  private async persistVerification(input: MpesaVerificationInput, result: ProviderVerificationResult, correlationId: string, webhookResult: WebhookVerificationResult): Promise<void> {
+  private async persistVerification(input: MpesaVerificationInput, result: ProviderVerificationResult, correlationId: string, webhookResult: MpesaWebhookVerificationResult): Promise<void> {
     const verified = result.overallStatus === 'VERIFIED';
     const primaryError = result.errors.length > 0 ? result.errors[0] : null;
     const errorDetails: any[] = [];
