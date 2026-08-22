@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma, WebhookDelivery } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import * as http from 'http';
 import * as https from 'https';
@@ -34,6 +35,22 @@ export class WebhookDeliveryService {
       throw new BadRequestException('Webhook endpoint is not active');
     }
 
+    return this.deliverRecord(delivery, delivery.endpoint.url);
+  }
+
+  async deliverToUrl(url: string, eventType: string, payload: Record<string, unknown>) {
+    const delivery = await this.prisma.webhookDelivery.create({
+      data: {
+        eventType,
+        payload: payload as Prisma.InputJsonValue,
+        status: 'PENDING',
+      },
+    });
+
+    return this.deliverRecord(delivery, url);
+  }
+
+  private async deliverRecord(delivery: WebhookDelivery, targetUrl: string) {
     let lastError = 'Webhook delivery failed';
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -46,7 +63,7 @@ export class WebhookDeliveryService {
       });
 
       try {
-        const result = await this.postJson(delivery.endpoint.url, delivery.payload);
+        const result = await this.postJson(targetUrl, delivery.payload);
         await this.prisma.webhookDelivery.update({
           where: { id: delivery.id },
           data: {
