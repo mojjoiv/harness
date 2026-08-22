@@ -107,6 +107,10 @@ export class WebhooksService {
     return this.deliveryService.deliver(delivery.id);
   }
 
+  async forwardToUrl(url: string, eventType: string, payload: Record<string, unknown>) {
+    return this.deliveryService.deliverToUrl(url, eventType, payload);
+  }
+
   async receive(provider: Provider, payload: Record<string, unknown>) {
     const delivery = await this.prisma.webhookDelivery.create({
       data: {
