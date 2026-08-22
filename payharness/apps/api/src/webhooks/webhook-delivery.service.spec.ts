@@ -50,7 +50,7 @@ describe('WebhookDeliveryService', () => {
 
     const result = await service.deliver('delivery-1');
 
-    expect(result.alreadyDelivered).toBe(true);
+    expect((result as any).alreadyDelivered).toBe(true);
     expect(postJson).not.toHaveBeenCalled();
     expect(prisma.webhookDelivery.update).not.toHaveBeenCalled();
   });
