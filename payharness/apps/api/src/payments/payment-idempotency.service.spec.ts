@@ -1,4 +1,5 @@
 import { ConflictException } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { PaymentIdempotencyService } from './payment-idempotency.service';
 
 function prismaMock() {
@@ -38,7 +39,7 @@ describe('PaymentIdempotencyService', () => {
     const service = new PaymentIdempotencyService(prisma as any);
     const body = { amountCents: 1000, currency: 'KES' };
 
-    const firstHash = require('crypto').createHash('sha256').update(JSON.stringify({ amountCents: 1000, currency: 'KES' })).digest('hex');
+    const firstHash = createHash('sha256').update(JSON.stringify({ amountCents: 1000, currency: 'KES' })).digest('hex');
     prisma.$queryRaw.mockResolvedValueOnce([{
       id: 'claim-1',
       request_hash: firstHash,
@@ -69,7 +70,7 @@ describe('PaymentIdempotencyService', () => {
     const prisma = prismaMock();
     prisma.$queryRaw.mockResolvedValue([{
       id: 'claim-1',
-      request_hash: require('crypto').createHash('sha256').update(JSON.stringify({ amountCents: 1000 })).digest('hex'),
+      request_hash: createHash('sha256').update(JSON.stringify({ amountCents: 1000 })).digest('hex'),
       status: 'PROCESSING',
       response_json: null,
     }]);
