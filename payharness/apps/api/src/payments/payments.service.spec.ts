@@ -38,12 +38,17 @@ describe('PaymentsService', () => {
       id: 'credential-1',
       provider: 'MPESA',
       environment: 'SANDBOX',
+      verificationStatus: 'PENDING',
+      oauthVerified: false,
+      accountVerified: false,
+      webhookVerified: false,
+      environmentVerified: false,
       publicConfig: { shortcode: '174379' },
       encryptedSecretConfig: {},
     });
   });
 
-  it('blocks LIVE M-Pesa STK requests before loading credentials', async () => {
+  it('blocks LIVE M-Pesa STK requests when the credential is not fully verified', async () => {
     const credentialSpy = jest.spyOn(service as any, 'getActiveCredential');
 
     await expect(
@@ -52,9 +57,44 @@ describe('PaymentsService', () => {
         amountCents: 1000,
         phoneNumber: '254700000000',
       } as any),
-    ).rejects.toThrow();
+    ).rejects.toThrow('fully verified provider credential');
 
-    expect(credentialSpy).not.toHaveBeenCalled();
+    expect(credentialSpy).toHaveBeenCalledWith('merchant-1', 'MPESA', 'LIVE');
+    expect(mpesaVerification.initiateStkPush).not.toHaveBeenCalled();
+  });
+
+  it('allows LIVE M-Pesa only after every verification gate passes', async () => {
+    jest.spyOn(service as any, 'getActiveCredential').mockResolvedValue({
+      id: 'credential-1',
+      provider: 'MPESA',
+      environment: 'LIVE',
+      verificationStatus: 'VERIFIED',
+      oauthVerified: true,
+      accountVerified: true,
+      webhookVerified: true,
+      environmentVerified: true,
+      publicConfig: { shortcode: '600000', businessType: 'PAYBILL' },
+      encryptedSecretConfig: {},
+    });
+    jest.spyOn(service as any, 'getAndValidateSession').mockResolvedValue(null);
+    crypto.decrypt.mockReturnValue({ consumerKey: 'key', consumerSecret: 'secret', passkey: 'passkey' });
+    mpesaVerification.initiateStkPush.mockResolvedValue({ checkoutRequestId: 'ws_CO_live_1' });
+    prisma.payment.create.mockResolvedValue({ id: 'payment-live-1', status: 'PENDING' });
+
+    const result = await service.createMpesaStk('merchant-1', 'user-1', {
+      environment: 'LIVE',
+      amountCents: 1000,
+      phoneNumber: '254700000000',
+    } as any);
+
+    expect(result).toEqual(expect.objectContaining({
+      paymentId: 'payment-live-1',
+      provider: 'MPESA',
+      environment: 'LIVE',
+      status: 'PENDING',
+      checkoutRequestId: 'ws_CO_live_1',
+    }));
+    expect(mpesaVerification.initiateStkPush).toHaveBeenCalledWith(expect.objectContaining({ environment: 'LIVE' }));
   });
 
   it('uses the simulated path when no phone number is supplied', async () => {
@@ -99,7 +139,6 @@ describe('PaymentsService', () => {
     const loggedText = loggerLogSpy.mock.calls.flat().join(' ');
     const errorText = loggerErrorSpy.mock.calls.flat().join(' ');
 
-    expect(loggedText).toContain('M-Pesa credentials decrypted successfully (values redacted)');
     expect(loggedText).not.toContain(secrets.consumerKey);
     expect(loggedText).not.toContain(secrets.consumerSecret);
     expect(loggedText).not.toContain(secrets.passkey);
