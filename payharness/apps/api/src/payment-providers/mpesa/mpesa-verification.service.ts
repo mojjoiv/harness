@@ -75,7 +75,6 @@ export interface ProviderCapabilities {
   supportsRegisterUrls: boolean;
 }
 
-// Result of the enhanced webhook reachability check
 export interface WebhookVerificationResult {
   reachable: boolean;
   statusCode?: number;
@@ -91,9 +90,6 @@ interface MpesaApiError extends Error {
   daraja?: { errorCode?: string; errorMessage?: string };
 }
 
-// --------------------------------------------------------------------
-// Service
-// --------------------------------------------------------------------
 @Injectable()
 export class MpesaVerificationService {
   private readonly logger = new Logger(MpesaVerificationService.name);
@@ -103,10 +99,6 @@ export class MpesaVerificationService {
     private readonly prisma: PrismaService,
   ) {}
 
-  /**
-   * Public verification pipeline.
-   * Generates a correlation ID and passes it through all stages.
-   */
   async verify(input: MpesaVerificationInput): Promise<ProviderVerificationResult> {
     const correlationId = randomUUID();
     const startedAt = Date.now();
@@ -114,29 +106,16 @@ export class MpesaVerificationService {
     this.logger.log(`[correlationId=${correlationId}] Starting M‑Pesa verification`);
     this.emitVerificationEvents('provider.verification.started', input, null, correlationId);
 
-    // Stage 1: Configuration validation
     const configCheck = this.verifyConfiguration(input);
-
-    // Stage 2: OAuth (actual API call)
     const oauthCheck = await this.verifyOAuth(input, correlationId);
-
-    // Stage 3: Webhook reachability (POST with lightweight payload)
     const webhookResult = await this.verifyWebhook(input, correlationId);
     const webhookReachable = webhookResult.reachable;
-
-    // Stage 4: Capability detection (static)
     const capabilities = this.verifyCapabilities(oauthCheck.oauthVerified);
-
     const latencyMs = Date.now() - startedAt;
 
-    // Build errors array with structured provider info
     const errors: any[] = [];
-    if (configCheck.errors.length) {
-      errors.push({ step: 'configuration', errors: configCheck.errors });
-    }
-    if (oauthCheck.errors.length) {
-      errors.push({ step: 'oauth', errors: oauthCheck.errors });
-    }
+    if (configCheck.errors.length) errors.push({ step: 'configuration', errors: configCheck.errors });
+    if (oauthCheck.errors.length) errors.push({ step: 'oauth', errors: oauthCheck.errors });
     if (!webhookReachable && webhookResult.error) {
       errors.push({
         step: 'webhook',
@@ -150,25 +129,16 @@ export class MpesaVerificationService {
     }
 
     const warnings: any[] = [];
-    if (oauthCheck.warnings.length) {
-      warnings.push({ step: 'oauth', warnings: oauthCheck.warnings });
-    }
+    if (oauthCheck.warnings.length) warnings.push({ step: 'oauth', warnings: oauthCheck.warnings });
     warnings.push({ correlationId });
 
-    // Compute overall status per the new rules:
-    // Only mark PARTIALLY_VERIFIED when an actual verification component fails.
-    // If OAuth, environment, account, and webhook (including 405) pass -> VERIFIED.
     const oauthOk = oauthCheck.oauthVerified;
     const accountOk = configCheck.accountVerified;
-    const environmentVerified = oauthOk; // OAuth uses the environment
-
-    let overallStatus: ProviderVerificationStatus;
-    if (oauthOk && accountOk && webhookReachable && environmentVerified) {
-      overallStatus = 'VERIFIED';
-    } else {
-      // Any component failure -> PARTIALLY_VERIFIED
-      overallStatus = 'PARTIALLY_VERIFIED';
-    }
+    const environmentVerified = oauthOk;
+    const overallStatus: ProviderVerificationResult['overallStatus'] =
+      oauthOk && accountOk && webhookReachable && environmentVerified
+        ? 'VERIFIED'
+        : 'PARTIALLY_VERIFIED';
 
     const result: ProviderVerificationResult = {
       provider: 'MPESA',
@@ -201,7 +171,6 @@ export class MpesaVerificationService {
     return result;
   }
 
-  // ---- Stage: Configuration shape validation ----
   private verifyConfiguration(input: MpesaVerificationInput): { accountVerified: boolean; errors: string[] } {
     const accountVerified = /^\d{5,7}$/.test(input.shortcode) && ['PAYBILL', 'TILL'].includes(input.businessType);
     return {
@@ -210,7 +179,6 @@ export class MpesaVerificationService {
     };
   }
 
-  // ---- Stage: OAuth exchange and smoke test ----
   private async verifyOAuth(
     input: MpesaVerificationInput,
     correlationId: string,
@@ -225,20 +193,14 @@ export class MpesaVerificationService {
         environment: input.environment,
       });
 
-      const token = await this.generateAccessToken(
-        input.consumerKey,
-        input.consumerSecret,
-        input.environment,
-      );
+      const token = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
       this.logger.log(`[correlationId=${correlationId}] M‑Pesa OAuth succeeded (${input.environment})`);
 
       const warnings: string[] = [];
       const smokeTestEnabled = this.config.get<string>('ENABLE_MPESA_SMOKE_TEST') === 'true';
       if (input.environment === 'SANDBOX' && smokeTestEnabled) {
         const smokeTest = await this.runSmokeTest(token, input);
-        if (!smokeTest.ok) {
-          warnings.push(`Smoke test STK push failed: ${smokeTest.error}`);
-        }
+        if (!smokeTest.ok) warnings.push(`Smoke test STK push failed: ${smokeTest.error}`);
       }
       return { oauthVerified: true, errors: [], warnings };
     } catch (error) {
@@ -251,7 +213,6 @@ export class MpesaVerificationService {
     }
   }
 
-  // ---- Stage: Enhanced webhook reachability using POST ----
   private async verifyWebhook(
     input: MpesaVerificationInput,
     correlationId: string,
@@ -260,10 +221,7 @@ export class MpesaVerificationService {
     const timeoutMs = 5000;
     const maxRedirects = 5;
     let redirectCount = 0;
-    let currentUrl = targetUrl;
     const startTime = Date.now();
-
-    // Lightweight verification payload
     const payload = JSON.stringify({ verification: true, timestamp: new Date().toISOString() });
 
     const performRequest = (urlToFetch: string): Promise<WebhookVerificationResult> => {
@@ -293,11 +251,6 @@ export class MpesaVerificationService {
             this.logger.log(`Response Body: ${responseBody}`);
             const latencyMs = Date.now() - startTime;
 
-            // Handle redirects (3xx) – follow them with POST? Usually redirects for POST may become GET,
-            // but we'll follow with a GET as per common behavior; we'll just follow the location.
-            // For simplicity, we'll follow with a GET (since many implementations do that).
-            // However, to keep it simple, we'll follow with a POST again? The spec says "follow redirects"
-            // without specifying method. We'll use the same method (POST) on redirect.
             if (statusCode >= 300 && statusCode < 400 && res.headers.location) {
               if (redirectCount >= maxRedirects) {
                 resolve({
@@ -311,30 +264,13 @@ export class MpesaVerificationService {
                 return;
               }
               redirectCount++;
-              const location = res.headers.location;
-              const nextUrl = new URL(location, urlToFetch).href;
-              // Recurse with the same POST method, but some servers may not allow POST on redirect.
-              // The requirement is to follow redirects; we'll follow with POST.
+              const nextUrl = new URL(res.headers.location, urlToFetch).href;
               performRequest(nextUrl).then(resolve);
               return;
             }
 
-            // Determine reachability: treat any HTTP response except network failures as reachable.
-            // According to spec, these status codes are explicitly reachable:
-            // 200, 201, 202, 204, 400, 401, 403, 405, 409.
-            // We'll accept any 2xx or 4xx as reachable; 5xx? Not in list, but maybe we should treat as reachable?
-            // The spec says "only mark verification failed on DNS, TLS, connection refused, timeout, invalid URL."
-            // So any HTTP response (including 500) should be considered reachable, because the server responded.
-            // The explicit list is a subset; we'll consider any HTTP status code (>=100) as reachable.
-            // But we'll also keep the explicit list for clarity.
-            const reachableStatuses = [200, 201, 202, 204, 400, 401, 403, 405, 409];
-            // Actually, the spec says "Consider any HTTP response except network failures as proof that the endpoint exists."
-            // So we should treat any status code as reachable, as long as we get a response.
-            // However, we'll also log the status code.
-            const reachable = true; // Any response means reachable.
-
             resolve({
-              reachable,
+              reachable: true,
               statusCode,
               latencyMs,
               requestUrl: urlToFetch,
@@ -346,7 +282,7 @@ export class MpesaVerificationService {
         req.on('error', (err: NodeJS.ErrnoException) => {
           const latencyMs = Date.now() - startTime;
           let errorMsg = err.message;
-          let networkError = err.code || 'UNKNOWN';
+          const networkError = err.code || 'UNKNOWN';
 
           if (err.code === 'ENOTFOUND') {
             errorMsg = `DNS resolution failed for ${parsed.hostname}`;
@@ -384,14 +320,13 @@ export class MpesaVerificationService {
       });
     };
 
-    const result = await performRequest(currentUrl);
+    const result = await performRequest(targetUrl);
     this.logger.debug(
       `[correlationId=${correlationId}] Webhook reachability: ${result.reachable} (status ${result.statusCode}, latency ${result.latencyMs}ms)`,
     );
     return result;
   }
 
-  // ---- Stage: Static capability detection ----
   private verifyCapabilities(oauthVerified: boolean): ProviderCapabilities {
     return {
       supportsSTKPush: oauthVerified,
@@ -404,7 +339,6 @@ export class MpesaVerificationService {
     };
   }
 
-  // ---- Stage: Persist verification results with enriched data ----
   private async persistVerification(
     input: MpesaVerificationInput,
     result: ProviderVerificationResult,
@@ -413,8 +347,8 @@ export class MpesaVerificationService {
   ): Promise<void> {
     const verified = result.overallStatus === 'VERIFIED';
     const primaryError = result.errors.length > 0 ? result.errors[0] : null;
-
     const errorDetails: any[] = [];
+
     if (!result.oauthVerified) {
       errorDetails.push({
         step: 'oauth',
@@ -440,8 +374,7 @@ export class MpesaVerificationService {
       });
     }
 
-    const warningDetails: any[] = [];
-    warningDetails.push({ correlationId });
+    const warningDetails: any[] = [{ correlationId }];
     if (result.warnings.length > 0) {
       result.warnings.forEach(w => {
         try { warningDetails.push(JSON.parse(w)); } catch { warningDetails.push({ warning: w }); }
@@ -481,7 +414,6 @@ export class MpesaVerificationService {
     });
   }
 
-  // ---- Event stubs (log only) ----
   private emitVerificationEvents(
     event: 'provider.verification.started' | 'provider.verification.completed' | 'provider.verification.failed',
     input: MpesaVerificationInput,
@@ -494,7 +426,6 @@ export class MpesaVerificationService {
     );
   }
 
-  // ---- OAuth token generation (unchanged) ----
   async generateAccessToken(
     consumerKey: string,
     consumerSecret: string,
@@ -515,7 +446,6 @@ export class MpesaVerificationService {
     return body.access_token as string;
   }
 
-  // ---- Smoke test (unchanged) ----
   private async runSmokeTest(
     accessToken: string,
     input: MpesaVerificationInput,
@@ -542,33 +472,20 @@ export class MpesaVerificationService {
     }
   }
 
-  // ---- STK Push methods (unchanged) ----
   async initiateStkPush(input: StkPushInput): Promise<StkPushResult> {
-  this.logger.warn('========== M-PESA CREDENTIALS ==========');
-  this.logger.warn(`Environment: ${input.environment}`);
-  this.logger.warn(`Shortcode: ${input.shortcode}`);
-  this.logger.warn(`BusinessType: ${input.businessType}`);
-  this.logger.warn(`ConsumerKey: ${input.consumerKey}`);
-  this.logger.warn(
-    `ConsumerSecret Prefix: ${input.consumerSecret.substring(0, 12)}...`,
-  );
-  this.logger.warn(
-    `Passkey Prefix: ${input.passkey.substring(0, 30)}...`,
-  );
-  this.logger.warn('========================================');
+    this.logger.warn('========== M-PESA CREDENTIALS ==========');
+    this.logger.warn(`Environment: ${input.environment}`);
+    this.logger.warn(`Shortcode: ${input.shortcode}`);
+    this.logger.warn(`BusinessType: ${input.businessType}`);
+    this.logger.warn(`ConsumerKey: ${input.consumerKey}`);
+    this.logger.warn(`ConsumerSecret Prefix: ${input.consumerSecret.substring(0, 12)}...`);
+    this.logger.warn(`Passkey Prefix: ${input.passkey.substring(0, 30)}...`);
+    this.logger.warn('========================================');
 
-  const accessToken = await this.generateAccessToken(
-    input.consumerKey,
-    input.consumerSecret,
-    input.environment,
-  );
-
-  this.logger.log(
-    `OAuth Token Preview: ${accessToken.substring(0, 25)}...`,
-  );
-
-  return this.initiateStkPushWithToken(accessToken, input);
-}
+    const accessToken = await this.generateAccessToken(input.consumerKey, input.consumerSecret, input.environment);
+    this.logger.log(`OAuth Token Preview: ${accessToken.substring(0, 25)}...`);
+    return this.initiateStkPushWithToken(accessToken, input);
+  }
 
   private async initiateStkPushWithToken(
     accessToken: string,
@@ -576,36 +493,19 @@ export class MpesaVerificationService {
   ): Promise<StkPushResult> {
     const timestamp = this.timestamp();
 
-this.logger.warn(`Passkey Length: ${input.passkey.length}`);
-this.logger.warn(`Passkey Starts: ${input.passkey.substring(0, 12)}`);
-this.logger.warn(
-  `Passkey Ends: ${input.passkey.substring(input.passkey.length - 12)}`,
-);
+    this.logger.warn(`Passkey Length: ${input.passkey.length}`);
+    this.logger.warn(`Passkey Starts: ${input.passkey.substring(0, 12)}`);
+    this.logger.warn(`Passkey Ends: ${input.passkey.substring(input.passkey.length - 12)}`);
+    this.logger.log(`STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`);
 
-this.logger.log(
-  `STK DEBUG env=${input.environment} shortcode=${input.shortcode} businessType=${input.businessType} timestamp=${timestamp} passkeyLength=${input.passkey.length}`,
-);
-
-    this.logger.warn("========== DECRYPTED CREDENTIALS ==========");
-this.logger.warn(`Shortcode: ${input.shortcode}`);
-this.logger.warn(`Passkey: ${input.passkey}`);
-this.logger.warn("===========================================");
-
-const password = this.buildPassword(
-  input.shortcode,
-  input.passkey,
-  timestamp,
-);
+    const password = this.buildPassword(input.shortcode, input.passkey, timestamp);
     const amount = Math.max(1, Math.round(input.amountCents / 100));
 
     this.logger.log(
       JSON.stringify(
         {
           businessShortCode: input.shortcode,
-          transactionType:
-            input.businessType === 'TILL'
-              ? 'CustomerBuyGoodsOnline'
-              : 'CustomerPayBillOnline',
+          transactionType: input.businessType === 'TILL' ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline',
           amount,
           partyA: input.phoneNumber,
           partyB: input.shortcode,
@@ -620,7 +520,6 @@ const password = this.buildPassword(
       ),
     );
 
-    // Build the exact STK payload
     const stkPayload = {
       BusinessShortCode: input.shortcode,
       Password: password,
@@ -635,8 +534,7 @@ const password = this.buildPassword(
       TransactionDesc: input.description,
     };
 
-    // ========== FINAL STK PAYLOAD LOGGING ==========
-    this.logger.error("========== FINAL STK PAYLOAD ==========");
+    this.logger.error('========== FINAL STK PAYLOAD ==========');
     this.logger.error(
       JSON.stringify(
         {
@@ -653,8 +551,7 @@ const password = this.buildPassword(
         2,
       ),
     );
-    this.logger.error("=======================================");
-
+    this.logger.error('=======================================');
     this.logger.log('Sending STK request to Safaricom...');
 
     const body = await this.request(
@@ -702,9 +599,7 @@ const password = this.buildPassword(
       return { status: 'FAILED', resultCode: String(body.ResultCode), resultDesc: body.ResultDesc };
     } catch (error) {
       const apiError = error as MpesaApiError;
-      if (apiError.daraja?.errorCode === '500.001.1001') {
-        return { status: 'PENDING' };
-      }
+      if (apiError.daraja?.errorCode === '500.001.1001') return { status: 'PENDING' };
       return {
         status: 'FAILED',
         resultDesc: apiError.daraja?.errorMessage || apiError.message || 'Query failed',
@@ -712,7 +607,6 @@ const password = this.buildPassword(
     }
   }
 
-  // ---- Helpers (unchanged) ----
   private buildPassword(shortcode: string, passkey: string, timestamp: string): string {
     return Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
   }
@@ -734,31 +628,19 @@ const password = this.buildPassword(
     const code = error.daraja?.errorCode;
     const message = (error.daraja?.errorMessage || error.message || '').toLowerCase();
 
-    if (error.httpStatus === 401 || message.includes('invalid consumer')) {
-      return 'Invalid Consumer Key or Consumer Secret';
-    }
-    if (message.includes('passkey') || code === '400.002.02') {
-      return 'Incorrect Passkey';
-    }
-    if (message.includes('shortcode') || message.includes('short code')) {
-      return 'Incorrect Shortcode';
-    }
-    if (error.httpStatus === 403) {
-      return 'Unauthorized -- check that these credentials are activated for this environment';
-    }
-    if (message.includes('timeout') || message.includes('timed out')) {
-      return 'Network timeout while contacting Safaricom';
-    }
-    if (!error.httpStatus) {
-      return 'Safaricom is currently unreachable';
-    }
+    if (error.httpStatus === 401 || message.includes('invalid consumer')) return 'Invalid Consumer Key or Consumer Secret';
+    if (message.includes('passkey') || code === '400.002.02') return 'Incorrect Passkey';
+    if (message.includes('shortcode') || message.includes('short code')) return 'Incorrect Shortcode';
+    if (error.httpStatus === 403) return 'Unauthorized -- check that these credentials are activated for this environment';
+    if (message.includes('timeout') || message.includes('timed out')) return 'Network timeout while contacting Safaricom';
+    if (!error.httpStatus) return 'Safaricom is currently unreachable';
     return error.daraja?.errorMessage || error.message || 'Verification failed';
   }
 
   private apiError(message: string, httpStatus?: number, daraja?: Record<string, unknown>): MpesaApiError {
     const error = new Error(message) as MpesaApiError;
     error.httpStatus = httpStatus;
-    error.daraja = daraja;
+    error.daraja = daraja as MpesaApiError['daraja'];
     return error;
   }
 
@@ -789,13 +671,11 @@ const password = this.buildPassword(
           let data = '';
           res.on('data', (chunk) => (data += chunk));
           res.on('end', () => {
-            // ========== ADDED DIAGNOSTIC LOGGING ==========
             this.logger.error('========= RAW SAFARICOM RESPONSE =========');
             this.logger.error(`STATUS: ${res.statusCode}`);
             this.logger.error(`HEADERS: ${JSON.stringify(res.headers, null, 2)}`);
             this.logger.error(`BODY: ${data}`);
             this.logger.error('=========================================');
-            // ===============================================
 
             let parsed: Record<string, any> = {};
             try {
@@ -805,13 +685,7 @@ const password = this.buildPassword(
             }
 
             if ((res.statusCode || 500) >= 300) {
-              reject(
-                this.apiError(
-                  parsed.errorMessage || `Safaricom responded with ${res.statusCode}`,
-                  res.statusCode,
-                  parsed,
-                ),
-              );
+              reject(this.apiError(parsed.errorMessage || `Safaricom responded with ${res.statusCode}`, res.statusCode, parsed));
               return;
             }
             resolve(parsed);
@@ -826,9 +700,6 @@ const password = this.buildPassword(
   }
 }
 
-// --------------------------------------------------------------------
-// ProviderVerificationResult type (must be defined somewhere)
-// --------------------------------------------------------------------
 export interface ProviderVerificationResult {
   provider: string;
   overallStatus: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'FAILED';
