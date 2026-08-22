@@ -7,12 +7,14 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, paginated } from '../common/pagination/pagination';
 import { PrismaService } from '../common/prisma.service';
 import { CreateWebhookEndpointDto } from './dto/create-webhook-endpoint.dto';
+import { WebhookDeliveryService } from './webhook-delivery.service';
 
 @Injectable()
 export class WebhooksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
+    private readonly deliveryService: WebhookDeliveryService,
   ) {}
 
   async createEndpoint(merchantId: string, userId: string, dto: CreateWebhookEndpointDto) {
@@ -85,7 +87,24 @@ export class WebhooksService {
         status: 'PENDING',
       },
     });
-    return { queued: true, deliveryId: delivery.id, payload };
+
+    const result = await this.deliveryService.deliver(delivery.id);
+    return { ...result, payload };
+  }
+
+  async retryDelivery(merchantId: string, deliveryId: string) {
+    const delivery = await this.prisma.webhookDelivery.findFirst({
+      where: {
+        id: deliveryId,
+        endpoint: { merchantId },
+      },
+      select: { id: true },
+    });
+    if (!delivery) {
+      throw new NotFoundException('Webhook delivery not found');
+    }
+
+    return this.deliveryService.deliver(delivery.id);
   }
 
   async receive(provider: Provider, payload: Record<string, unknown>) {
@@ -100,12 +119,6 @@ export class WebhooksService {
     return { received: true, deliveryId: delivery.id };
   }
 
-  /**
-   * Stub for the merchant-scoped provider callback URL shown on the
-   * Providers page. Confirms the merchant exists so a bad URL fails loudly,
-   * but does not yet verify signatures or route the payload to a
-   * transaction -- that's Checkout Engine scope.
-   */
   async receiveForMerchant(providerParam: string, merchantId: string, payload: Record<string, unknown>) {
     const provider = providerParam.toUpperCase() as Provider;
     const merchant = await this.prisma.merchant.findUnique({ where: { id: merchantId }, select: { id: true } });
