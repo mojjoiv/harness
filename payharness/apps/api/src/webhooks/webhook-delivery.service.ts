@@ -21,6 +21,15 @@ export class WebhookDeliveryService {
 
     if (!delivery) throw new NotFoundException('Webhook delivery not found');
     if (!delivery.endpoint) throw new BadRequestException('Webhook delivery has no destination endpoint');
+    if (delivery.status === 'SUCCEEDED') {
+      return {
+        delivered: true,
+        deliveryId: delivery.id,
+        attempts: delivery.attempts,
+        responseCode: delivery.responseCode,
+        alreadyDelivered: true,
+      };
+    }
     if (delivery.endpoint.status !== 'ACTIVE') {
       throw new BadRequestException('Webhook endpoint is not active');
     }
