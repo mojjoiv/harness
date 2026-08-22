@@ -2,6 +2,8 @@ import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { ApiKeyAuthGuard } from './api-key-auth.guard';
 
+jest.mock('bcrypt', () => ({ compare: jest.fn() }));
+
 describe('ApiKeyAuthGuard', () => {
   const prisma = {
     apiKey: {
@@ -15,7 +17,7 @@ describe('ApiKeyAuthGuard', () => {
     switchToHttp: () => ({ getRequest: () => ({ headers }) }),
   }) as any;
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => jest.resetAllMocks());
 
   it('rejects a missing API key', async () => {
     await expect(guard.canActivate(context({}))).rejects.toBeInstanceOf(UnauthorizedException);
@@ -24,7 +26,7 @@ describe('ApiKeyAuthGuard', () => {
 
   it('rejects an invalid API key', async () => {
     prisma.apiKey.findMany.mockResolvedValue([{ id: 'key-1', prefix: 'ph_live_1234567', keyHash: 'hash', merchantId: 'm-1', environment: 'LIVE' }]);
-    jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
+    (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
     await expect(guard.canActivate(context({ authorization: 'Bearer ph_live_123456789' }))).rejects.toBeInstanceOf(UnauthorizedException);
     expect(prisma.apiKey.update).not.toHaveBeenCalled();
@@ -34,7 +36,7 @@ describe('ApiKeyAuthGuard', () => {
     const request: any = { headers: { authorization: 'Bearer ph_live_123456789' } };
     prisma.apiKey.findMany.mockResolvedValue([{ id: 'key-1', prefix: 'ph_live_1234567', keyHash: 'hash', merchantId: 'm-1', environment: 'LIVE' }]);
     prisma.apiKey.update.mockResolvedValue({});
-    jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
     const result = await guard.canActivate(({ switchToHttp: () => ({ getRequest: () => request }) }) as any);
 
