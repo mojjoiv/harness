@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Observable, from, throwError } from 'rxjs';
 import { catchError, mergeMap } from 'rxjs/operators';
-import { PaymentIdempotencyService, IdempotencyClaim } from './payment-idempotency.service';
+import { PaymentIdempotencyService } from './payment-idempotency.service';
 
 @Injectable()
 export class PaymentIdempotencyInterceptor implements NestInterceptor {
