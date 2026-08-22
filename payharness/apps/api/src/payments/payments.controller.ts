@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards, UseInterceptors } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
+import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor';
 import { PaymentsService } from './payments.service';
 
 @UseGuards(MerchantAuthGuard)
@@ -10,16 +11,19 @@ export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post('mpesa/stk')
+  @UseInterceptors(PaymentIdempotencyInterceptor)
   mpesaStk(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     return this.paymentsService.createMpesaStk(user.merchantId as string, user.userId || undefined, this.lockEnvironment(user, dto));
   }
 
   @Post('stripe/intent')
+  @UseInterceptors(PaymentIdempotencyInterceptor)
   stripeIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     return this.paymentsService.createStripeIntent(user.merchantId as string, user.userId || undefined, this.lockEnvironment(user, dto));
   }
 
   @Post('paypal/order')
+  @UseInterceptors(PaymentIdempotencyInterceptor)
   paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     return this.paymentsService.createPaypalOrder(user.merchantId as string, user.userId || undefined, this.lockEnvironment(user, dto));
   }
