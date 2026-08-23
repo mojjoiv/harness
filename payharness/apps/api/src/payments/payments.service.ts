@@ -30,6 +30,29 @@ export class PaymentsService {
     this.logStartupInfo();
   }
 
+  private logStartupInfo(): void {
+    const commitSha = process.env.GIT_COMMIT_SHA || 'unknown';
+    const nodeEnv = process.env.NODE_ENV || 'unknown';
+    const appUrl = this.config.get<string>('APP_URL') || 'unknown';
+    const dbUrl = this.config.get<string>('DATABASE_URL') || '';
+    let dbHost = 'unknown';
+    try {
+      dbHost = dbUrl ? new URL(dbUrl).host : 'unknown';
+    } catch {
+      dbHost = 'invalid-database-url';
+    }
+    const renderService = process.env.RENDER_SERVICE_NAME || 'unknown';
+
+    this.logger.log(`🚀 PayHarness API startup:
+    Git SHA: ${commitSha}
+    NODE_ENV: ${nodeEnv}
+    APP_URL: ${appUrl}
+    DB Host: ${dbHost}
+    Render Service: ${renderService}
+    PaymentsService instrumentation loaded ✅
+    createRealMpesaStk instrumentation enabled ✅`);
+  }
+
   async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] Entering createMpesaStk`, { merchantId, environment: dto.environment, checkoutSessionId: dto.checkoutSessionId, phoneNumber: dto.phoneNumber ? this.maskPhone(dto.phoneNumber) : undefined, simulateOutcome: dto.simulateOutcome });
