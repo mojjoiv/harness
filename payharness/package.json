@@ -21,6 +21,7 @@
     "seed": "npm --workspace apps/api run seed",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "format:check": "prettier --check .",
+    "format:check:changed": "node scripts/check-format-changed.js",
     "typecheck": "npm --workspace apps/api run typecheck",
     "test": "npm test --workspaces --if-present",
     "test:api": "npm --workspace apps/api test",
