@@ -1,23 +1,55 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-payharness}
+      POSTGRES_USER: ${POSTGRES_USER:-payharness}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in payharness/.env}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-payharness} -d ${POSTGRES_DB:-payharness}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
     env_file:
-      - apps/api/.env
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-payharness}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in payharness/.env}@postgres:5432/${POSTGRES_DB:-payharness}
+      PORT: 3000
+      NODE_ENV: ${NODE_ENV:-development}
+      FRONTEND_URL: http://localhost:3001
+      APP_URL: http://localhost:3000
+      CHECKOUT_URL: http://localhost:3001
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "3000:3000"
-    restart: unless-stopped
 
   dashboard:
     build:
       context: .
       dockerfile: apps/dashboard/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      PORT: 3001
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
-    ports:
-      - "3001:3001"
+      NODE_ENV: ${NODE_ENV:-development}
+      NEXT_PUBLIC_API_URL: http://localhost:3000
     depends_on:
       - api
-    restart: unless-stopped
+    ports:
+      - "3001:3001"
+
+volumes:
+  postgres_data:
