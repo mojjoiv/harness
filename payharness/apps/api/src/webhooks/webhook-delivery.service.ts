@@ -3,6 +3,7 @@ import { Prisma, WebhookDelivery } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import * as http from 'http';
 import * as https from 'https';
+import { createHash } from 'crypto';
 
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAYS_MS = [0, 1000, 3000];
@@ -15,139 +16,71 @@ export class WebhookDeliveryService {
   constructor(private readonly prisma: PrismaService) {}
 
   async deliver(deliveryId: string) {
-    const delivery = await this.prisma.webhookDelivery.findUnique({
-      where: { id: deliveryId },
-      include: { endpoint: true },
-    });
-
+    const delivery = await this.prisma.webhookDelivery.findUnique({ where: { id: deliveryId }, include: { endpoint: true } });
     if (!delivery) throw new NotFoundException('Webhook delivery not found');
     if (!delivery.endpoint) throw new BadRequestException('Webhook delivery has no destination endpoint');
-    if (delivery.status === 'SUCCEEDED') {
-      return {
-        delivered: true,
-        deliveryId: delivery.id,
-        attempts: delivery.attempts,
-        responseCode: delivery.responseCode,
-        alreadyDelivered: true,
-      };
-    }
-    if (delivery.endpoint.status !== 'ACTIVE') {
-      throw new BadRequestException('Webhook endpoint is not active');
-    }
-
+    if (delivery.status === 'SUCCEEDED') return { delivered: true, deliveryId: delivery.id, attempts: delivery.attempts, responseCode: delivery.responseCode, alreadyDelivered: true };
+    if (delivery.endpoint.status !== 'ACTIVE') throw new BadRequestException('Webhook endpoint is not active');
     return this.deliverRecord(delivery, delivery.endpoint.url);
   }
 
-  async deliverToUrl(url: string, eventType: string, payload: Record<string, unknown>) {
-    const delivery = await this.prisma.webhookDelivery.create({
-      data: {
-        eventType,
-        payload: payload as Prisma.InputJsonValue,
-        status: 'PENDING',
-      },
-    });
+  async deliverToUrl(url: string, eventType: string, payload: Record<string, unknown>, idempotencyKey?: string) {
+    const key = idempotencyKey || this.defaultIdempotencyKey(eventType, payload);
+    const deliveryId = this.idForKey(key);
+    const existing = await this.prisma.webhookDelivery.findUnique({ where: { id: deliveryId } });
+    if (existing) {
+      if (existing.status === 'SUCCEEDED') return { delivered: true, deliveryId: existing.id, attempts: existing.attempts, responseCode: existing.responseCode, alreadyDelivered: true };
+      return this.deliverRecord(existing, url);
+    }
 
+    const delivery = await this.prisma.webhookDelivery.create({
+      data: { id: deliveryId, eventType, payload: payload as Prisma.InputJsonValue, status: 'PENDING' },
+    });
     return this.deliverRecord(delivery, url);
+  }
+
+  private defaultIdempotencyKey(eventType: string, payload: Record<string, unknown>) {
+    const paymentId = typeof payload.paymentId === 'string' ? payload.paymentId : undefined;
+    return paymentId ? `${paymentId}:${eventType}` : undefined;
+  }
+
+  private idForKey(key?: string) {
+    if (!key) return undefined;
+    const hash = createHash('sha256').update(key).digest('hex');
+    return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
   }
 
   private async deliverRecord(delivery: WebhookDelivery, targetUrl: string) {
     let lastError = 'Webhook delivery failed';
-
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
       const delay = RETRY_DELAYS_MS[attempt - 1] || 0;
       if (delay > 0) await this.sleep(delay);
-
-      await this.prisma.webhookDelivery.update({
-        where: { id: delivery.id },
-        data: { attempts: attempt, status: 'PENDING' },
-      });
-
+      await this.prisma.webhookDelivery.update({ where: { id: delivery.id }, data: { attempts: attempt, status: 'PENDING' } });
       try {
         const result = await this.postJson(targetUrl, delivery.payload);
-        await this.prisma.webhookDelivery.update({
-          where: { id: delivery.id },
-          data: {
-            status: 'SUCCEEDED',
-            responseCode: result.statusCode,
-            responseBody: result.body,
-            deliveredAt: new Date(),
-          },
-        });
-
-        return {
-          delivered: true,
-          deliveryId: delivery.id,
-          attempts: attempt,
-          responseCode: result.statusCode,
-        };
+        await this.prisma.webhookDelivery.update({ where: { id: delivery.id }, data: { status: 'SUCCEEDED', responseCode: result.statusCode, responseBody: result.body, deliveredAt: new Date() } });
+        return { delivered: true, deliveryId: delivery.id, attempts: attempt, responseCode: result.statusCode };
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
         this.logger.warn(`Webhook delivery ${delivery.id} attempt ${attempt}/${MAX_ATTEMPTS} failed: ${lastError}`);
-
-        if (attempt === MAX_ATTEMPTS) {
-          await this.prisma.webhookDelivery.update({
-            where: { id: delivery.id },
-            data: {
-              status: 'FAILED',
-              responseBody: lastError.slice(0, MAX_RESPONSE_BODY),
-            },
-          });
-        }
+        if (attempt === MAX_ATTEMPTS) await this.prisma.webhookDelivery.update({ where: { id: delivery.id }, data: { status: 'FAILED', responseBody: lastError.slice(0, MAX_RESPONSE_BODY) } });
       }
     }
-
-    return {
-      delivered: false,
-      deliveryId: delivery.id,
-      attempts: MAX_ATTEMPTS,
-      error: lastError,
-    };
+    return { delivered: false, deliveryId: delivery.id, attempts: MAX_ATTEMPTS, error: lastError };
   }
 
   private postJson(targetUrl: string, payload: unknown): Promise<{ statusCode: number; body: string }> {
     const parsed = new URL(targetUrl);
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      throw new BadRequestException('Webhook URL must use HTTP or HTTPS');
-    }
-
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new BadRequestException('Webhook URL must use HTTP or HTTPS');
     const body = JSON.stringify(payload);
     const client = parsed.protocol === 'http:' ? http : https;
-
     return new Promise((resolve, reject) => {
-      const request = client.request(
-        {
-          hostname: parsed.hostname,
-          port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
-          path: `${parsed.pathname}${parsed.search}`,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(body),
-          },
-          timeout: 8000,
-        },
-        (response) => {
-          const chunks: Buffer[] = [];
-          let size = 0;
-          response.on('data', (chunk: Buffer) => {
-            if (size >= MAX_RESPONSE_BODY) return;
-            const remaining = MAX_RESPONSE_BODY - size;
-            const slice = chunk.subarray(0, remaining);
-            chunks.push(slice);
-            size += slice.length;
-          });
-          response.on('end', () => {
-            const responseBody = Buffer.concat(chunks).toString('utf8');
-            const statusCode = response.statusCode || 500;
-            if (statusCode < 200 || statusCode >= 300) {
-              reject(new Error(`Webhook endpoint responded with ${statusCode}`));
-              return;
-            }
-            resolve({ statusCode, body: responseBody });
-          });
-        },
-      );
-
+      const request = client.request({ hostname: parsed.hostname, port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443), path: `${parsed.pathname}${parsed.search}`, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, timeout: 8000 }, (response) => {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        response.on('data', (chunk: Buffer) => { if (size >= MAX_RESPONSE_BODY) return; const slice = chunk.subarray(0, MAX_RESPONSE_BODY - size); chunks.push(slice); size += slice.length; });
+        response.on('end', () => { const responseBody = Buffer.concat(chunks).toString('utf8'); const statusCode = response.statusCode || 500; if (statusCode < 200 || statusCode >= 300) { reject(new Error(`Webhook endpoint responded with ${statusCode}`)); return; } resolve({ statusCode, body: responseBody }); });
+      });
       request.on('error', reject);
       request.on('timeout', () => request.destroy(new Error('Webhook request timed out')));
       request.write(body);
@@ -155,7 +88,5 @@ export class WebhookDeliveryService {
     });
   }
 
-  private sleep(ms: number) {
-    return new Promise<void>((resolve) => setTimeout(resolve, ms));
-  }
+  private sleep(ms: number) { return new Promise<void>((resolve) => setTimeout(resolve, ms)); }
 }
