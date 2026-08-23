@@ -5,6 +5,7 @@ describe('PaymentsService', () => {
     payment: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
     transaction: { updateMany: jest.fn() },
     checkoutSession: { update: jest.fn() },
+    merchantSettings: { findUnique: jest.fn() },
   } as any;
   const config = { get: jest.fn() } as any;
   const crypto = { decrypt: jest.fn() } as any;
@@ -19,6 +20,8 @@ describe('PaymentsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     config.get.mockImplementation((key: string) => (key === 'DATABASE_URL' ? 'postgresql://localhost/payharness' : undefined));
+    prisma.merchantSettings.findUnique.mockResolvedValue({ webhookForwardingUrl: 'https://merchant.example/webhook' });
+    webhooks.forwardToUrl.mockResolvedValue({ delivered: true });
     service = new PaymentsService(prisma, config, crypto, mpesa, mpesaVerification, stripe, paypal, auditLogs, webhooks);
     jest.spyOn(service as any, 'getActiveCredential').mockResolvedValue({
       id: 'credential-1', provider: 'MPESA', environment: 'SANDBOX', verificationStatus: 'PENDING',
@@ -97,7 +100,11 @@ describe('PaymentsService', () => {
     expect(prisma.payment.update).toHaveBeenCalledWith({ where: { id: 'payment-1' }, data: { status: 'SUCCEEDED' } });
     expect(prisma.transaction.updateMany).toHaveBeenCalledWith({ where: { paymentId: 'payment-1' }, data: { status: 'SUCCEEDED' } });
     expect(prisma.checkoutSession.update).toHaveBeenCalledWith({ where: { id: 'session-1' }, data: { status: 'SUCCEEDED' } });
-    expect(webhooks.forwardToUrl).toHaveBeenCalledWith(expect.objectContaining({ event: 'payment.succeeded', paymentId: 'payment-1', checkoutSessionId: 'session-1', status: 'SUCCEEDED' }));
+    expect(webhooks.forwardToUrl).toHaveBeenCalledWith(
+      'https://merchant.example/webhook',
+      'payment.succeeded',
+      expect.objectContaining({ event: 'payment.succeeded', paymentId: 'payment-1', checkoutSessionId: 'session-1', status: 'SUCCEEDED' }),
+    );
   });
 
   it('settles a pending payment as FAILED and forwards payment.failed', async () => {
@@ -107,7 +114,11 @@ describe('PaymentsService', () => {
     expect(prisma.payment.update).toHaveBeenCalledWith({ where: { id: 'payment-2' }, data: { status: 'FAILED' } });
     expect(prisma.transaction.updateMany).toHaveBeenCalledWith({ where: { paymentId: 'payment-2' }, data: { status: 'FAILED' } });
     expect(prisma.checkoutSession.update).toHaveBeenCalledWith({ where: { id: 'session-2' }, data: { status: 'FAILED' } });
-    expect(webhooks.forwardToUrl).toHaveBeenCalledWith(expect.objectContaining({ event: 'payment.failed', paymentId: 'payment-2', status: 'FAILED' }));
+    expect(webhooks.forwardToUrl).toHaveBeenCalledWith(
+      'https://merchant.example/webhook',
+      'payment.failed',
+      expect.objectContaining({ event: 'payment.failed', paymentId: 'payment-2', status: 'FAILED' }),
+    );
   });
 
   it('keeps a pending payment pending when the provider reports PENDING', async () => {
