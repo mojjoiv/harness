@@ -6,6 +6,7 @@ describe('WebhookDeliveryService', () => {
       webhookDelivery: {
         findUnique: jest.fn(),
         update: jest.fn(),
+        create: jest.fn(),
       },
     };
   }
@@ -53,6 +54,31 @@ describe('WebhookDeliveryService', () => {
     expect((result as any).alreadyDelivered).toBe(true);
     expect(postJson).not.toHaveBeenCalled();
     expect(prisma.webhookDelivery.update).not.toHaveBeenCalled();
+  });
+
+  it('reuses an existing payment delivery when the same event is forwarded again', async () => {
+    const prisma = prismaMock();
+    prisma.webhookDelivery.findUnique.mockResolvedValue({
+      id: 'existing-delivery',
+      status: 'SUCCEEDED',
+      attempts: 1,
+      responseCode: 200,
+      payload: { paymentId: 'payment-1', event: 'payment.succeeded' },
+    });
+
+    const service = new WebhookDeliveryService(prisma as any);
+    const postJson = jest.spyOn(service as any, 'postJson');
+
+    const result = await service.deliverToUrl(
+      'https://merchant.example/webhook',
+      'payment.succeeded',
+      { paymentId: 'payment-1', event: 'payment.succeeded' },
+    );
+
+    expect((result as any).alreadyDelivered).toBe(true);
+    expect(result.deliveryId).toBe('existing-delivery');
+    expect(postJson).not.toHaveBeenCalled();
+    expect(prisma.webhookDelivery.create).not.toHaveBeenCalled();
   });
 
   it('retries failed delivery and marks it failed after the final attempt', async () => {
