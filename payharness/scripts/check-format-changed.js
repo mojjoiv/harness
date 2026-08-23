@@ -1,5 +1,7 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 const eventName = process.env.GITHUB_EVENT_NAME;
 const baseRef = process.env.GITHUB_BASE_REF;
