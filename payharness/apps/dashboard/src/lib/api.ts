@@ -10,6 +10,8 @@ export class ApiError extends Error {
 
   constructor(message: string, code = 'API_ERROR', status = 500, errors: unknown[] = []) {
     super(message);
+    this.name = 'ApiError';
+    Object.setPrototypeOf(this, ApiError.prototype);
     this.code = code;
     this.status = status;
     this.errors = errors;
