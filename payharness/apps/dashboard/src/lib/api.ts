@@ -49,16 +49,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function readBody(response: Response): Promise<ParsedBody> {
-  const rawText = await response.text();
-  if (!rawText) {
-    return { payload: undefined, rawText, isJson: true };
+  const contentType = response.headers?.get?.('content-type') || '';
+
+  // Some test/mocked fetch responses expose json() but not text(). Prefer
+  // the JSON reader when the response advertises JSON content.
+  if (contentType.toLowerCase().includes('application/json') && typeof response.json === 'function') {
+    try {
+      const payload = await response.json();
+      return { payload, rawText: '', isJson: true };
+    } catch {
+      // Fall through to text() for a malformed JSON response.
+    }
   }
 
-  try {
-    return { payload: JSON.parse(rawText), rawText, isJson: true };
-  } catch {
-    return { payload: undefined, rawText, isJson: false };
+  if (typeof response.text === 'function') {
+    const rawText = await response.text();
+    if (!rawText) {
+      return { payload: undefined, rawText, isJson: contentType.toLowerCase().includes('application/json') };
+    }
+
+    try {
+      return { payload: JSON.parse(rawText), rawText, isJson: true };
+    } catch {
+      return { payload: undefined, rawText, isJson: false };
+    }
   }
+
+  return { payload: undefined, rawText: '', isJson: false };
 }
 
 function getErrorMessage(payload: unknown, fallback: string) {
@@ -154,10 +171,10 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}) {
 
     return await parseResponse<T>(response);
   } catch (error) {
-    if ((error as ApiError).status === 401) {
-      clearSession();
-    }
     if (error instanceof ApiError) {
+      if (error.status === 401) {
+        clearSession();
+      }
       throw error;
     }
 
