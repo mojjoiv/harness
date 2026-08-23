@@ -1,6 +1,8 @@
 FROM node:20.11.1-bookworm-slim AS build
 
 WORKDIR /app
+ARG NEXT_PUBLIC_API_URL=http://localhost:3000
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 COPY package*.json ./
 COPY apps/dashboard/package*.json ./apps/dashboard/
 RUN npm ci
