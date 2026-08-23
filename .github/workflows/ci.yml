@@ -32,7 +32,7 @@ jobs:
       - name: Lint
         working-directory: payharness
         run: npm run lint
-      - name: Tests
+      - name: API and dashboard tests
         working-directory: payharness
         run: npm test
       - name: Dependency audit
