@@ -10,6 +10,7 @@ export interface AuthUser {
   environment?: 'SANDBOX' | 'LIVE';
 }
 
-export const CurrentUser = createParamDecorator(
-  (_data: unknown, ctx: ExecutionContext): AuthUser => ctx.switchToHttp().getRequest().user,
-);
+export const currentUserFactory = (_data: unknown, ctx: ExecutionContext): AuthUser | undefined =>
+  ctx.switchToHttp().getRequest()?.user as AuthUser | undefined;
+
+export const CurrentUser = createParamDecorator(currentUserFactory);
