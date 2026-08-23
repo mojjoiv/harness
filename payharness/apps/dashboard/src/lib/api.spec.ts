@@ -37,7 +37,7 @@ describe('dashboard API client', () => {
 
     expect(global.fetch).toHaveBeenCalledWith('http://localhost:3000/payments', expect.objectContaining({
       method: 'GET',
-      headers: expect.any(Headers),
+      headers: expect.any(Object),
     }));
     const [, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(init.headers.get('Authorization')).toBe('Bearer test-token');
