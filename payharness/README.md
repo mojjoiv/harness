@@ -14,7 +14,7 @@ Payment aggregator SaaS monorepo for the backend MVP.
 
 - Node.js `>=20.11.1` (matches the root `package.json` engine requirement)
 - npm
-- PostgreSQL (local or hosted, such as Neon)
+- PostgreSQL for non-Docker local development (Docker Compose includes PostgreSQL)
 
 Check your versions before installing:
 
@@ -57,30 +57,40 @@ Generate an encryption key with:
 openssl rand -base64 32
 ```
 
-The root `.env.example` documents the environment used by the API and dashboard. Never commit a populated `.env` file or real provider credentials.
+The root `.env.example` documents the environment used by the API, dashboard, and local Docker Compose stack. Never commit a populated `.env` file or real provider credentials.
 
 ### Docker Compose
 
-Docker Compose uses the same root `.env` file, so a fresh clone only needs one environment file:
+Docker Compose provides the API, dashboard, and a local PostgreSQL database. Copy the example environment and start the stack:
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-The API is available at `http://localhost:3000` and the dashboard at `http://localhost:3001`.
+The Compose defaults are safe for local development and use a named PostgreSQL volume. If `DATABASE_URL` is left blank, the API connects to the Compose PostgreSQL service automatically. To use an external PostgreSQL instance instead, set `DATABASE_URL` in `.env`.
 
-To stop the stack:
+The API automatically runs committed Prisma migrations before starting in Compose. It does not run the seed script automatically.
+
+The API is available at `http://localhost:3000` and the dashboard at `http://localhost:3001`. PostgreSQL is exposed on `localhost:5432` by default.
+
+To stop the stack while preserving database data:
 
 ```bash
 docker compose down
+```
+
+To stop the stack and remove the local database volume:
+
+```bash
+docker compose down -v
 ```
 
 The Compose configuration does not contain application secrets. Keep real credentials in the local `.env` file or your deployment platform's secret/environment configuration.
 
 ### Prepare Prisma
 
-For local development:
+For local development without Docker:
 
 ```bash
 npm --workspace apps/api run prisma:generate
