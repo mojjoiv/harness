@@ -32,9 +32,9 @@ jobs:
       - name: Lint
         working-directory: payharness
         run: npm run lint
-      - name: API and dashboard tests
+      - name: API and dashboard tests with coverage
         working-directory: payharness
-        run: npm test
+        run: npm run test:cov
       - name: Dependency audit
         working-directory: payharness
         run: npm audit --audit-level=high
