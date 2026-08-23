@@ -22,7 +22,9 @@
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "format:check": "prettier --check .",
     "typecheck": "npm --workspace apps/api run typecheck",
-    "test": "npm --workspace apps/api test",
+    "test": "npm test --workspaces --if-present",
+    "test:api": "npm --workspace apps/api test",
+    "test:dashboard": "npm --workspace apps/dashboard test",
     "test:cov": "npm --workspace apps/api run test:cov"
   },
   "devDependencies": {
