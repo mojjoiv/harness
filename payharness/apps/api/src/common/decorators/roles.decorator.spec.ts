@@ -19,9 +19,10 @@ describe('Roles decorator', () => {
       descriptor,
     );
 
-    expect(
-      Reflect.getMetadata(ROLES_KEY, TestController.prototype, 'test'),
-    ).toEqual([UserRole.OWNER, UserRole.ADMIN]);
+    expect(Reflect.getMetadata(ROLES_KEY, descriptor.value)).toEqual([
+      UserRole.OWNER,
+      UserRole.ADMIN,
+    ]);
   });
 
   it('stores platform roles without changing their order', () => {
@@ -37,9 +38,7 @@ describe('Roles decorator', () => {
     const roles = [PlatformRole.PLATFORM_ADMIN, PlatformRole.SUPERADMIN];
     Roles(...roles)(TestController.prototype, 'test', descriptor);
 
-    expect(
-      Reflect.getMetadata(ROLES_KEY, TestController.prototype, 'test'),
-    ).toEqual(roles);
+    expect(Reflect.getMetadata(ROLES_KEY, descriptor.value)).toEqual(roles);
   });
 
   it('stores an empty role list when no roles are supplied', () => {
@@ -54,9 +53,7 @@ describe('Roles decorator', () => {
 
     Roles()(TestController.prototype, 'test', descriptor);
 
-    expect(
-      Reflect.getMetadata(ROLES_KEY, TestController.prototype, 'test'),
-    ).toEqual([]);
+    expect(Reflect.getMetadata(ROLES_KEY, descriptor.value)).toEqual([]);
   });
 
   it('uses the expected metadata key', () => {
