@@ -21,10 +21,14 @@ describe('dashboard API client', () => {
   });
 
   it('unwraps successful API responses and sends authorization', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue(new Response(
-      JSON.stringify({ success: true, data: { id: 'p1' }, meta: { page: 1 } }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    ));
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { id: 'p1' }, meta: { page: 1 } }),
+      headers: {
+        get: (key: string) => (key.toLowerCase() === 'content-type' ? 'application/json' : null),
+      },
+    });
 
     await expect(apiRequest('/payments')).resolves.toEqual({
       data: { id: 'p1' },
@@ -40,10 +44,14 @@ describe('dashboard API client', () => {
   });
 
   it('normalizes API failures into ApiError', async () => {
-    (global.fetch as jest.Mock).mockResolvedValue(new Response(
-      JSON.stringify({ message: 'Payment failed', code: 'PAYMENT_FAILED', errors: ['invalid'] }),
-      { status: 422, headers: { 'Content-Type': 'application/json' } },
-    ));
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ message: 'Payment failed', code: 'PAYMENT_FAILED', errors: ['invalid'] }),
+      headers: {
+        get: (key: string) => (key.toLowerCase() === 'content-type' ? 'application/json' : null),
+      },
+    });
 
     const request = apiRequest('/payments', { method: 'POST' });
     await expect(request).rejects.toBeInstanceOf(ApiError);
