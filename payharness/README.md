@@ -32,22 +32,22 @@ cd payharness
 npm ci
 ```
 
-Create the API environment file:
+Create the root environment file:
 
 ```bash
-cp apps/api/.env.example apps/api/.env
+cp .env.example .env
 ```
 
-Set the required values in `apps/api/.env`. At minimum:
+Set the required values in `.env`. At minimum:
 
 ```env
 NODE_ENV=development
 PORT=3000
 DATABASE_URL=postgresql://user:password@localhost:5432/payharness
-JWT_SECRET=replace-with-a-strong-secret
+JWT_SECRET=<strong random secret>
 CREDENTIAL_ENCRYPTION_KEY=<base64 encoded 32-byte key>
 SUPERADMIN_EMAIL=admin@example.com
-SUPERADMIN_PASSWORD=replace-with-a-strong-password
+SUPERADMIN_PASSWORD=<strong password>
 SUPERADMIN_NAME=Platform Admin
 ```
 
@@ -57,7 +57,26 @@ Generate an encryption key with:
 openssl rand -base64 32
 ```
 
-The `.env.example` file also documents optional email and M-Pesa smoke-test configuration. Never commit a populated `.env` file or real provider credentials.
+The root `.env.example` documents the environment used by the API and dashboard. Never commit a populated `.env` file or real provider credentials.
+
+### Docker Compose
+
+Docker Compose uses the same root `.env` file, so a fresh clone only needs one environment file:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+The API is available at `http://localhost:3000` and the dashboard at `http://localhost:3001`.
+
+To stop the stack:
+
+```bash
+docker compose down
+```
+
+The Compose configuration does not contain application secrets. Keep real credentials in the local `.env` file or your deployment platform's secret/environment configuration.
 
 ### Prepare Prisma
 
@@ -239,6 +258,6 @@ See Swagger at `/docs` for the complete current API contract.
 
 ## Pull Requests and CI
 
-Create focused branches for changes and open a pull request against `main`. CI runs typechecking, linting, tests, dependency audit, and secret scanning. Do not merge a PR with a failing quality or security check.
+Create focused branches from `main` for changes and open a pull request against `main`. CI runs typechecking, linting, tests, dependency audit, and secret scanning. Do not merge a PR with a failing quality or security check.
 
 For development conventions and the contribution workflow, see `CONTRIBUTING.md`.
