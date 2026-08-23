@@ -53,9 +53,8 @@ describe('dashboard API client', () => {
       },
     });
 
-    const request = apiRequest('/payments', { method: 'POST' });
-    await expect(request).rejects.toBeInstanceOf(ApiError);
-    await expect(request).rejects.toMatchObject({
+    await expect(apiRequest('/payments', { method: 'POST' })).rejects.toBeInstanceOf(ApiError);
+    await expect(apiRequest('/payments', { method: 'POST' })).rejects.toMatchObject({
       message: 'Payment failed',
       code: 'PAYMENT_FAILED',
       status: 422,
