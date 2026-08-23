@@ -12,8 +12,9 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+  const requestIdMiddleware = new RequestIdMiddleware();
 
-  app.use(new RequestIdMiddleware().use.bind(new RequestIdMiddleware()));
+  app.use(requestIdMiddleware.use.bind(requestIdMiddleware));
 
   const allowedOrigins = [
     'http://localhost:3001',
