@@ -23,12 +23,9 @@ describe('HttpExceptionFilter', () => {
     return { host, status, json };
   };
 
-  it('handles HttpException responses', () => {
+  it('handles HttpException responses with a string message', () => {
     const { host, status, json } = makeHost();
-    const exception = new HttpException(
-      { message: 'Not found' },
-      HttpStatus.NOT_FOUND,
-    );
+    const exception = new HttpException('Not found', HttpStatus.NOT_FOUND);
 
     filter.catch(exception, host);
 
@@ -40,6 +37,40 @@ describe('HttpExceptionFilter', () => {
         errors: [],
         path: '/test',
       }),
+    );
+  });
+
+  it('handles HttpException responses with an array message', () => {
+    const { host, status, json } = makeHost();
+    const exception = new HttpException(
+      { message: ['invalid email', 'invalid name'] },
+      HttpStatus.BAD_REQUEST,
+    );
+
+    filter.catch(exception, host);
+
+    expect(status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        message: 'invalid email',
+        errors: ['invalid email', 'invalid name'],
+      }),
+    );
+  });
+
+  it('handles HttpException responses with an object message', () => {
+    const { host, status, json } = makeHost();
+    const exception = new HttpException(
+      { message: 'Unauthorized' },
+      HttpStatus.UNAUTHORIZED,
+    );
+
+    filter.catch(exception, host);
+
+    expect(status).toHaveBeenCalledWith(HttpStatus.UNAUTHORIZED);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Unauthorized', errors: [] }),
     );
   });
 
@@ -59,10 +90,24 @@ describe('HttpExceptionFilter', () => {
     );
   });
 
+  it('falls back to the internal server message for an empty Error', () => {
+    const { host, status, json } = makeHost();
+
+    filter.catch(new Error(), host);
+
+    expect(status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        message: 'Internal server error',
+      }),
+    );
+  });
+
   it('handles unknown exceptions as internal server errors', () => {
     const { host, status, json } = makeHost();
 
-    filter.catch('unexpected failure', host);
+    filter.catch({ reason: 'unexpected failure' }, host);
 
     expect(status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
     expect(json).toHaveBeenCalledWith(
