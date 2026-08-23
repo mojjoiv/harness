@@ -13,7 +13,7 @@ describe('Roles decorator', () => {
       'test',
     ) as PropertyDescriptor;
 
-    Roles(UserRole.USER, UserRole.ADMIN)(
+    Roles(UserRole.OWNER, UserRole.ADMIN)(
       TestController.prototype,
       'test',
       descriptor,
@@ -21,7 +21,7 @@ describe('Roles decorator', () => {
 
     expect(
       Reflect.getMetadata(ROLES_KEY, TestController.prototype, 'test'),
-    ).toEqual([UserRole.USER, UserRole.ADMIN]);
+    ).toEqual([UserRole.OWNER, UserRole.ADMIN]);
   });
 
   it('stores platform roles without changing their order', () => {
@@ -34,7 +34,7 @@ describe('Roles decorator', () => {
       'test',
     ) as PropertyDescriptor;
 
-    const roles = [PlatformRole.ADMIN, PlatformRole.SUPER_ADMIN];
+    const roles = [PlatformRole.PLATFORM_ADMIN, PlatformRole.SUPERADMIN];
     Roles(...roles)(TestController.prototype, 'test', descriptor);
 
     expect(
