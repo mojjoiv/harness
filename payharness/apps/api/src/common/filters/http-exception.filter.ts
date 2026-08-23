@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -34,20 +35,29 @@ export class HttpExceptionFilter implements ExceptionFilter {
         : (body as { message?: string | string[] }).message;
 
     const errors = Array.isArray(message) ? message : [];
+    const requestId = request.headers?.['x-request-id'] || randomUUID();
+    const errorId = randomUUID();
 
-    // ===== LOG THE FULL EXCEPTION =====
-    if (exception instanceof Error) {
-      this.logger.error(
-        `${request.method} ${request.url}`,
-        exception.stack,
-      );
-    } else {
-      this.logger.error(
-        `${request.method} ${request.url}`,
-        JSON.stringify(exception),
-      );
+    if (!response.headersSent) {
+      response.setHeader('x-request-id', requestId);
     }
-    // ================================
+
+    this.logger.error(
+      JSON.stringify({
+        event: 'http.exception',
+        errorId,
+        requestId,
+        status,
+        method: request.method,
+        path: request.url,
+        exception: {
+          name: exception instanceof Error ? exception.name : typeof exception,
+          message: exception instanceof Error ? exception.message : undefined,
+          stack: exception instanceof Error ? exception.stack : undefined,
+        },
+        timestamp: new Date().toISOString(),
+      }),
+    );
 
     response.status(status).json({
       success: false,
@@ -58,6 +68,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
       errors,
       timestamp: new Date().toISOString(),
       path: request.url,
+      requestId,
+      errorId,
     });
   }
 

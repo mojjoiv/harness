@@ -8,11 +8,19 @@ describe('HttpExceptionFilter', () => {
     filter = new HttpExceptionFilter();
   });
 
-  const makeHost = () => {
+  const makeHost = (requestId = 'req-test-123') => {
     const json = jest.fn();
     const status = jest.fn().mockReturnValue({ json });
-    const response = { status };
-    const request = { method: 'GET', url: '/test' };
+    const response = {
+      status,
+      headersSent: false,
+      setHeader: jest.fn(),
+    };
+    const request = {
+      method: 'GET',
+      url: '/test',
+      headers: { 'x-request-id': requestId },
+    };
     const host = {
       switchToHttp: () => ({
         getResponse: () => response,
@@ -20,22 +28,25 @@ describe('HttpExceptionFilter', () => {
       }),
     } as any;
 
-    return { host, status, json };
+    return { host, status, json, response };
   };
 
   it('handles HttpException responses with a string message', () => {
-    const { host, status, json } = makeHost();
+    const { host, status, json, response } = makeHost();
     const exception = new HttpException('Not found', HttpStatus.NOT_FOUND);
 
     filter.catch(exception, host);
 
     expect(status).toHaveBeenCalledWith(HttpStatus.NOT_FOUND);
+    expect(response.setHeader).toHaveBeenCalledWith('x-request-id', 'req-test-123');
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         success: false,
         message: 'Not found',
         errors: [],
         path: '/test',
+        requestId: 'req-test-123',
+        errorId: expect.any(String),
       }),
     );
   });
@@ -86,6 +97,8 @@ describe('HttpExceptionFilter', () => {
         message: 'boom',
         errors: [],
         path: '/test',
+        requestId: 'req-test-123',
+        errorId: expect.any(String),
       }),
     );
   });
