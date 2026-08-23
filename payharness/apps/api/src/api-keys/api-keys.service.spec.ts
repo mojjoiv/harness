@@ -50,15 +50,17 @@ describe('ApiKeysService', () => {
       const createdAt = new Date('2026-08-23T00:00:00.000Z');
       prisma.apiKey.findFirst.mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-secret');
-      prisma.apiKey.create.mockResolvedValue({
-        id: 'key-1',
-        name: 'Sandbox',
-        environment: Environment.SANDBOX,
-        prefix: 'ph_sandbox_123',
-        keyHash: 'hashed-secret',
-        status: Status.ACTIVE,
-        createdAt,
-      });
+      prisma.apiKey.create.mockImplementation((args) =>
+        Promise.resolve({
+          id: 'key-1',
+          name: 'Sandbox',
+          environment: Environment.SANDBOX,
+          prefix: args.data.prefix,
+          keyHash: 'hashed-secret',
+          status: Status.ACTIVE,
+          createdAt,
+        }),
+      );
 
       const result = await service.create('merchant-1', 'user-1', {
         name: 'Sandbox',
