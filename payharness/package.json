@@ -17,7 +17,7 @@
     "start:dashboard": "npm --workspace apps/dashboard run start",
     "prisma:generate": "npm --workspace apps/api run prisma:generate",
     "prisma:migrate:deploy": "npm --workspace apps/api run prisma:migrate:deploy",
-    "db:setup": "npm run prisma:generate && npm run prisma:migrate:deploy && npm run seed",
+    "db:setup": "npm --workspace apps/api run db:setup",
     "seed": "npm --workspace apps/api run seed",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "format:check": "prettier --check .",
