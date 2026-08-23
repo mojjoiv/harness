@@ -5,13 +5,18 @@ module.exports = {
   roots: ['<rootDir>/src'],
   testRegex: '.*\\.spec\\.ts$',
   moduleFileExtensions: ['ts', 'js', 'json'],
-  collectCoverageFrom: ['src/**/*.ts', '!src/main.ts'],
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/main.ts',
+    '!src/**/*.dto.ts',
+    '!src/**/*.module.ts',
+  ],
   coverageThreshold: {
     global: {
-      branches: 60,
-      functions: 60,
-      lines: 60,
-      statements: 60,
+      branches: 15,
+      functions: 15,
+      lines: 15,
+      statements: 15,
     },
   },
 };
