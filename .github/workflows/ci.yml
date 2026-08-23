@@ -37,7 +37,7 @@ jobs:
         run: npm test
       - name: Dependency audit
         working-directory: payharness
-        run: npm audit --audit-level=critical
+        run: npm audit --audit-level=high
 
   secret-scan:
     runs-on: ubuntu-latest
