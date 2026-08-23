@@ -47,7 +47,7 @@ describe('WebhooksService', () => {
 
     expect(result.id).toBe('endpoint-1');
     expect(result.secret).toMatch(/^whsec_/);
-    expect(result.secretHash).toBeUndefined();
+    expect(result).not.toHaveProperty('secretHash');
     expect(auditLogs.create).toHaveBeenCalledWith(expect.objectContaining({
       action: 'webhook.created',
       entityId: 'endpoint-1',
