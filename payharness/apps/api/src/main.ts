@@ -7,10 +7,13 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ApiUsageInterceptor } from './common/interceptors/api-usage.interceptor';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+
+  app.use(new RequestIdMiddleware().use.bind(new RequestIdMiddleware()));
 
   const allowedOrigins = [
     'http://localhost:3001',
