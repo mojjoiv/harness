@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import PlatformPlansPage from './index';
+import PlatformPlansPage from '@/pages/platform/plans';
 import { api } from '@/lib/api';
 
 jest.mock('@/components/auth', () => ({
