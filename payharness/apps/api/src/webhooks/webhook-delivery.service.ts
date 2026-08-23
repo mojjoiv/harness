@@ -40,7 +40,7 @@ export class WebhookDeliveryService {
   }
 
   async deliverToUrl(url: string, eventType: string, payload: Record<string, unknown>, idempotencyKey?: string) {
-    const key = idempotencyKey || this.defaultIdempotencyKey(eventType, payload);
+    const key = idempotencyKey || this.defaultIdempotencyKey(url, eventType, payload);
     const deliveryId = this.idForKey(key);
 
     if (deliveryId) {
@@ -71,9 +71,9 @@ export class WebhookDeliveryService {
     return this.deliverRecord(delivery, url);
   }
 
-  private defaultIdempotencyKey(eventType: string, payload: Record<string, unknown>) {
+  private defaultIdempotencyKey(url: string, eventType: string, payload: Record<string, unknown>) {
     const paymentId = typeof payload.paymentId === 'string' ? payload.paymentId : undefined;
-    return paymentId ? `${paymentId}:${eventType}` : undefined;
+    return paymentId ? `${url}:${paymentId}:${eventType}` : undefined;
   }
 
   private idForKey(key?: string) {
