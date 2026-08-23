@@ -4,6 +4,9 @@ const path = require('node:path');
 const eventName = process.env.GITHUB_EVENT_NAME;
 const baseRef = process.env.GITHUB_BASE_REF;
 const beforeSha = process.env.GITHUB_EVENT_BEFORE;
+const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+  encoding: 'utf8',
+}).trim();
 
 let base;
 if (eventName === 'pull_request' && baseRef) {
@@ -38,7 +41,7 @@ const files = execFileSync(
   .map((file) => file.trim())
   .filter(Boolean)
   .filter((file) => !file.startsWith('node_modules/'))
-  .map((file) => path.resolve(file));
+  .map((file) => path.resolve(repoRoot, file));
 
 if (files.length === 0) {
   console.log(`No supported files changed since ${base}; formatting check passed.`);
