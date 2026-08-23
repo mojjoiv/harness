@@ -1,4 +1,4 @@
-import { CurrentUser, AuthUser } from './current-user.decorator';
+import { currentUserFactory, AuthUser } from './current-user.decorator';
 
 describe('CurrentUser', () => {
   it('returns the authenticated user from the request', () => {
@@ -15,8 +15,6 @@ describe('CurrentUser', () => {
       }),
     } as any;
 
-    const factory = (CurrentUser as any).factory;
-
-    expect(factory(undefined, ctx)).toBe(user);
+    expect(currentUserFactory(undefined, ctx)).toBe(user);
   });
 });
