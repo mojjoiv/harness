@@ -3,6 +3,7 @@ import { Prisma, WebhookDelivery } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import * as http from 'http';
 import * as https from 'https';
+import { createHash } from 'crypto';
 
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAYS_MS = [0, 1000, 3000];
@@ -38,9 +39,29 @@ export class WebhookDeliveryService {
     return this.deliverRecord(delivery, delivery.endpoint.url);
   }
 
-  async deliverToUrl(url: string, eventType: string, payload: Record<string, unknown>) {
+  async deliverToUrl(url: string, eventType: string, payload: Record<string, unknown>, idempotencyKey?: string) {
+    const key = idempotencyKey || this.defaultIdempotencyKey(url, eventType, payload);
+    const deliveryId = this.idForKey(key);
+
+    if (deliveryId) {
+      const existing = await this.prisma.webhookDelivery.findUnique({ where: { id: deliveryId } });
+      if (existing) {
+        if (existing.status === 'SUCCEEDED') {
+          return {
+            delivered: true,
+            deliveryId: existing.id,
+            attempts: existing.attempts,
+            responseCode: existing.responseCode,
+            alreadyDelivered: true,
+          };
+        }
+        return this.deliverRecord(existing, url);
+      }
+    }
+
     const delivery = await this.prisma.webhookDelivery.create({
       data: {
+        ...(deliveryId ? { id: deliveryId } : {}),
         eventType,
         payload: payload as Prisma.InputJsonValue,
         status: 'PENDING',
@@ -48,6 +69,17 @@ export class WebhookDeliveryService {
     });
 
     return this.deliverRecord(delivery, url);
+  }
+
+  private defaultIdempotencyKey(url: string, eventType: string, payload: Record<string, unknown>) {
+    const paymentId = typeof payload.paymentId === 'string' ? payload.paymentId : undefined;
+    return paymentId ? `${url}:${paymentId}:${eventType}` : undefined;
+  }
+
+  private idForKey(key?: string) {
+    if (!key) return undefined;
+    const hash = createHash('sha256').update(key).digest('hex');
+    return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
   }
 
   private async deliverRecord(delivery: WebhookDelivery, targetUrl: string) {
