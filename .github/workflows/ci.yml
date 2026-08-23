@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -32,6 +34,9 @@ jobs:
       - name: Lint
         working-directory: payharness
         run: npm run lint
+      - name: Format check
+        working-directory: payharness
+        run: npm run format:check:changed
       - name: API and dashboard tests with coverage
         working-directory: payharness
         run: npm run test:cov
