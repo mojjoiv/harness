@@ -43,7 +43,11 @@ function validateCompose() {
       .map((value) => value.toString().trim())
       .filter(Boolean)
       .join('\n');
-    fail(`docker compose configuration is invalid or Docker Compose is unavailable${output ? `:\n${output}` : '.'}`);
+    fail(
+      `docker compose configuration is invalid or Docker Compose is unavailable${
+        output ? `:\n${output}` : '.'
+      }`,
+    );
   }
 }
 
