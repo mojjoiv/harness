@@ -16,6 +16,7 @@ git checkout main
 git pull --ff-only origin main
 git checkout -b feat/my-change
 npm ci
+npm run verify:fresh-clone
 ```
 
 ## Quality checks
@@ -39,7 +40,7 @@ Add tests with behavior changes. Prefer focused unit tests for services, guards,
 
 ## Environment
 
-Copy `apps/api/.env.example` to `apps/api/.env` for local development. Use test/sandbox credentials only. Do not place real production credentials in source code, test fixtures, logs, or pull requests.
+For a reproducible local stack, copy `payharness/.env.example` to `payharness/.env` and use `docker compose up --build` from `payharness/`. For local development without Docker, the API-specific example is available at `apps/api/.env.example`. Use test/sandbox credentials only. Do not place real production credentials in source code, test fixtures, logs, or pull requests.
 
 ## Commits
 
