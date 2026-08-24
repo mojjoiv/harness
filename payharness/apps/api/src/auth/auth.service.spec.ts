@@ -121,26 +121,25 @@ describe('AuthService', () => {
       await expect(service.login(dto as never)).rejects.toThrow(ForbiddenException);
     });
 
-    it.each([
-      [MerchantStatus.PENDING, 'awaiting approval'],
-      [MerchantStatus.REJECTED, 'rejected'],
-      [MerchantStatus.SUSPENDED, 'suspended'],
-    ])('rejects an inactive merchant with %s status', async (status: MerchantStatus) => {
-      prisma.user.findUnique.mockResolvedValue({
-        ...baseUser,
-        merchantUsers: [
-          {
-            merchantId: merchant.id,
-            role: UserRole.OWNER,
-            status: 'ACTIVE',
-            merchant: { ...merchant, status },
-          },
-        ],
-      });
+    it.each([MerchantStatus.PENDING, MerchantStatus.REJECTED, MerchantStatus.SUSPENDED])(
+      'rejects an inactive merchant with %s status',
+      async (status: MerchantStatus) => {
+        prisma.user.findUnique.mockResolvedValue({
+          ...baseUser,
+          merchantUsers: [
+            {
+              merchantId: merchant.id,
+              role: UserRole.OWNER,
+              status: 'ACTIVE',
+              merchant: { ...merchant, status },
+            },
+          ],
+        });
 
-      await expect(service.login(dto as never)).rejects.toThrow(ForbiddenException);
-      expect(auditLogs.create).not.toHaveBeenCalled();
-    });
+        await expect(service.login(dto as never)).rejects.toThrow(ForbiddenException);
+        expect(auditLogs.create).not.toHaveBeenCalled();
+      },
+    );
 
     it('logs in an active merchant user and signs a merchant token', async () => {
       prisma.user.findUnique.mockResolvedValue({
