@@ -18,7 +18,11 @@ export function AuthGate({ children }: React.PropsWithChildren) {
   }, [router]);
 
   if (!ready) {
-    return <div className="flex min-h-screen items-center justify-center bg-bg text-sm text-muted">Loading...</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg text-sm text-muted">
+        Loading...
+      </div>
+    );
   }
   return <>{children}</>;
 }
@@ -44,7 +48,11 @@ export function PlatformAuthGate({ children }: React.PropsWithChildren) {
   }, [router]);
 
   if (!ready) {
-    return <div className="flex min-h-screen items-center justify-center bg-bg text-sm text-muted">Loading...</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg text-sm text-muted">
+        Loading...
+      </div>
+    );
   }
   return <>{children}</>;
 }
