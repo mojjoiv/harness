@@ -24,6 +24,7 @@
     "prisma:migrate:deploy": "npm --workspace apps/api run prisma:migrate:deploy",
     "db:setup": "npm --workspace apps/api run db:setup",
     "seed": "npm --workspace apps/api run seed",
+    "verify:fresh-clone": "node scripts/verify-fresh-clone.js",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "format:check": "prettier --check .",
     "format:check:changed": "node scripts/check-format-changed.js",
