@@ -14,6 +14,7 @@ Payment aggregator SaaS monorepo for the backend MVP.
 
 - Node.js `>=20.11.1` (matches the root `package.json` engine requirement)
 - npm
+- Docker Desktop / Docker Engine with Compose v2 for the reproducible local stack
 - PostgreSQL for non-Docker local development (Docker Compose includes PostgreSQL)
 
 Check your versions before installing:
@@ -21,6 +22,25 @@ Check your versions before installing:
 ```bash
 node --version
 npm --version
+docker compose version
+```
+
+## Fresh-clone verification
+
+After cloning the repository, run this from `payharness/` before making application changes:
+
+```bash
+npm ci
+npm run verify:fresh-clone
+```
+
+The verification checks the Node.js engine requirement, the committed npm lockfile, required environment and Docker files, and the Docker Compose configuration. It does not start containers or modify the database.
+
+A clean clone should then be able to start the complete local stack using only the committed configuration and a local `.env` file:
+
+```bash
+cp .env.example .env
+docker compose up --build
 ```
 
 ## Local Setup
