@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { useRouter } from 'next/compat/router';
 import { useEffect, useMemo, useState } from 'react';
 import { getSession } from '@/lib/auth';
 import { logout, platformLogout } from './auth';
@@ -9,18 +9,45 @@ type NavItem = { label: string; href: string; exact?: boolean; disabled?: boolea
 type NavSection = { title: string; items: NavItem[] };
 
 const sections: NavSection[] = [
-  { title: 'Main', items: [{ label: 'Dashboard', href: '/dashboard', exact: true }, { label: 'Transactions', href: '/transactions' }, { label: 'Checkout Sessions', href: '/checkout-sessions' }] },
-  { title: 'Operations', items: [{ label: 'Providers', href: '/providers' }, { label: 'Analytics', href: '/analytics' }] },
-  { title: 'Developers', items: [{ label: 'API Keys', href: '/developers/api-keys' }, { label: 'Webhooks', href: '/developers/webhooks' }, { label: 'Usage', href: '/developers/usage' }] },
-  { title: 'Settings', items: [{ label: 'Profile', href: '/settings/profile' }, { label: 'Team', href: '/settings/team' }, { label: 'Branding', href: '/settings/branding' }, { label: 'General', href: '/settings/general' }] },
+  {
+    title: 'Main',
+    items: [
+      { label: 'Dashboard', href: '/dashboard', exact: true },
+      { label: 'Transactions', href: '/transactions' },
+      { label: 'Checkout Sessions', href: '/checkout-sessions' },
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
+      { label: 'Providers', href: '/providers' },
+      { label: 'Analytics', href: '/analytics' },
+    ],
+  },
+  {
+    title: 'Developers',
+    items: [
+      { label: 'API Keys', href: '/developers/api-keys' },
+      { label: 'Webhooks', href: '/developers/webhooks' },
+      { label: 'Usage', href: '/developers/usage' },
+    ],
+  },
+  {
+    title: 'Settings',
+    items: [
+      { label: 'Profile', href: '/settings/profile' },
+      { label: 'Team', href: '/settings/team' },
+      { label: 'Branding', href: '/settings/branding' },
+      { label: 'General', href: '/settings/general' },
+    ],
+  },
 ];
 
 export function DashboardLayout({ children }: React.PropsWithChildren) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState('');
-  const currentPath = router.asPath.split('?')[0];
-
+  const currentPath = router?.asPath?.split('?')[0] || '';
   const nav = useMemo(() => sections, []);
 
   useEffect(() => {
@@ -48,10 +75,14 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
           <nav className="space-y-5">
             {nav.map((section) => (
               <div key={section.title}>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">{section.title}</div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  {section.title}
+                </div>
                 <div className="space-y-1">
                   {section.items.map((item) => {
-                    const active = item.exact ? currentPath === item.href : currentPath.startsWith(item.href);
+                    const active = item.exact
+                      ? currentPath === item.href
+                      : currentPath.startsWith(item.href);
                     return (
                       <Link
                         key={item.href}
@@ -71,7 +102,6 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
             ))}
           </nav>
         </aside>
-
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-line bg-[rgba(246,247,251,0.9)] backdrop-blur">
             <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-8">
@@ -95,7 +125,13 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
           <main className="flex-1 px-4 py-6 lg:px-8">{children}</main>
         </div>
       </div>
-      {open ? <button className="fixed inset-0 z-20 bg-black/30 lg:hidden" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
+      {open ? (
+        <button
+          className="fixed inset-0 z-20 bg-black/30 lg:hidden"
+          aria-label="Close menu"
+          onClick={() => setOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -117,7 +153,7 @@ const platformItems: NavItem[] = [
 export function PlatformLayout({ children }: React.PropsWithChildren) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const currentPath = router.asPath.split('?')[0];
+  const currentPath = router?.asPath?.split('?')[0] || '';
 
   return (
     <div className="min-h-screen bg-bg text-ink">
@@ -139,7 +175,9 @@ export function PlatformLayout({ children }: React.PropsWithChildren) {
           </div>
           <nav className="space-y-1">
             {platformItems.map((item) => {
-              const active = item.exact ? currentPath === item.href : currentPath.startsWith(item.href);
+              const active = item.exact
+                ? currentPath === item.href
+                : currentPath.startsWith(item.href);
               if (item.disabled) {
                 return (
                   <div
@@ -187,7 +225,13 @@ export function PlatformLayout({ children }: React.PropsWithChildren) {
           <main className="flex-1 px-4 py-6 lg:px-8">{children}</main>
         </div>
       </div>
-      {open ? <button className="fixed inset-0 z-20 bg-black/30 lg:hidden" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
+      {open ? (
+        <button
+          className="fixed inset-0 z-20 bg-black/30 lg:hidden"
+          aria-label="Close menu"
+          onClick={() => setOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
