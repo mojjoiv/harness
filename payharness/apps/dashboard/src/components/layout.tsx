@@ -80,7 +80,9 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
                 </div>
                 <div className="space-y-1">
                   {section.items.map((item) => {
-                    const active = item.exact ? currentPath === item.href : currentPath.startsWith(item.href);
+                    const active = item.exact
+                      ? currentPath === item.href
+                      : currentPath.startsWith(item.href);
                     return (
                       <Link
                         key={item.href}
@@ -173,7 +175,9 @@ export function PlatformLayout({ children }: React.PropsWithChildren) {
           </div>
           <nav className="space-y-1">
             {platformItems.map((item) => {
-              const active = item.exact ? currentPath === item.href : currentPath.startsWith(item.href);
+              const active = item.exact
+                ? currentPath === item.href
+                : currentPath.startsWith(item.href);
               if (item.disabled) {
                 return (
                   <div
