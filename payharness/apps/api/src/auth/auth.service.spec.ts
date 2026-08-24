@@ -8,8 +8,8 @@ jest.mock('bcrypt', () => ({
   compare: jest.fn(),
 }));
 
-const bcryptHash = bcrypt.hash as jest.MockedFunction<typeof bcrypt.hash>;
-const bcryptCompare = bcrypt.compare as jest.MockedFunction<typeof bcrypt.compare>;
+const bcryptHash = bcrypt.hash as jest.Mock;
+const bcryptCompare = bcrypt.compare as jest.Mock;
 
 describe('AuthService', () => {
   const prisma = {
@@ -41,7 +41,6 @@ describe('AuthService', () => {
 
     it('rejects an already registered email', async () => {
       prisma.user.findUnique.mockResolvedValue({ id: 'existing' });
-
       await expect(service.register(dto as never)).rejects.toThrow(
         new BadRequestException('Email is already registered'),
       );
@@ -69,7 +68,11 @@ describe('AuthService', () => {
         user: { create: jest.fn().mockResolvedValue({ id: 'user-1', email: dto.email, name: dto.name }) },
         subscriptionPlan: { findFirst: jest.fn().mockResolvedValue({ id: 'plan-1' }) },
         merchant: {
-          create: jest.fn().mockResolvedValue({ id: 'merchant-1', name: dto.merchantName, status: MerchantStatus.PENDING }),
+          create: jest.fn().mockResolvedValue({
+            id: 'merchant-1',
+            name: dto.merchantName,
+            status: MerchantStatus.PENDING,
+          }),
         },
       };
       prisma.$transaction.mockImplementation((callback: (value: typeof tx) => unknown) => callback(tx));
@@ -122,10 +125,17 @@ describe('AuthService', () => {
       [MerchantStatus.PENDING, 'awaiting approval'],
       [MerchantStatus.REJECTED, 'rejected'],
       [MerchantStatus.SUSPENDED, 'suspended'],
-    ])('rejects an inactive merchant with %s status', async (status) => {
+    ])('rejects an inactive merchant with %s status', async (status: MerchantStatus) => {
       prisma.user.findUnique.mockResolvedValue({
         ...baseUser,
-        merchantUsers: [{ merchantId: merchant.id, role: UserRole.OWNER, status: 'ACTIVE', merchant: { ...merchant, status } }],
+        merchantUsers: [
+          {
+            merchantId: merchant.id,
+            role: UserRole.OWNER,
+            status: 'ACTIVE',
+            merchant: { ...merchant, status },
+          },
+        ],
       });
 
       await expect(service.login(dto as never)).rejects.toThrow(ForbiddenException);
