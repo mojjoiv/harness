@@ -115,7 +115,12 @@ describe('AuthService', () => {
   describe('login', () => {
     const dto = { email: 'owner@example.com', password: 'password123' };
     const merchant = { id: 'merchant-1', status: MerchantStatus.ACTIVE };
-    const baseUser = { id: 'user-1', email: dto.email, name: 'Owner', passwordHash: 'hash' };
+    const baseUser = {
+      id: 'user-1',
+      email: dto.email,
+      name: 'Owner',
+      passwordHash: 'hash',
+    };
 
     it('rejects an unknown user or invalid password', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
