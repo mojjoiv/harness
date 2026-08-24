@@ -19,7 +19,12 @@ describe('AuthService', () => {
   const jwtService = { signAsync: jest.fn() };
   const auditLogs = { create: jest.fn() };
   const mailer = { send: jest.fn() };
-  const service = new AuthService(prisma as never, jwtService as never, auditLogs as never, mailer as never);
+  const service = new AuthService(
+    prisma as never,
+    jwtService as never,
+    auditLogs as never,
+    mailer as never,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -50,7 +55,13 @@ describe('AuthService', () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
         callback({
-          user: { create: jest.fn().mockResolvedValue({ id: 'user-1', email: dto.email, name: dto.name }) },
+          user: {
+            create: jest.fn().mockResolvedValue({
+              id: 'user-1',
+              email: dto.email,
+              name: dto.name,
+            }),
+          },
           subscriptionPlan: { findFirst: jest.fn().mockResolvedValue(null) },
           merchant: { create: jest.fn() },
         }),
@@ -65,7 +76,13 @@ describe('AuthService', () => {
     it('creates the merchant, audit event, notification, and owner response', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       const tx = {
-        user: { create: jest.fn().mockResolvedValue({ id: 'user-1', email: dto.email, name: dto.name }) },
+        user: {
+          create: jest.fn().mockResolvedValue({
+            id: 'user-1',
+            email: dto.email,
+            name: dto.name,
+          }),
+        },
         subscriptionPlan: { findFirst: jest.fn().mockResolvedValue({ id: 'plan-1' }) },
         merchant: {
           create: jest.fn().mockResolvedValue({
@@ -116,7 +133,14 @@ describe('AuthService', () => {
     it('rejects a deactivated merchant user', async () => {
       prisma.user.findUnique.mockResolvedValue({
         ...baseUser,
-        merchantUsers: [{ merchantId: merchant.id, role: UserRole.OWNER, status: 'DEACTIVATED', merchant }],
+        merchantUsers: [
+          {
+            merchantId: merchant.id,
+            role: UserRole.OWNER,
+            status: 'DEACTIVATED',
+            merchant,
+          },
+        ],
       });
       await expect(service.login(dto as never)).rejects.toThrow(ForbiddenException);
     });
@@ -160,7 +184,9 @@ describe('AuthService', () => {
       expect(jwtService.signAsync).toHaveBeenCalledWith(
         expect.objectContaining({ userId: baseUser.id, merchantId: merchant.id, type: 'merchant' }),
       );
-      expect(auditLogs.create).toHaveBeenCalledWith(expect.objectContaining({ action: 'auth.login' }));
+      expect(auditLogs.create).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'auth.login' }),
+      );
     });
   });
 });
