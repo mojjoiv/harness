@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   format-auth-spec:
-    if: !contains(github.event.head_commit.message, 'apply prettier formatting')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -23,11 +22,11 @@ jobs:
         with:
           node-version: 20
 
-      - name: Format auth service spec with Prettier
+      - name: Format auth service spec with Prettier 3.9.0
         working-directory: payharness
         run: npx --yes prettier@3.9.0 --write apps/api/src/auth/auth.service.spec.ts
 
-      - name: Verify formatting with the same Prettier version
+      - name: Verify formatting
         working-directory: payharness
         run: npx --yes prettier@3.9.0 --check apps/api/src/auth/auth.service.spec.ts
 
@@ -38,5 +37,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add payharness/apps/api/src/auth/auth.service.spec.ts
           git rm .github/workflows/one-time-prettier-fix.yml
-          git commit -m "fix: apply prettier formatting to auth service test"
+          if git diff --cached --quiet; then
+            echo "Prettier made no changes; removing temporary workflow only."
+            git commit -m "chore: remove one-time prettier workflow"
+          else
+            git commit -m "fix: apply prettier formatting to auth service test"
+          fi
           git push origin HEAD:test/auth-service-coverage
