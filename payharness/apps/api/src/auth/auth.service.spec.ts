@@ -53,19 +53,18 @@ describe('AuthService', () => {
 
     it('rejects registration when the starter plan is missing', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
-      prisma.$transaction.mockImplementation(
-        async (callback: (tx: unknown) => unknown) =>
-          callback({
-            user: {
-              create: jest.fn().mockResolvedValue({
-                id: 'user-1',
-                email: dto.email,
-                name: dto.name,
-              }),
-            },
-            subscriptionPlan: { findFirst: jest.fn().mockResolvedValue(null) },
-            merchant: { create: jest.fn() },
-          }),
+      prisma.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) =>
+        callback({
+          user: {
+            create: jest.fn().mockResolvedValue({
+              id: 'user-1',
+              email: dto.email,
+              name: dto.name,
+            }),
+          },
+          subscriptionPlan: { findFirst: jest.fn().mockResolvedValue(null) },
+          merchant: { create: jest.fn() },
+        }),
       );
 
       await expect(service.register(dto as never)).rejects.toThrow(
@@ -93,8 +92,8 @@ describe('AuthService', () => {
           }),
         },
       };
-      prisma.$transaction.mockImplementation(
-        (callback: (value: typeof tx) => unknown) => callback(tx),
+      prisma.$transaction.mockImplementation((callback: (value: typeof tx) => unknown) =>
+        callback(tx),
       );
 
       await expect(service.register(dto as never)).resolves.toEqual({
