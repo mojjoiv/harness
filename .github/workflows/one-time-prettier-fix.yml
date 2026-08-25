@@ -22,20 +22,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: payharness/package-lock.json
 
-      - name: Install dependencies without changing the lockfile
+      - name: Format auth service spec with Prettier
         working-directory: payharness
-        run: npm install --package-lock=false
+        run: npx --yes prettier@3.9.0 --write apps/api/src/auth/auth.service.spec.ts
 
-      - name: Format auth service spec with repository Prettier
+      - name: Verify formatting with the same Prettier version
         working-directory: payharness
-        run: npx prettier --write apps/api/src/auth/auth.service.spec.ts
-
-      - name: Verify formatting
-        working-directory: payharness
-        run: npx prettier --check apps/api/src/auth/auth.service.spec.ts
+        run: npx --yes prettier@3.9.0 --check apps/api/src/auth/auth.service.spec.ts
 
       - name: Commit formatted file and remove temporary workflow
         shell: bash
