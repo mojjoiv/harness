@@ -24,7 +24,9 @@ export class ApiKeysService {
         entity: 'api_key',
         metadata: { reason: 'duplicate_name', name: dto.name },
       });
-      throw new ConflictException(`You already have an active API key named "${dto.name}"`);
+      throw new ConflictException(
+        `You already have an active API key named "${dto.name}"`,
+      );
     }
 
     const secret = `ph_${dto.environment.toLowerCase()}_${randomBytes(24).toString('hex')}`;
@@ -65,25 +67,23 @@ export class ApiKeysService {
       where: { merchantId },
       orderBy: { createdAt: 'desc' },
     });
-    return keys.map(({ keyHash: _keyHash, ...key }) => {
-      void _keyHash;
-      return {
-        ...key,
-        maskedKey: `${key.prefix}...`,
-      };
-    });
+    return keys.map(({ keyHash: _, ...key }) => ({
+      ...key,
+      maskedKey: `${key.prefix}...`,
+    }));
   }
 
   async revoke(merchantId: string, userId: string, id: string) {
-    const existing = await this.prisma.apiKey.findFirst({ where: { id, merchantId } });
+    const existing = await this.prisma.apiKey.findFirst({
+      where: { id, merchantId },
+    });
     if (!existing) {
       throw new NotFoundException('API key not found');
     }
-    const { keyHash: _keyHash, ...apiKey } = await this.prisma.apiKey.update({
+    const { keyHash: _, ...apiKey } = await this.prisma.apiKey.update({
       where: { id },
       data: { status: 'REVOKED', revokedAt: new Date() },
     });
-    void _keyHash;
     await this.auditLogs.create({
       merchantId,
       userId,
