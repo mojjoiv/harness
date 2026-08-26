@@ -62,7 +62,9 @@ export class WebhooksService {
   }
 
   async disableEndpoint(merchantId: string, id: string) {
-    const endpoint = await this.prisma.webhookEndpoint.findFirst({ where: { id, merchantId } });
+    const endpoint = await this.prisma.webhookEndpoint.findFirst({
+      where: { id, merchantId },
+    });
     if (!endpoint) {
       throw new NotFoundException('Webhook endpoint not found');
     }
@@ -75,7 +77,9 @@ export class WebhooksService {
   }
 
   async testEndpoint(merchantId: string, id: string) {
-    const endpoint = await this.prisma.webhookEndpoint.findFirst({ where: { id, merchantId } });
+    const endpoint = await this.prisma.webhookEndpoint.findFirst({
+      where: { id, merchantId },
+    });
     if (!endpoint) {
       throw new NotFoundException('Webhook endpoint not found');
     }
@@ -128,9 +132,16 @@ export class WebhooksService {
     return { received: true, deliveryId: delivery.id };
   }
 
-  async receiveForMerchant(providerParam: string, merchantId: string, payload: Record<string, unknown>) {
+  async receiveForMerchant(
+    providerParam: string,
+    merchantId: string,
+    payload: Record<string, unknown>,
+  ) {
     const provider = providerParam.toUpperCase() as Provider;
-    const merchant = await this.prisma.merchant.findUnique({ where: { id: merchantId }, select: { id: true } });
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: { id: true },
+    });
     if (!merchant) {
       throw new NotFoundException('Unknown merchant');
     }
