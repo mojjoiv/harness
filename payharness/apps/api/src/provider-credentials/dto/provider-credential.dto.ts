@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsIn, IsObject, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsEnum, IsIn, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Environment } from '@prisma/client';
 
 export class MpesaPublicConfigDto {
