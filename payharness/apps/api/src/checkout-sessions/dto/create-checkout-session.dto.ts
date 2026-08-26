@@ -1,5 +1,16 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsEmail, IsEnum, IsInt, IsObject, IsOptional, IsString, IsUrl, Min, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsEmail,
+  IsEnum,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUrl,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { Provider } from '@prisma/client';
 
 export class CheckoutCustomerDto {
