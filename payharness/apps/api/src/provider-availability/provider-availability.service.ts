@@ -20,7 +20,9 @@ export class ProviderAvailabilityService {
     ]);
 
     const globallyEnabled = new Set(globalConfig.map((c) => c.provider));
-    return countryRows.map((row) => row.provider).filter((provider) => globallyEnabled.has(provider));
+    return countryRows
+      .map((row) => row.provider)
+      .filter((provider) => globallyEnabled.has(provider));
   }
 
   /** Admin: full country x provider matrix for the Payment Gateways page. */
@@ -46,7 +48,9 @@ export class ProviderAvailabilityService {
         });
 
     await this.auditLogs.create({
-      action: updated.enabled ? 'platform.provider_availability.enabled' : 'platform.provider_availability.disabled',
+      action: updated.enabled
+        ? 'platform.provider_availability.enabled'
+        : 'platform.provider_availability.disabled',
       entity: 'provider_country_availability',
       entityId: updated.id,
       metadata: { platformUserId, provider, countryCode: normalized },
