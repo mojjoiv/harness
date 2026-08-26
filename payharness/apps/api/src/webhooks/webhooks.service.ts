@@ -35,6 +35,7 @@ export class WebhooksService {
       entityId: endpoint.id,
     });
     const { secretHash: _secretHash, ...safeEndpoint } = endpoint;
+    void _secretHash;
     return { ...safeEndpoint, secret };
   }
 
@@ -51,14 +52,19 @@ export class WebhooksService {
     ]);
 
     return paginated(
-      endpoints.map(({ secretHash: _secretHash, ...endpoint }) => endpoint),
+      endpoints.map(({ secretHash: _secretHash, ...endpoint }) => {
+        void _secretHash;
+        return endpoint;
+      }),
       total,
       pagination,
     );
   }
 
   async disableEndpoint(merchantId: string, id: string) {
-    const endpoint = await this.prisma.webhookEndpoint.findFirst({ where: { id, merchantId } });
+    const endpoint = await this.prisma.webhookEndpoint.findFirst({
+      where: { id, merchantId },
+    });
     if (!endpoint) {
       throw new NotFoundException('Webhook endpoint not found');
     }
@@ -66,11 +72,14 @@ export class WebhooksService {
       where: { id },
       data: { status: 'INACTIVE' },
     });
+    void _secretHash;
     return updated;
   }
 
   async testEndpoint(merchantId: string, id: string) {
-    const endpoint = await this.prisma.webhookEndpoint.findFirst({ where: { id, merchantId } });
+    const endpoint = await this.prisma.webhookEndpoint.findFirst({
+      where: { id, merchantId },
+    });
     if (!endpoint) {
       throw new NotFoundException('Webhook endpoint not found');
     }
@@ -123,9 +132,16 @@ export class WebhooksService {
     return { received: true, deliveryId: delivery.id };
   }
 
-  async receiveForMerchant(providerParam: string, merchantId: string, payload: Record<string, unknown>) {
+  async receiveForMerchant(
+    providerParam: string,
+    merchantId: string,
+    payload: Record<string, unknown>,
+  ) {
     const provider = providerParam.toUpperCase() as Provider;
-    const merchant = await this.prisma.merchant.findUnique({ where: { id: merchantId }, select: { id: true } });
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: { id: true },
+    });
     if (!merchant) {
       throw new NotFoundException('Unknown merchant');
     }
