@@ -24,9 +24,7 @@ export class ApiKeysService {
         entity: 'api_key',
         metadata: { reason: 'duplicate_name', name: dto.name },
       });
-      throw new ConflictException(
-        `You already have an active API key named "${dto.name}"`,
-      );
+      throw new ConflictException(`You already have an active API key named "${dto.name}"`);
     }
 
     const secret = `ph_${dto.environment.toLowerCase()}_${randomBytes(24).toString('hex')}`;
