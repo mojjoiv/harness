@@ -35,6 +35,7 @@ export class WebhooksService {
       entityId: endpoint.id,
     });
     const { secretHash: _secretHash, ...safeEndpoint } = endpoint;
+    void _secretHash;
     return { ...safeEndpoint, secret };
   }
 
@@ -51,7 +52,10 @@ export class WebhooksService {
     ]);
 
     return paginated(
-      endpoints.map(({ secretHash: _secretHash, ...endpoint }) => endpoint),
+      endpoints.map(({ secretHash: _secretHash, ...endpoint }) => {
+        void _secretHash;
+        return endpoint;
+      }),
       total,
       pagination,
     );
@@ -66,6 +70,7 @@ export class WebhooksService {
       where: { id },
       data: { status: 'INACTIVE' },
     });
+    void _secretHash;
     return updated;
   }
 
