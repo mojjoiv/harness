@@ -67,10 +67,13 @@ export class ApiKeysService {
       where: { merchantId },
       orderBy: { createdAt: 'desc' },
     });
-    return keys.map(({ keyHash: _, ...key }) => ({
-      ...key,
-      maskedKey: `${key.prefix}...`,
-    }));
+    return keys.map(({ keyHash: _keyHash, ...key }) => {
+      void _keyHash;
+      return {
+        ...key,
+        maskedKey: `${key.prefix}...`,
+      };
+    });
   }
 
   async revoke(merchantId: string, userId: string, id: string) {
@@ -80,10 +83,11 @@ export class ApiKeysService {
     if (!existing) {
       throw new NotFoundException('API key not found');
     }
-    const { keyHash: _, ...apiKey } = await this.prisma.apiKey.update({
+    const { keyHash: _keyHash, ...apiKey } = await this.prisma.apiKey.update({
       where: { id },
       data: { status: 'REVOKED', revokedAt: new Date() },
     });
+    void _keyHash;
     await this.auditLogs.create({
       merchantId,
       userId,
