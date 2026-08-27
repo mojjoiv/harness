@@ -1,0 +1,45 @@
+name: Fix provider credential formatting
+
+on:
+  push:
+    branches:
+      - feat/provider-credentials-coverage
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.1'
+
+      - name: Install dependencies
+        working-directory: payharness
+        run: npm install
+
+      - name: Format provider credential files
+        working-directory: payharness
+        run: |
+          npx prettier --write apps/api/src/provider-credentials/provider-credentials.service.ts
+          npx prettier --write apps/api/src/provider-credentials/provider-credentials.service.spec.ts
+
+      - name: Commit formatted source files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- payharness/apps/api/src/provider-credentials/provider-credentials.service.ts payharness/apps/api/src/provider-credentials/provider-credentials.service.spec.ts; then
+            echo "Provider credential files are already formatted"
+            exit 0
+          fi
+          git add payharness/apps/api/src/provider-credentials/provider-credentials.service.ts payharness/apps/api/src/provider-credentials/provider-credentials.service.spec.ts
+          git commit -m "style: format provider credentials files [skip ci]"
+          git push origin HEAD:feat/provider-credentials-coverage
