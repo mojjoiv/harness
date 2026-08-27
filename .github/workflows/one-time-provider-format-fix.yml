@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/provider-credentials-coverage
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -27,23 +28,27 @@ jobs:
         working-directory: payharness
         run: npm ci
 
-      - name: Format failing spec
+      - name: Format provider credentials files
         working-directory: payharness
-        run: npx prettier --write apps/api/src/provider-credentials/provider-credentials.service.spec.ts
+        run: |
+          npx prettier --write apps/api/src/provider-credentials/provider-credentials.service.ts
+          npx prettier --write apps/api/src/provider-credentials/provider-credentials.service.spec.ts
 
       - name: Verify formatting
         working-directory: payharness
-        run: npx prettier --check apps/api/src/provider-credentials/provider-credentials.service.spec.ts
+        run: |
+          npx prettier --check apps/api/src/provider-credentials/provider-credentials.service.ts
+          npx prettier --check apps/api/src/provider-credentials/provider-credentials.service.spec.ts
 
-      - name: Commit formatted spec and remove workflow
+      - name: Commit formatted files and remove workflow
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm .github/workflows/one-time-provider-format-fix.yml
-          git add payharness/apps/api/src/provider-credentials/provider-credentials.service.spec.ts .github/workflows/one-time-provider-format-fix.yml
+          git add payharness/apps/api/src/provider-credentials/provider-credentials.service.ts payharness/apps/api/src/provider-credentials/provider-credentials.service.spec.ts .github/workflows/one-time-provider-format-fix.yml
           if git diff --cached --quiet; then
             echo "No changes needed"
             exit 0
           fi
-          git commit -m "chore: format provider credentials tests"
+          git commit -m "chore: format provider credentials files"
           git push origin HEAD:feat/provider-credentials-coverage
