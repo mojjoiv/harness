@@ -7,7 +7,10 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
-import { computeOverallStatus, ProviderVerificationResult } from '../payment-providers/provider-verification.types';
+import {
+  computeOverallStatus,
+  ProviderVerificationResult,
+} from '../payment-providers/provider-verification.types';
 import { PlatformGatewaysService } from '../platform/platform-gateways/platform-gateways.service';
 import { ProviderAvailabilityService } from '../provider-availability/provider-availability.service';
 import { SaveProviderCredentialDto } from './dto/provider-credential.dto';
@@ -31,7 +34,10 @@ export class ProviderCredentialsService {
    * in later is just replacing their function body here, same as M-Pesa
    * was until this phase.
    */
-  private readonly verifiers: Record<Provider, (ctx: VerifierContext) => Promise<ProviderVerificationResult>>;
+  private readonly verifiers: Record<
+    Provider,
+    (ctx: VerifierContext) => Promise<ProviderVerificationResult>
+  >;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -92,7 +98,10 @@ export class ProviderCredentialsService {
 
   private shapeResult(
     provider: string,
-    partial: Pick<ProviderVerificationResult, 'oauthVerified' | 'accountVerified' | 'environmentVerified'> & {
+    partial: Pick<
+      ProviderVerificationResult,
+      'oauthVerified' | 'accountVerified' | 'environmentVerified'
+    > & {
       errors: string[];
     },
   ): ProviderVerificationResult {
@@ -113,10 +122,20 @@ export class ProviderCredentialsService {
   }
 
   private shapeFailure(provider: string, errors: string[]): ProviderVerificationResult {
-    return this.shapeResult(provider, { oauthVerified: false, accountVerified: false, environmentVerified: false, errors });
+    return this.shapeResult(provider, {
+      oauthVerified: false,
+      accountVerified: false,
+      environmentVerified: false,
+      errors,
+    });
   }
 
-  async save(merchantId: string, userId: string, provider: Provider, dto: SaveProviderCredentialDto) {
+  async save(
+    merchantId: string,
+    userId: string,
+    provider: Provider,
+    dto: SaveProviderCredentialDto,
+  ) {
     const enabled = await this.gateways.isEnabled(provider);
     if (!enabled) {
       throw new ForbiddenException('This payment provider is currently disabled platform-wide');
@@ -126,7 +145,10 @@ export class ProviderCredentialsService {
       where: { id: merchantId },
       select: { profile: { select: { country: true } } },
     });
-    const isAvailableInCountry = await this.availability.isAvailable(provider, merchant?.profile?.country);
+    const isAvailableInCountry = await this.availability.isAvailable(
+      provider,
+      merchant?.profile?.country,
+    );
     if (!isAvailableInCountry) {
       throw new ForbiddenException(`${provider} is not available in your country`);
     }
@@ -134,7 +156,9 @@ export class ProviderCredentialsService {
     const label = dto.label || 'default';
     const publicConfig = { ...dto.publicConfig };
     const secretConfig = { ...dto.secretConfig };
-    const encryptedSecretConfig = this.crypto.encrypt(secretConfig) as unknown as Prisma.InputJsonObject;
+    const encryptedSecretConfig = this.crypto.encrypt(
+      secretConfig,
+    ) as unknown as Prisma.InputJsonObject;
     const credential = await this.prisma.providerCredential.upsert({
       where: {
         merchantId_provider_environment_label: {
@@ -224,7 +248,8 @@ export class ProviderCredentialsService {
         ? `Fix credentials: ${credential.lastVerificationError}`
         : 'Run verification to check these credentials';
     }
-    if (!credential.webhookVerified) return 'Check that your API is publicly reachable so callbacks can be delivered';
+    if (!credential.webhookVerified)
+      return 'Check that your API is publicly reachable so callbacks can be delivered';
     if (credential.verificationStatus === 'VERIFIED') return 'No action needed';
     return 'Re-run verification';
   }
@@ -245,7 +270,13 @@ export class ProviderCredentialsService {
       const client = parsed.protocol === 'http:' ? http : https;
       return await new Promise<boolean>((resolve) => {
         const request = client.request(
-          { hostname: parsed.hostname, port: parsed.port, path: parsed.pathname, method: 'HEAD', timeout: 5000 },
+          {
+            hostname: parsed.hostname,
+            port: parsed.port,
+            path: parsed.pathname,
+            method: 'HEAD',
+            timeout: 5000,
+          },
           (res) => {
             res.resume();
             // Any response at all -- even a 404/405 for a HEAD the route
@@ -321,7 +352,11 @@ export class ProviderCredentialsService {
       action: 'platform.provider_credentials.force_disconnected',
       entity: 'provider_credential',
       entityId: credential.id,
-      metadata: { platformUserId, provider: credential.provider, environment: credential.environment },
+      metadata: {
+        platformUserId,
+        provider: credential.provider,
+        environment: credential.environment,
+      },
     });
 
     return this.maskCredential(updated);
@@ -338,7 +373,10 @@ export class ProviderCredentialsService {
         where: { merchantId, provider: credential.provider, id: { not: credential.id } },
         data: { isDefault: false },
       });
-      return tx.providerCredential.update({ where: { id: credential.id }, data: { isDefault: true } });
+      return tx.providerCredential.update({
+        where: { id: credential.id },
+        data: { isDefault: true },
+      });
     });
 
     await this.auditLogs.create({
@@ -365,7 +403,10 @@ export class ProviderCredentialsService {
     try {
       decrypted = this.crypto.decrypt(credential.encryptedSecretConfig as any);
     } catch {
-      return this.recordVerification(credential, this.shapeFailure(credential.provider, ['Stored credentials could not be read']));
+      return this.recordVerification(
+        credential,
+        this.shapeFailure(credential.provider, ['Stored credentials could not be read']),
+      );
     }
 
     const result = await this.verifiers[credential.provider]({
@@ -385,10 +426,15 @@ export class ProviderCredentialsService {
     // adapter class yet (still inline shape-checks above), so they still
     // need this service to do the webhook check + persistence for them.
     if (credential.provider === 'MPESA') {
-      const updated = await this.prisma.providerCredential.findUniqueOrThrow({ where: { id: credential.id } });
+      const updated = await this.prisma.providerCredential.findUniqueOrThrow({
+        where: { id: credential.id },
+      });
       return {
         verified: result.overallStatus === 'VERIFIED',
-        message: result.overallStatus === 'VERIFIED' ? 'Credentials look valid' : result.errors[0] || 'Verification failed',
+        message:
+          result.overallStatus === 'VERIFIED'
+            ? 'Credentials look valid'
+            : result.errors[0] || 'Verification failed',
         lastVerifiedAt: updated.lastVerifiedAt,
         failedVerificationCount: updated.failedVerificationCount,
         healthStatus: this.healthStatus(updated),
@@ -399,7 +445,10 @@ export class ProviderCredentialsService {
     // our own webhook reachability (that's this service's concern, not a
     // provider API concern) -- fill it in here rather than duplicating the
     // probe in every verifier.
-    const webhookVerified = await this.checkWebhookReachable(credential.provider, credential.merchantId);
+    const webhookVerified = await this.checkWebhookReachable(
+      credential.provider,
+      credential.merchantId,
+    );
     const withWebhook: ProviderVerificationResult = {
       ...result,
       webhookVerified,
@@ -415,11 +464,17 @@ export class ProviderCredentialsService {
   }
 
   private async recordVerification(
-    credential: { id: string; merchantId: string; provider: Provider; environment: 'SANDBOX' | 'LIVE' },
+    credential: {
+      id: string;
+      merchantId: string;
+      provider: Provider;
+      environment: 'SANDBOX' | 'LIVE';
+    },
     result: ProviderVerificationResult,
   ) {
     const verified = result.overallStatus === 'VERIFIED';
-    const verificationStatus: ProviderVerificationStatus = result.overallStatus as ProviderVerificationStatus;
+    const verificationStatus: ProviderVerificationStatus =
+      result.overallStatus as ProviderVerificationStatus;
     const primaryError = result.errors[0];
 
     const updated = await this.prisma.providerCredential.update({
@@ -435,7 +490,10 @@ export class ProviderCredentialsService {
         verificationErrors: result.errors as Prisma.InputJsonValue,
         ...(verified
           ? { lastVerifiedAt: new Date(), lastVerificationError: null, failedVerificationCount: 0 }
-          : { lastVerificationError: primaryError || 'Verification failed', failedVerificationCount: { increment: 1 } }),
+          : {
+              lastVerificationError: primaryError || 'Verification failed',
+              failedVerificationCount: { increment: 1 },
+            }),
       },
     });
 
@@ -463,7 +521,9 @@ export class ProviderCredentialsService {
   }
 
   private async getOwnedOrThrow(merchantId: string, id: string) {
-    const credential = await this.prisma.providerCredential.findFirst({ where: { id, merchantId } });
+    const credential = await this.prisma.providerCredential.findFirst({
+      where: { id, merchantId },
+    });
     if (!credential) {
       throw new NotFoundException('Provider credential not found');
     }

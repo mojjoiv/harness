@@ -89,7 +89,9 @@ describe('ProviderCredentialsService', () => {
         publicConfig: { publishableKey: 'pk_test' },
         secretConfig: { secretKey: 'sk_test' },
       } as never),
-    ).rejects.toThrow(new ForbiddenException('This payment provider is currently disabled platform-wide'));
+    ).rejects.toThrow(
+      new ForbiddenException('This payment provider is currently disabled platform-wide'),
+    );
     expect(prisma.providerCredential.upsert).not.toHaveBeenCalled();
   });
 
@@ -129,10 +131,12 @@ describe('ProviderCredentialsService', () => {
       secretConfig: { secretKey: 'sk_test' },
     } as never);
 
-    expect(result).toEqual(expect.objectContaining({
-      provider: Provider.STRIPE,
-      secretConfig: { secretKey: '***test' },
-    }));
+    expect(result).toEqual(
+      expect.objectContaining({
+        provider: Provider.STRIPE,
+        secretConfig: { secretKey: '***test' },
+      }),
+    );
     expect(crypto.encrypt).toHaveBeenCalledWith({ secretKey: 'sk_test' });
     expect(prisma.providerCredential.upsert).toHaveBeenCalled();
     expect(auditLogs.create).toHaveBeenCalledWith(
@@ -307,7 +311,9 @@ describe('ProviderCredentialsService', () => {
       },
     };
     prisma.providerCredential.findFirst.mockResolvedValue(credential);
-    prisma.$transaction.mockImplementation((callback: (value: typeof tx) => unknown) => callback(tx));
+    prisma.$transaction.mockImplementation((callback: (value: typeof tx) => unknown) =>
+      callback(tx),
+    );
 
     await expect(service.setDefault('merchant-1', 'user-1', 'credential-1')).resolves.toEqual(
       expect.objectContaining({ isDefault: true }),
@@ -352,37 +358,45 @@ describe('ProviderCredentialsService', () => {
   });
 
   it('returns the correct recommended actions', () => {
-    expect((service as any).nextRecommendedAction({
-      status: 'REVOKED',
-      verificationStatus: 'FAILED',
-      oauthVerified: false,
-      webhookVerified: false,
-      lastVerificationError: null,
-    })).toBe('Reconnect this provider to use it again');
+    expect(
+      (service as any).nextRecommendedAction({
+        status: 'REVOKED',
+        verificationStatus: 'FAILED',
+        oauthVerified: false,
+        webhookVerified: false,
+        lastVerificationError: null,
+      }),
+    ).toBe('Reconnect this provider to use it again');
 
-    expect((service as any).nextRecommendedAction({
-      status: 'ACTIVE',
-      verificationStatus: 'PENDING',
-      oauthVerified: false,
-      webhookVerified: false,
-      lastVerificationError: null,
-    })).toBe('Run verification to check these credentials');
+    expect(
+      (service as any).nextRecommendedAction({
+        status: 'ACTIVE',
+        verificationStatus: 'PENDING',
+        oauthVerified: false,
+        webhookVerified: false,
+        lastVerificationError: null,
+      }),
+    ).toBe('Run verification to check these credentials');
 
-    expect((service as any).nextRecommendedAction({
-      status: 'ACTIVE',
-      verificationStatus: 'PARTIALLY_VERIFIED',
-      oauthVerified: true,
-      webhookVerified: false,
-      lastVerificationError: null,
-    })).toContain('publicly reachable');
+    expect(
+      (service as any).nextRecommendedAction({
+        status: 'ACTIVE',
+        verificationStatus: 'PARTIALLY_VERIFIED',
+        oauthVerified: true,
+        webhookVerified: false,
+        lastVerificationError: null,
+      }),
+    ).toContain('publicly reachable');
 
-    expect((service as any).nextRecommendedAction({
-      status: 'ACTIVE',
-      verificationStatus: 'VERIFIED',
-      oauthVerified: true,
-      webhookVerified: true,
-      lastVerificationError: null,
-    })).toBe('No action needed');
+    expect(
+      (service as any).nextRecommendedAction({
+        status: 'ACTIVE',
+        verificationStatus: 'VERIFIED',
+        oauthVerified: true,
+        webhookVerified: true,
+        lastVerificationError: null,
+      }),
+    ).toBe('No action needed');
   });
 
   it('delegates M-Pesa verification to the adapter', async () => {
