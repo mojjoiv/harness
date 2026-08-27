@@ -22,12 +22,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: payharness/package-lock.json
 
-      - name: Install dependencies
+      - name: Regenerate lockfile and install dependencies
         working-directory: payharness
-        run: npm ci
+        run: npm install
 
       - name: Format failing file
         working-directory: payharness
@@ -37,15 +35,19 @@ jobs:
         working-directory: payharness
         run: npx prettier --check apps/api/src/provider-credentials/provider-credentials.service.ts
 
-      - name: Commit formatted file and remove workflow
+      - name: Verify clean install from regenerated lockfile
+        working-directory: payharness
+        run: npm ci
+
+      - name: Commit lockfile, formatted file, and remove workflow
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm .github/workflows/one-time-provider-format-fix.yml
-          git add payharness/apps/api/src/provider-credentials/provider-credentials.service.ts .github/workflows/one-time-provider-format-fix.yml
+          git add payharness/package-lock.json payharness/apps/api/src/provider-credentials/provider-credentials.service.ts .github/workflows/one-time-provider-format-fix.yml
           if git diff --cached --quiet; then
             echo "No changes needed"
             exit 0
           fi
-          git commit -m "chore: format provider credentials service"
+          git commit -m "fix: regenerate lockfile and format provider credentials service"
           git push origin HEAD:feat/provider-credentials-coverage
