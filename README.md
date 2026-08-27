@@ -121,6 +121,13 @@ Run dashboard tests:
 npm run test:dashboard
 ```
 
+For a fresh checkout, generate the Prisma client before running API coverage tests:
+
+```bash
+npm run prisma:generate
+npm run test:cov
+```
+
 Tests should use mocks/test doubles rather than real payment-provider accounts or live external APIs.
 
 ## Quality checks
