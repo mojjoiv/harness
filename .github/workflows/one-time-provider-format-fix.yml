@@ -23,31 +23,27 @@ jobs:
         with:
           node-version: 20
 
-      - name: Regenerate lockfile and install dependencies
-        working-directory: payharness
-        run: npm install
-
-      - name: Format failing file
-        working-directory: payharness
-        run: npx prettier --write apps/api/src/provider-credentials/provider-credentials.service.ts
-
-      - name: Verify formatting
-        working-directory: payharness
-        run: npx prettier --check apps/api/src/provider-credentials/provider-credentials.service.ts
-
-      - name: Verify clean install from regenerated lockfile
+      - name: Install dependencies
         working-directory: payharness
         run: npm ci
 
-      - name: Commit lockfile, formatted file, and remove workflow
+      - name: Format failing spec
+        working-directory: payharness
+        run: npx prettier --write apps/api/src/provider-credentials/provider-credentials.service.spec.ts
+
+      - name: Verify formatting
+        working-directory: payharness
+        run: npx prettier --check apps/api/src/provider-credentials/provider-credentials.service.spec.ts
+
+      - name: Commit formatted spec and remove workflow
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm .github/workflows/one-time-provider-format-fix.yml
-          git add payharness/package-lock.json payharness/apps/api/src/provider-credentials/provider-credentials.service.ts .github/workflows/one-time-provider-format-fix.yml
+          git add payharness/apps/api/src/provider-credentials/provider-credentials.service.spec.ts .github/workflows/one-time-provider-format-fix.yml
           if git diff --cached --quiet; then
             echo "No changes needed"
             exit 0
           fi
-          git commit -m "fix: regenerate lockfile and format provider credentials service"
+          git commit -m "chore: format provider credentials tests"
           git push origin HEAD:feat/provider-credentials-coverage
