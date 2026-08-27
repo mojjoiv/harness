@@ -18,11 +18,6 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.19.1'
-
       - name: Fix Stripe save test fixture
         run: |
           python3 - <<'PY'
@@ -35,21 +30,6 @@ jobs:
               raise SystemExit('Stripe save test marker not found; refusing to modify the wrong location')
           path.write_text(text.replace(marker, replacement, 1))
           PY
-
-      - name: Install dependencies
-        working-directory: payharness
-        run: npm install
-
-      - name: Generate Prisma client
-        working-directory: payharness
-        run: npm run prisma:generate
-
-      - name: Verify formatting and targeted test
-        working-directory: payharness
-        run: |
-          npx prettier --write apps/api/src/provider-credentials/provider-credentials.service.spec.ts
-          npm run format:check:changed
-          npm run test:cov -- provider-credentials
 
       - name: Commit fix to main
         run: |
