@@ -40,6 +40,10 @@ jobs:
         working-directory: payharness
         run: npm install
 
+      - name: Generate Prisma client
+        working-directory: payharness
+        run: npm run prisma:generate
+
       - name: Verify formatting and targeted test
         working-directory: payharness
         run: |
