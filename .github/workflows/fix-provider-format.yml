@@ -1,0 +1,66 @@
+name: Fix provider credential formatting
+
+on:
+  push:
+    branches:
+      - feat/provider-credentials-coverage
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.1'
+
+      - name: Install dependencies
+        working-directory: payharness
+        run: npm install
+
+      - name: Generate Prisma Client
+        working-directory: payharness
+        run: npm run prisma:generate
+
+      - name: Format provider credential files
+        working-directory: payharness
+        run: |
+          npx prettier --write apps/api/src/provider-credentials/provider-credentials.service.ts
+          npx prettier --write apps/api/src/provider-credentials/provider-credentials.service.spec.ts
+
+      - name: Check changed-file formatting
+        working-directory: payharness
+        run: npm run format:check:changed
+
+      - name: Typecheck
+        working-directory: payharness
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: payharness
+        run: npm run lint
+
+      - name: Tests with coverage
+        working-directory: payharness
+        run: npm run test:cov
+
+      - name: Commit verified formatting and remove temporary workflows
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/fix-provider-format.yml .github/workflows/one-time-provider-format-fix.yml
+          git add payharness/apps/api/src/provider-credentials/provider-credentials.service.ts payharness/apps/api/src/provider-credentials/provider-credentials.service.spec.ts .github/workflows/fix-provider-format.yml .github/workflows/one-time-provider-format-fix.yml
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "style: fix prettier formatting in provider-credentials.service.ts"
+          git push origin HEAD:feat/provider-credentials-coverage
