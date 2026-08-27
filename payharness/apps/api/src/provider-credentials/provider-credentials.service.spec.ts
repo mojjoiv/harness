@@ -120,6 +120,7 @@ describe('ProviderCredentialsService', () => {
     });
     prisma.providerCredential.upsert.mockResolvedValue(credential);
     prisma.providerCredential.findFirst.mockResolvedValue(credential);
+    crypto.decrypt.mockReturnValue({ secretKey: 'sk_test' });
     prisma.providerCredential.update.mockResolvedValue(verified);
     prisma.providerCredential.findUniqueOrThrow.mockResolvedValue(verified);
     jest.spyOn(service as any, 'checkWebhookReachable').mockResolvedValue(true);
