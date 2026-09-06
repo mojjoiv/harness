@@ -227,7 +227,7 @@ export class PaymentsService {
     return { paymentId: payment.id, status, providerStatus: intent.status, clientSecret: intent.clientSecret };
   }
 
-  private mapStripeStatus(status: string): PaymentStatus {
+  private mapStripeStatus(status: string): 'SUCCEEDED' | 'FAILED' | 'PENDING' {
     if (status === 'succeeded') return 'SUCCEEDED';
     if (status === 'canceled') return 'FAILED';
     return 'PENDING';
