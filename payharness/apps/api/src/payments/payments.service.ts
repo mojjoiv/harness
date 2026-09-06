@@ -53,7 +53,11 @@ export class PaymentsService {
     createRealMpesaStk instrumentation enabled ✅`);
   }
 
-  async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+  async createMpesaStk(
+    merchantId: string,
+    userId: string | undefined,
+    dto: CreateProviderPaymentDto,
+  ) {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] Entering createMpesaStk`, {
       merchantId,
@@ -71,20 +75,34 @@ export class PaymentsService {
         environment: credential.environment,
       });
       if (!dto.phoneNumber || dto.simulateOutcome) {
-        this.logger.log(`[correlationId=${correlationId}] Using simulated flow (no phone or simulateOutcome set)`);
-        return this.process(merchantId, userId, 'MPESA', dto, (input) => this.mpesa.createStkPush(input));
+        this.logger.log(
+          `[correlationId=${correlationId}] Using simulated flow (no phone or simulateOutcome set)`,
+        );
+        return this.process(merchantId, userId, 'MPESA', dto, (input) =>
+          this.mpesa.createStkPush(input),
+        );
       }
       this.logger.log(`[correlationId=${correlationId}] Entering createRealMpesaStk`);
       return await this.createRealMpesaStk(merchantId, userId, credential, dto, correlationId);
     } catch (error) {
-      this.logger.error(`[correlationId=${correlationId}] createMpesaStk failed:`, this.serializeError(error));
+      this.logger.error(
+        `[correlationId=${correlationId}] createMpesaStk failed:`,
+        this.serializeError(error),
+      );
       throw error;
     }
   }
 
-  async createStripeIntent(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+  async createStripeIntent(
+    merchantId: string,
+    userId: string | undefined,
+    dto: CreateProviderPaymentDto,
+  ) {
     const correlationId = randomUUID();
-    this.logger.log(`[correlationId=${correlationId}] Entering createStripeIntent`, { merchantId, environment: dto.environment });
+    this.logger.log(`[correlationId=${correlationId}] Entering createStripeIntent`, {
+      merchantId,
+      environment: dto.environment,
+    });
     try {
       const credential = await this.getActiveCredential(merchantId, 'STRIPE', dto.environment);
       this.assertLiveSupported('STRIPE', dto.environment, credential);
@@ -129,7 +147,12 @@ export class PaymentsService {
         action: 'payment.created',
         entity: 'payment',
         entityId: payment.id,
-        metadata: { provider: 'STRIPE', environment: dto.environment, status, stripePaymentIntentId: intent.id },
+        metadata: {
+          provider: 'STRIPE',
+          environment: dto.environment,
+          status,
+          stripePaymentIntentId: intent.id,
+        },
       });
 
       let redirectUrl: string | undefined;
@@ -158,15 +181,24 @@ export class PaymentsService {
         redirectUrl,
       };
     } catch (error) {
-      this.logger.error(`[correlationId=${correlationId}] createStripeIntent failed:`, this.serializeError(error));
+      this.logger.error(
+        `[correlationId=${correlationId}] createStripeIntent failed:`,
+        this.serializeError(error),
+      );
       throw error;
     }
   }
 
-  async createPaypalOrder(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+  async createPaypalOrder(
+    merchantId: string,
+    userId: string | undefined,
+    dto: CreateProviderPaymentDto,
+  ) {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] createPaypalOrder`, { merchantId });
-    return this.process(merchantId, userId, 'PAYPAL', dto, (input) => this.paypal.createOrder(input));
+    return this.process(merchantId, userId, 'PAYPAL', dto, (input) =>
+      this.paypal.createOrder(input),
+    );
   }
 
   async queryPayment(merchantId: string, userId: string | undefined, paymentId: string) {
@@ -180,11 +212,19 @@ export class PaymentsService {
         return this.queryStripePayment(merchantId, userId, payment, correlationId);
       }
 
-      if (payment.provider !== 'MPESA') throw new BadRequestException('Only M-Pesa and Stripe payments support status queries right now');
+      if (payment.provider !== 'MPESA')
+        throw new BadRequestException(
+          'Only M-Pesa and Stripe payments support status queries right now',
+        );
       if (payment.status !== 'PENDING') return { paymentId: payment.id, status: payment.status };
-      if (!payment.providerReference) throw new BadRequestException('This payment has no Safaricom CheckoutRequestID to query');
+      if (!payment.providerReference)
+        throw new BadRequestException('This payment has no Safaricom CheckoutRequestID to query');
       const credential = await this.getActiveCredential(merchantId, 'MPESA', payment.environment);
-      const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(credential);
+      const secrets = this.decryptSecrets<{
+        consumerKey: string;
+        consumerSecret: string;
+        passkey: string;
+      }>(credential);
       const publicConfig = credential.publicConfig as { shortcode: string };
       const result = await this.mpesaVerification.queryStkStatus({
         consumerKey: secrets.consumerKey,
@@ -195,25 +235,50 @@ export class PaymentsService {
         checkoutRequestId: payment.providerReference,
       });
       if (result.status === 'PENDING') return { paymentId: payment.id, status: 'PENDING' as const };
-      await this.settlePendingPayment(merchantId, userId, payment, result.status, result.resultDesc, correlationId);
+      await this.settlePendingPayment(
+        merchantId,
+        userId,
+        payment,
+        result.status,
+        result.resultDesc,
+        correlationId,
+      );
       return { paymentId: payment.id, status: result.status };
     } catch (error) {
-      this.logger.error(`[correlationId=${correlationId}] queryPayment failed:`, this.serializeError(error));
+      this.logger.error(
+        `[correlationId=${correlationId}] queryPayment failed:`,
+        this.serializeError(error),
+      );
       throw error;
     }
   }
 
-  private async queryStripePayment(merchantId: string, userId: string | undefined, payment: Payment, correlationId: string) {
-    if (!payment.providerReference) throw new BadRequestException('This payment has no Stripe PaymentIntent id');
-    if (payment.status === 'SUCCEEDED' || payment.status === 'FAILED') return { paymentId: payment.id, status: payment.status };
+  private async queryStripePayment(
+    merchantId: string,
+    userId: string | undefined,
+    payment: Payment,
+    correlationId: string,
+  ) {
+    if (!payment.providerReference)
+      throw new BadRequestException('This payment has no Stripe PaymentIntent id');
+    if (payment.status === 'SUCCEEDED' || payment.status === 'FAILED')
+      return { paymentId: payment.id, status: payment.status };
 
     const credential = await this.getActiveCredential(merchantId, 'STRIPE', payment.environment);
     const secrets = this.decryptSecrets<{ secretKey: string }>(credential);
-    const intent = await this.stripe.retrievePaymentIntent(secrets.secretKey, payment.providerReference);
+    const intent = await this.stripe.retrievePaymentIntent(
+      secrets.secretKey,
+      payment.providerReference,
+    );
     const status = this.mapStripeStatus(intent.status);
 
     if (status === 'PENDING') {
-      return { paymentId: payment.id, status: 'PENDING' as const, providerStatus: intent.status, clientSecret: intent.clientSecret };
+      return {
+        paymentId: payment.id,
+        status: 'PENDING' as const,
+        providerStatus: intent.status,
+        clientSecret: intent.clientSecret,
+      };
     }
 
     await this.settlePendingPayment(
@@ -224,10 +289,15 @@ export class PaymentsService {
       `Stripe PaymentIntent status: ${intent.status}`,
       correlationId,
     );
-    return { paymentId: payment.id, status, providerStatus: intent.status, clientSecret: intent.clientSecret };
+    return {
+      paymentId: payment.id,
+      status,
+      providerStatus: intent.status,
+      clientSecret: intent.clientSecret,
+    };
   }
 
-  private mapStripeStatus(status: string): PaymentStatus {
+  private mapStripeStatus(status: string): 'SUCCEEDED' | 'FAILED' | 'PENDING' {
     if (status === 'succeeded') return 'SUCCEEDED';
     if (status === 'canceled') return 'FAILED';
     return 'PENDING';
@@ -242,8 +312,16 @@ export class PaymentsService {
   ) {
     try {
       const session = await this.getAndValidateSession(merchantId, dto.checkoutSessionId);
-      const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(credential);
-      const publicConfig = credential.publicConfig as { shortcode: string; businessType: 'PAYBILL' | 'TILL'; accountReference?: string };
+      const secrets = this.decryptSecrets<{
+        consumerKey: string;
+        consumerSecret: string;
+        passkey: string;
+      }>(credential);
+      const publicConfig = credential.publicConfig as {
+        shortcode: string;
+        businessType: 'PAYBILL' | 'TILL';
+        accountReference?: string;
+      };
       const callbackUrl = this.webhookUrl('MPESA', merchantId);
       const pushResult = await this.mpesaVerification.initiateStkPush({
         consumerKey: secrets.consumerKey,
@@ -255,7 +333,10 @@ export class PaymentsService {
         callbackUrl,
         amountCents: dto.amountCents,
         phoneNumber: dto.phoneNumber!,
-        accountReference: (dto.metadata?.accountReference as string) || publicConfig.accountReference || 'PayHarness',
+        accountReference:
+          (dto.metadata?.accountReference as string) ||
+          publicConfig.accountReference ||
+          'PayHarness',
         description: (dto.metadata?.description as string) || 'Payment',
       });
       const payment = await this.prisma.payment.create({
@@ -290,10 +371,16 @@ export class PaymentsService {
           action: 'payment.stk_push_sent',
           entity: 'payment',
           entityId: payment.id,
-          metadata: { checkoutRequestId: pushResult.checkoutRequestId, phoneNumber: this.maskPhone(dto.phoneNumber!) },
+          metadata: {
+            checkoutRequestId: pushResult.checkoutRequestId,
+            phoneNumber: this.maskPhone(dto.phoneNumber!),
+          },
         });
       } catch (error) {
-        this.logger.error(`[correlationId=${correlationId}] Audit log creation failed:`, this.serializeError(error));
+        this.logger.error(
+          `[correlationId=${correlationId}] Audit log creation failed:`,
+          this.serializeError(error),
+        );
       }
       return {
         paymentId: payment.id,
@@ -301,10 +388,14 @@ export class PaymentsService {
         environment: dto.environment,
         status: 'PENDING' as const,
         checkoutRequestId: pushResult.checkoutRequestId,
-        message: 'STK push sent -- ask the customer to check their phone, then poll GET /payments/:id/query',
+        message:
+          'STK push sent -- ask the customer to check their phone, then poll GET /payments/:id/query',
       };
     } catch (error) {
-      this.logger.error(`[correlationId=${correlationId}] createRealMpesaStk failed:`, this.serializeError(error));
+      this.logger.error(
+        `[correlationId=${correlationId}] createRealMpesaStk failed:`,
+        this.serializeError(error),
+      );
       throw error;
     }
   }
@@ -319,15 +410,43 @@ export class PaymentsService {
   ) {
     const cid = correlationId || randomUUID();
     try {
-      await this.prisma.payment.update({ where: { id: payment.id }, data: { status: finalStatus } });
-      await this.prisma.transaction.updateMany({ where: { paymentId: payment.id }, data: { status: finalStatus } });
-      await this.auditLogs.create({ merchantId, userId, action: 'payment.settled', entity: 'payment', entityId: payment.id, metadata: { status: finalStatus, reason } });
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: finalStatus },
+      });
+      await this.prisma.transaction.updateMany({
+        where: { paymentId: payment.id },
+        data: { status: finalStatus },
+      });
+      await this.auditLogs.create({
+        merchantId,
+        userId,
+        action: 'payment.settled',
+        entity: 'payment',
+        entityId: payment.id,
+        metadata: { status: finalStatus, reason },
+      });
       if (payment.checkoutSessionId) {
-        const session = await this.prisma.checkoutSession.update({ where: { id: payment.checkoutSessionId }, data: { status: finalStatus } });
-        await this.forwardWebhook(merchantId, { event: finalStatus === 'SUCCEEDED' ? 'payment.succeeded' : 'payment.failed', checkoutSessionId: session.id, paymentId: payment.id, provider: payment.provider, environment: payment.environment, amountCents: payment.amountCents, currency: payment.currency, status: finalStatus });
+        const session = await this.prisma.checkoutSession.update({
+          where: { id: payment.checkoutSessionId },
+          data: { status: finalStatus },
+        });
+        await this.forwardWebhook(merchantId, {
+          event: finalStatus === 'SUCCEEDED' ? 'payment.succeeded' : 'payment.failed',
+          checkoutSessionId: session.id,
+          paymentId: payment.id,
+          provider: payment.provider,
+          environment: payment.environment,
+          amountCents: payment.amountCents,
+          currency: payment.currency,
+          status: finalStatus,
+        });
       }
     } catch (error) {
-      this.logger.error(`[correlationId=${cid}] settlePendingPayment failed:`, this.serializeError(error));
+      this.logger.error(
+        `[correlationId=${cid}] settlePendingPayment failed:`,
+        this.serializeError(error),
+      );
       throw error;
     }
   }
@@ -344,7 +463,11 @@ export class PaymentsService {
       const credential = await this.getActiveCredential(merchantId, provider, dto.environment);
       this.assertLiveSupported(provider, dto.environment, credential);
       const session = await this.getAndValidateSession(merchantId, dto.checkoutSessionId);
-      const result = await callAdapter({ amountCents: dto.amountCents, currency: dto.currency, metadata: dto.metadata });
+      const result = await callAdapter({
+        amountCents: dto.amountCents,
+        currency: dto.currency,
+        metadata: dto.metadata,
+      });
       const finalStatus: PaymentStatus = dto.simulateOutcome === 'FAILED' ? 'FAILED' : 'SUCCEEDED';
       const payment = await this.prisma.payment.create({
         data: {
@@ -372,16 +495,45 @@ export class PaymentsService {
         },
         include: { transactions: true },
       });
-      await this.auditLogs.create({ merchantId, userId, action: 'payment.created', entity: 'payment', entityId: payment.id, metadata: { provider, environment: dto.environment, status: finalStatus } });
+      await this.auditLogs.create({
+        merchantId,
+        userId,
+        action: 'payment.created',
+        entity: 'payment',
+        entityId: payment.id,
+        metadata: { provider, environment: dto.environment, status: finalStatus },
+      });
       let redirectUrl: string | undefined;
       if (session) {
-        await this.prisma.checkoutSession.update({ where: { id: session.id }, data: { status: finalStatus } });
+        await this.prisma.checkoutSession.update({
+          where: { id: session.id },
+          data: { status: finalStatus },
+        });
         redirectUrl = finalStatus === 'SUCCEEDED' ? session.successUrl : session.cancelUrl;
-        await this.forwardWebhook(merchantId, { event: finalStatus === 'SUCCEEDED' ? 'payment.succeeded' : 'payment.failed', checkoutSessionId: session.id, paymentId: payment.id, provider, environment: dto.environment, amountCents: dto.amountCents, currency: dto.currency, status: finalStatus });
+        await this.forwardWebhook(merchantId, {
+          event: finalStatus === 'SUCCEEDED' ? 'payment.succeeded' : 'payment.failed',
+          checkoutSessionId: session.id,
+          paymentId: payment.id,
+          provider,
+          environment: dto.environment,
+          amountCents: dto.amountCents,
+          currency: dto.currency,
+          status: finalStatus,
+        });
       }
-      return { paymentId: payment.id, provider, environment: dto.environment, status: payment.status, providerReference: payment.providerReference, redirectUrl };
+      return {
+        paymentId: payment.id,
+        provider,
+        environment: dto.environment,
+        status: payment.status,
+        providerReference: payment.providerReference,
+        redirectUrl,
+      };
     } catch (error) {
-      this.logger.error(`[correlationId=${correlationId}] process failed:`, this.serializeError(error));
+      this.logger.error(
+        `[correlationId=${correlationId}] process failed:`,
+        this.serializeError(error),
+      );
       throw error;
     }
   }
@@ -389,32 +541,58 @@ export class PaymentsService {
   private assertLiveSupported(
     provider: Provider,
     environment: CreateProviderPaymentDto['environment'],
-    credential: { verificationStatus?: string; oauthVerified?: boolean; accountVerified?: boolean; webhookVerified?: boolean; environmentVerified?: boolean },
+    credential: {
+      verificationStatus?: string;
+      oauthVerified?: boolean;
+      accountVerified?: boolean;
+      webhookVerified?: boolean;
+      environmentVerified?: boolean;
+    },
   ) {
     if (environment !== 'LIVE') return;
     if (provider !== 'MPESA' && provider !== 'STRIPE') {
-      throw new BadRequestException(`Live ${provider} processing is not enabled yet because the ${provider} adapter is still sandbox/mock-only.`);
+      throw new BadRequestException(
+        `Live ${provider} processing is not enabled yet because the ${provider} adapter is still sandbox/mock-only.`,
+      );
     }
-    if (credential.verificationStatus !== 'VERIFIED' || credential.oauthVerified !== true || credential.accountVerified !== true || credential.environmentVerified !== true) {
-      throw new BadRequestException(`Live ${provider} processing requires a fully verified provider credential before payments can be initiated.`);
+    if (
+      credential.verificationStatus !== 'VERIFIED' ||
+      credential.oauthVerified !== true ||
+      credential.accountVerified !== true ||
+      credential.environmentVerified !== true
+    ) {
+      throw new BadRequestException(
+        `Live ${provider} processing requires a fully verified provider credential before payments can be initiated.`,
+      );
     }
   }
 
   private async getAndValidateSession(merchantId: string, checkoutSessionId?: string) {
     if (!checkoutSessionId) return null;
-    const session = await this.prisma.checkoutSession.findFirst({ where: { id: checkoutSessionId, merchantId } });
+    const session = await this.prisma.checkoutSession.findFirst({
+      where: { id: checkoutSessionId, merchantId },
+    });
     if (!session) throw new NotFoundException('Checkout session not found');
-    if (session.status !== 'PENDING') throw new BadRequestException(`This checkout session is already ${session.status.toLowerCase()}`);
-    if (session.expiresAt < new Date()) throw new BadRequestException('This checkout session has expired');
+    if (session.status !== 'PENDING')
+      throw new BadRequestException(
+        `This checkout session is already ${session.status.toLowerCase()}`,
+      );
+    if (session.expiresAt < new Date())
+      throw new BadRequestException('This checkout session has expired');
     return session;
   }
 
-  private async getActiveCredential(merchantId: string, provider: Provider, environment: CreateProviderPaymentDto['environment']) {
+  private async getActiveCredential(
+    merchantId: string,
+    provider: Provider,
+    environment: CreateProviderPaymentDto['environment'],
+  ) {
     const credential = await this.prisma.providerCredential.findFirst({
       where: { merchantId, provider, environment, status: 'ACTIVE' },
       orderBy: [{ isDefault: 'desc' }, { lastVerifiedAt: 'desc' }, { updatedAt: 'desc' }],
     });
-    if (!credential) throw new NotFoundException(`Active ${provider} ${environment} credentials were not found`);
+    if (!credential)
+      throw new NotFoundException(`Active ${provider} ${environment} credentials were not found`);
     return credential;
   }
 
@@ -435,7 +613,11 @@ export class PaymentsService {
     const settings = await this.prisma.merchantSettings.findUnique({ where: { merchantId } });
     const url = settings?.webhookForwardingUrl;
     if (!url) return;
-    const result = await this.webhooks.forwardToUrl(url, String(payload.event || 'payment.event'), payload);
+    const result = await this.webhooks.forwardToUrl(
+      url,
+      String(payload.event || 'payment.event'),
+      payload,
+    );
     if (!result.delivered) {
       const errorMessage = 'error' in result ? result.error : 'Unknown error';
       this.logger.warn(`Webhook forwarding to ${url} exhausted retries: ${errorMessage}`);
@@ -444,7 +626,13 @@ export class PaymentsService {
 
   private serializeError(error: unknown): Record<string, any> {
     if (!error) return { message: 'Unknown error' };
-    if (error instanceof Error) return { name: error.constructor.name, message: error.message, stack: error.stack, ...(error as any) };
+    if (error instanceof Error)
+      return {
+        name: error.constructor.name,
+        message: error.message,
+        stack: error.stack,
+        ...(error as any),
+      };
     try {
       return { error: JSON.stringify(error) };
     } catch {
@@ -455,7 +643,12 @@ export class PaymentsService {
   private serializePrismaError(error: unknown): Record<string, any> {
     const base = this.serializeError(error);
     if (error && typeof error === 'object' && 'code' in error) {
-      return { ...base, prismaCode: (error as any).code, prismaMeta: (error as any).meta, clientVersion: (error as any).clientVersion };
+      return {
+        ...base,
+        prismaCode: (error as any).code,
+        prismaMeta: (error as any).meta,
+        clientVersion: (error as any).clientVersion,
+      };
     }
     return base;
   }
