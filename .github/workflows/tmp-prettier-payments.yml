@@ -33,7 +33,7 @@ jobs:
           else
             git add payharness/apps/api/src/payments/payments.service.ts
             git commit -m "style: format payments service with prettier"
-            git push origin HEAD:fix/stripe-payment-status-typecheck
+            git push --force origin HEAD:fix/stripe-payment-status-typecheck
           fi
 
 # temporary trigger
