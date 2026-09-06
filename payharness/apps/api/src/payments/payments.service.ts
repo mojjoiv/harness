@@ -321,10 +321,26 @@ export class PaymentsService {
     try {
       await this.prisma.payment.update({ where: { id: payment.id }, data: { status: finalStatus } });
       await this.prisma.transaction.updateMany({ where: { paymentId: payment.id }, data: { status: finalStatus } });
-      await this.auditLogs.create({ merchantId, userId, action: 'payment.settled', entity: 'payment', entityId: payment.id, metadata: { status: finalStatus, reason } });
+      await this.auditLogs.create({
+        merchantId,
+        userId,
+        action: 'payment.settled',
+        entity: 'payment',
+        entityId: payment.id,
+        metadata: { status: finalStatus, reason },
+      });
       if (payment.checkoutSessionId) {
         const session = await this.prisma.checkoutSession.update({ where: { id: payment.checkoutSessionId }, data: { status: finalStatus } });
-        await this.forwardWebhook(merchantId, { event: finalStatus === 'SUCCEEDED' ? 'payment.succeeded' : 'payment.failed', checkoutSessionId: session.id, paymentId: payment.id, provider: payment.provider, environment: payment.environment, amountCents: payment.amountCents, currency: payment.currency, status: finalStatus });
+        await this.forwardWebhook(merchantId, {
+          event: finalStatus === 'SUCCEEDED' ? 'payment.succeeded' : 'payment.failed',
+          checkoutSessionId: session.id,
+          paymentId: payment.id,
+          provider: payment.provider,
+          environment: payment.environment,
+          amountCents: payment.amountCents,
+          currency: payment.currency,
+          status: finalStatus,
+        });
       }
     } catch (error) {
       this.logger.error(`[correlationId=${cid}] settlePendingPayment failed:`, this.serializeError(error));
@@ -372,12 +388,28 @@ export class PaymentsService {
         },
         include: { transactions: true },
       });
-      await this.auditLogs.create({ merchantId, userId, action: 'payment.created', entity: 'payment', entityId: payment.id, metadata: { provider, environment: dto.environment, status: finalStatus } });
+      await this.auditLogs.create({
+        merchantId,
+        userId,
+        action: 'payment.created',
+        entity: 'payment',
+        entityId: payment.id,
+        metadata: { provider, environment: dto.environment, status: finalStatus },
+      });
       let redirectUrl: string | undefined;
       if (session) {
         await this.prisma.checkoutSession.update({ where: { id: session.id }, data: { status: finalStatus } });
         redirectUrl = finalStatus === 'SUCCEEDED' ? session.successUrl : session.cancelUrl;
-        await this.forwardWebhook(merchantId, { event: finalStatus === 'SUCCEEDED' ? 'payment.succeeded' : 'payment.failed', checkoutSessionId: session.id, paymentId: payment.id, provider, environment: dto.environment, amountCents: dto.amountCents, currency: dto.currency, status: finalStatus });
+        await this.forwardWebhook(merchantId, {
+          event: finalStatus === 'SUCCEEDED' ? 'payment.succeeded' : 'payment.failed',
+          checkoutSessionId: session.id,
+          paymentId: payment.id,
+          provider,
+          environment: dto.environment,
+          amountCents: dto.amountCents,
+          currency: dto.currency,
+          status: finalStatus,
+        });
       }
       return { paymentId: payment.id, provider, environment: dto.environment, status: payment.status, providerReference: payment.providerReference, redirectUrl };
     } catch (error) {
