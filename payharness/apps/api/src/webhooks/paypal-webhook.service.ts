@@ -10,10 +10,7 @@ const PAYPAL_HOST_SUFFIX = '.paypal.com';
 
 @Injectable()
 export class PaypalWebhookService {
-  private readonly certificateCache = new Map<
-    string,
-    { certificate: string; expiresAt: number }
-  >();
+  private readonly certificateCache = new Map<string, { certificate: string; expiresAt: number }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -77,10 +74,7 @@ export class PaypalWebhookService {
     if (!transmissionId || !transmissionTime || !certUrl || !signature) return false;
 
     const timestamp = Date.parse(transmissionTime);
-    if (
-      !Number.isFinite(timestamp) ||
-      Math.abs(Date.now() - timestamp) > MAX_TRANSMISSION_AGE_MS
-    ) {
+    if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > MAX_TRANSMISSION_AGE_MS) {
       return false;
     }
 

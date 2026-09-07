@@ -37,11 +37,7 @@ describe('PaypalWebhookService', () => {
     prisma.checkoutSession.update.mockResolvedValue({});
     auditLogs.create.mockResolvedValue({});
 
-    const service = new PaypalWebhookService(
-      prisma as any,
-      crypto as any,
-      auditLogs as any,
-    );
+    const service = new PaypalWebhookService(prisma as any, crypto as any, auditLogs as any);
     jest.spyOn(service as any, 'verifySignature').mockResolvedValue(true);
 
     const result = await service.handle(
@@ -94,19 +90,12 @@ describe('PaypalWebhookService', () => {
     ]);
     crypto.decrypt.mockReturnValue({});
 
-    const service = new PaypalWebhookService(
-      prisma as any,
-      crypto as any,
-      auditLogs as any,
-    );
+    const service = new PaypalWebhookService(prisma as any, crypto as any, auditLogs as any);
 
     await expect(
-      service.handle(
-        'merchant-1',
-        {},
-        Buffer.from('{}'),
-        { event_type: 'PAYMENT.CAPTURE.COMPLETED' },
-      ),
+      service.handle('merchant-1', {}, Buffer.from('{}'), {
+        event_type: 'PAYMENT.CAPTURE.COMPLETED',
+      }),
     ).rejects.toThrow('Invalid PayPal webhook signature');
     expect(prisma.webhookDelivery.create).not.toHaveBeenCalled();
   });
