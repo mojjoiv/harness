@@ -4,7 +4,9 @@ import { PaymentsService } from './payments.service';
 
 describe('PaymentsController environment safety', () => {
   let controller: PaymentsController;
-  let paymentsService: jest.Mocked<Pick<PaymentsService, 'createMpesaStk' | 'createStripeIntent' | 'queryPayment'>>;
+  let paymentsService: jest.Mocked<
+    Pick<PaymentsService, 'createMpesaStk' | 'createStripeIntent' | 'queryPayment'>
+  >;
   let paypalPaymentService: jest.Mocked<Pick<PaypalPaymentService, 'createOrder'>>;
 
   beforeEach(() => {
@@ -101,12 +103,14 @@ describe('PaymentsController environment safety', () => {
       environment: 'SANDBOX',
     } as any;
 
-    expect(() => controller.paypalOrder(user, {
-      amountCents: 1000,
-      currency: 'USD',
-      environment: 'SANDBOX',
-      simulateOutcome: 'SUCCEEDED',
-    } as any)).toThrow('PayPal does not support simulated outcomes');
+    expect(() =>
+      controller.paypalOrder(user, {
+        amountCents: 1000,
+        currency: 'USD',
+        environment: 'SANDBOX',
+        simulateOutcome: 'SUCCEEDED',
+      } as any),
+    ).toThrow('PayPal does not support simulated outcomes');
     expect(paypalPaymentService.createOrder).not.toHaveBeenCalled();
   });
 });
