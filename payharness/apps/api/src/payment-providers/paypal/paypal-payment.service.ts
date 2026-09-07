@@ -33,7 +33,9 @@ export class PaypalPaymentService {
   ) {
     const correlationId = randomUUID();
     const credential = await this.getCredential(merchantId, dto.environment);
-    const secrets = this.crypto.decrypt(credential.encryptedSecretConfig as { iv: string; tag: string; data: string }) as {
+    const secrets = this.crypto.decrypt(
+      credential.encryptedSecretConfig as { iv: string; tag: string; data: string },
+    ) as {
       clientSecret?: string;
     };
     const publicConfig = credential.publicConfig as { clientId?: string };
@@ -146,7 +148,9 @@ export class PaypalPaymentService {
       };
     }
     const credential = await this.getCredential(merchantId, payment.environment);
-    const secrets = this.crypto.decrypt(credential.encryptedSecretConfig as { iv: string; tag: string; data: string }) as {
+    const secrets = this.crypto.decrypt(
+      credential.encryptedSecretConfig as { iv: string; tag: string; data: string },
+    ) as {
       clientSecret?: string;
     };
     const publicConfig = credential.publicConfig as { clientId?: string };
@@ -183,7 +187,9 @@ export class PaypalPaymentService {
       };
     }
     const credential = await this.getCredential(merchantId, payment.environment);
-    const secrets = this.crypto.decrypt(credential.encryptedSecretConfig as { iv: string; tag: string; data: string }) as {
+    const secrets = this.crypto.decrypt(
+      credential.encryptedSecretConfig as { iv: string; tag: string; data: string },
+    ) as {
       clientSecret?: string;
     };
     const publicConfig = credential.publicConfig as { clientId?: string };
@@ -256,7 +262,8 @@ export class PaypalPaymentService {
     const credential = await this.prisma.providerCredential.findFirst({
       where: { merchantId, provider: 'PAYPAL', environment, status: 'ACTIVE' },
     });
-    if (!credential) throw new BadRequestException(`No active PAYPAL credential for ${environment}`);
+    if (!credential)
+      throw new BadRequestException(`No active PAYPAL credential for ${environment}`);
     return credential;
   }
 }
