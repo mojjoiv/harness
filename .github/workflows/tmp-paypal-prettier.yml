@@ -1,0 +1,24 @@
+name: tmp-paypal-prettier
+
+on:
+  push:
+    branches:
+      - fix/paypal-prettier-format
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.1
+      - working-directory: payharness
+        run: npm install
+      - working-directory: payharness
+        run: |
+          npx prettier --write apps/api/src/payment-providers/paypal/paypal-payment.service.ts apps/api/src/payment-providers/paypal/paypal-provider.service.ts
+          echo '---PAYPAL-PAYMENT---'
+          git diff -- apps/api/src/payment-providers/paypal/paypal-payment.service.ts
+          echo '---PAYPAL-PROVIDER---'
+          git diff -- apps/api/src/payment-providers/paypal/paypal-provider.service.ts
