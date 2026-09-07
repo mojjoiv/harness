@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards, UseInterceptors } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
+import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
 import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor';
 import { PaymentsService } from './payments.service';
@@ -8,41 +9,71 @@ import { PaymentsService } from './payments.service';
 @UseGuards(MerchantAuthGuard)
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly paypalPaymentService: PaypalPaymentService,
+  ) {}
 
   @Post('mpesa/stk')
   @UseInterceptors(PaymentIdempotencyInterceptor)
   mpesaStk(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
-    return this.paymentsService.createMpesaStk(user.merchantId as string, user.userId || undefined, this.lockEnvironment(user, dto));
+    return this.paymentsService.createMpesaStk(
+      user.merchantId as string,
+      user.userId || undefined,
+      this.lockEnvironment(user, dto),
+    );
   }
 
   @Post('stripe/intent')
   @UseInterceptors(PaymentIdempotencyInterceptor)
   stripeIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
-    return this.paymentsService.createStripeIntent(user.merchantId as string, user.userId || undefined, this.lockEnvironment(user, dto));
+    return this.paymentsService.createStripeIntent(
+      user.merchantId as string,
+      user.userId || undefined,
+      this.lockEnvironment(user, dto),
+    );
   }
 
   @Post('paypal/order')
   @UseInterceptors(PaymentIdempotencyInterceptor)
   paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
-    return this.paymentsService.createPaypalOrder(user.merchantId as string, user.userId || undefined, this.lockEnvironment(user, dto));
+    if (dto.simulateOutcome) {
+      throw new Error('PayPal does not support simulated outcomes; use the real PayPal sandbox flow');
+    }
+    return this.paypalPaymentService.createOrder(
+      user.merchantId as string,
+      user.userId || undefined,
+      this.lockEnvironment(user, dto),
+    );
   }
 
-  /**
-   * Poll this while a real M-Pesa STK push is PENDING to find out once the
-   * customer has entered their PIN (or declined, or timed out). Safe to
-   * call repeatedly.
-   */
+  @Post('paypal/:id/capture')
+  @UseInterceptors(PaymentIdempotencyInterceptor)
+  paypalCapture(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.paypalPaymentService.captureOrder(
+      user.merchantId as string,
+      user.userId || undefined,
+      id,
+    );
+  }
+
+  @Get('paypal/:id/query')
+  paypalQuery(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.paypalPaymentService.queryOrder(
+      user.merchantId as string,
+      user.userId || undefined,
+      id,
+    );
+  }
+
+  /** Poll this while a real M-Pesa STK push is PENDING. */
   @Get(':id/query')
   query(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.paymentsService.queryPayment(user.merchantId as string, user.userId || undefined, id);
   }
 
   /**
-   * A request authenticated with a SANDBOX API key must never be able to
-   * trigger a LIVE payment (and vice versa) just by putting a different
-   * value in the request body. Dashboard (JWT) callers aren't locked --
-   * they're a human testing in the UI, not an unattended integration.
+   * API-key callers cannot switch between SANDBOX and LIVE using the body.
    */
   private lockEnvironment(user: AuthUser, dto: CreateProviderPaymentDto): CreateProviderPaymentDto {
     if (user.type === 'api_key' && user.environment) {
