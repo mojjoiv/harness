@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Environment, Payment, PaymentStatus, Prisma } from '@prisma/client';
+import { Environment, Payment, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { AuditLogsService } from '../../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../../common/crypto/credential-crypto.service';
@@ -19,25 +19,19 @@ export class PaypalPaymentService {
     private readonly auditLogs: AuditLogsService,
   ) {}
 
-  async createOrder(
-    merchantId: string,
-    userId: string | undefined,
-    dto: {
-      amountCents: number;
-      currency: string;
-      environment: Environment;
-      customerId?: string;
-      checkoutSessionId?: string;
-      metadata?: Record<string, unknown>;
-    },
-  ) {
+  async createOrder(merchantId: string, userId: string | undefined, dto: {
+    amountCents: number;
+    currency: string;
+    environment: Environment;
+    customerId?: string;
+    checkoutSessionId?: string;
+    metadata?: Record<string, unknown>;
+  }) {
     const correlationId = randomUUID();
     const credential = await this.getCredential(merchantId, dto.environment);
-    const secrets = this.crypto.decrypt<{ clientSecret: string }>(credential.encryptedSecretConfig);
+    const secrets = this.crypto.decrypt(credential.encryptedSecretConfig as { iv: string; tag: string; data: string }) as { clientSecret?: string };
     const publicConfig = credential.publicConfig as { clientId?: string };
-    if (!publicConfig.clientId || !secrets.clientSecret) {
-      throw new BadRequestException('PayPal client ID and client secret are required');
-    }
+    if (!publicConfig.clientId || !secrets.clientSecret) throw new BadRequestException('PayPal client ID and client secret are required');
 
     const session = dto.checkoutSessionId
       ? await this.prisma.checkoutSession.findFirst({ where: { id: dto.checkoutSessionId, merchantId } })
@@ -55,16 +49,14 @@ export class PaypalPaymentService {
         customerId: dto.customerId,
         checkoutSessionId: session?.id,
         metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
-        transactions: {
-          create: {
-            merchantId,
-            type: 'PAYMENT',
-            amountCents: dto.amountCents,
-            currency: dto.currency,
-            status: 'PENDING',
-            metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
-          },
-        },
+        transactions: { create: {
+          merchantId,
+          type: 'PAYMENT',
+          amountCents: dto.amountCents,
+          currency: dto.currency,
+          status: 'PENDING',
+          metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+        } },
       },
     });
 
@@ -81,15 +73,8 @@ export class PaypalPaymentService {
         cancelUrl,
         metadata: { ...(dto.metadata || {}), paymentReference: payment.id },
       });
-
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: { providerReference: order.orderId },
-      });
-      await this.prisma.transaction.updateMany({
-        where: { paymentId: payment.id },
-        data: { reference: order.orderId },
-      });
+      await this.prisma.payment.update({ where: { id: payment.id }, data: { providerReference: order.orderId } });
+      await this.prisma.transaction.updateMany({ where: { paymentId: payment.id }, data: { reference: order.orderId } });
       await this.auditLogs.create({
         merchantId,
         userId,
@@ -98,7 +83,6 @@ export class PaypalPaymentService {
         entityId: payment.id,
         metadata: { provider: 'PAYPAL', environment: dto.environment, paypalOrderId: order.orderId, status: 'PENDING' },
       });
-
       return {
         paymentId: payment.id,
         provider: 'PAYPAL' as const,
@@ -120,20 +104,12 @@ export class PaypalPaymentService {
     const payment = await this.findPayment(merchantId, paymentId);
     if (payment.provider !== 'PAYPAL') throw new BadRequestException('Payment is not a PayPal payment');
     if (!payment.providerReference) throw new BadRequestException('PayPal order ID is missing');
-    if (payment.status === 'SUCCEEDED' || payment.status === 'FAILED') {
-      return { paymentId: payment.id, status: payment.status, providerReference: payment.providerReference };
-    }
-
+    if (payment.status === 'SUCCEEDED' || payment.status === 'FAILED') return { paymentId: payment.id, status: payment.status, providerReference: payment.providerReference };
     const credential = await this.getCredential(merchantId, payment.environment);
-    const secrets = this.crypto.decrypt<{ clientSecret: string }>(credential.encryptedSecretConfig);
+    const secrets = this.crypto.decrypt(credential.encryptedSecretConfig as { iv: string; tag: string; data: string }) as { clientSecret?: string };
     const publicConfig = credential.publicConfig as { clientId?: string };
     if (!publicConfig.clientId || !secrets.clientSecret) throw new BadRequestException('PayPal credentials are incomplete');
-
-    const order = await this.paypal.captureOrder({
-      credentials: { clientId: publicConfig.clientId, clientSecret: secrets.clientSecret },
-      environment: payment.environment,
-      orderId: payment.providerReference,
-    });
+    const order = await this.paypal.captureOrder({ credentials: { clientId: publicConfig.clientId, clientSecret: secrets.clientSecret }, environment: payment.environment, orderId: payment.providerReference });
     return this.applyProviderStatus(merchantId, userId, payment, order.status, 'PayPal capture response');
   }
 
@@ -141,36 +117,21 @@ export class PaypalPaymentService {
     const payment = await this.findPayment(merchantId, paymentId);
     if (payment.provider !== 'PAYPAL') throw new BadRequestException('Payment is not a PayPal payment');
     if (!payment.providerReference) throw new BadRequestException('PayPal order ID is missing');
-    if (payment.status === 'SUCCEEDED' || payment.status === 'FAILED') {
-      return { paymentId: payment.id, status: payment.status, providerStatus: payment.status };
-    }
-
+    if (payment.status === 'SUCCEEDED' || payment.status === 'FAILED') return { paymentId: payment.id, status: payment.status, providerStatus: payment.status };
     const credential = await this.getCredential(merchantId, payment.environment);
-    const secrets = this.crypto.decrypt<{ clientSecret: string }>(credential.encryptedSecretConfig);
+    const secrets = this.crypto.decrypt(credential.encryptedSecretConfig as { iv: string; tag: string; data: string }) as { clientSecret?: string };
     const publicConfig = credential.publicConfig as { clientId?: string };
     if (!publicConfig.clientId || !secrets.clientSecret) throw new BadRequestException('PayPal credentials are incomplete');
-    const order = await this.paypal.getOrder({
-      credentials: { clientId: publicConfig.clientId, clientSecret: secrets.clientSecret },
-      environment: payment.environment,
-      orderId: payment.providerReference,
-    });
+    const order = await this.paypal.getOrder({ credentials: { clientId: publicConfig.clientId, clientSecret: secrets.clientSecret }, environment: payment.environment, orderId: payment.providerReference });
     return this.applyProviderStatus(merchantId, userId, payment, order.status, 'PayPal order status');
   }
 
-  private async applyProviderStatus(
-    merchantId: string,
-    userId: string | undefined,
-    payment: Payment,
-    providerStatus: string,
-    reason: string,
-  ) {
+  private async applyProviderStatus(merchantId: string, userId: string | undefined, payment: Payment, providerStatus: string, reason: string) {
     if (providerStatus === 'COMPLETED') {
       await this.settle(payment, merchantId, userId, 'SUCCEEDED', `${reason}: COMPLETED`);
       return { paymentId: payment.id, status: 'SUCCEEDED' as const, providerStatus };
     }
-    if (['VOIDED', 'PAYER_ACTION_REQUIRED'].includes(providerStatus)) {
-      return { paymentId: payment.id, status: 'PENDING' as const, providerStatus };
-    }
+    if (['VOIDED', 'PAYER_ACTION_REQUIRED'].includes(providerStatus)) return { paymentId: payment.id, status: 'PENDING' as const, providerStatus };
     if (['CANCELLED', 'FAILED'].includes(providerStatus)) {
       await this.settle(payment, merchantId, userId, 'FAILED', `${reason}: ${providerStatus}`);
       return { paymentId: payment.id, status: 'FAILED' as const, providerStatus };
@@ -178,26 +139,11 @@ export class PaypalPaymentService {
     return { paymentId: payment.id, status: 'PENDING' as const, providerStatus };
   }
 
-  private async settle(
-    payment: Payment,
-    merchantId: string,
-    userId: string | undefined,
-    status: 'SUCCEEDED' | 'FAILED',
-    reason: string,
-  ) {
+  private async settle(payment: Payment, merchantId: string, userId: string | undefined, status: 'SUCCEEDED' | 'FAILED', reason: string) {
     await this.prisma.payment.update({ where: { id: payment.id }, data: { status } });
     await this.prisma.transaction.updateMany({ where: { paymentId: payment.id }, data: { status } });
-    if (payment.checkoutSessionId) {
-      await this.prisma.checkoutSession.update({ where: { id: payment.checkoutSessionId }, data: { status } });
-    }
-    await this.auditLogs.create({
-      merchantId,
-      userId,
-      action: 'payment.settled',
-      entity: 'payment',
-      entityId: payment.id,
-      metadata: { provider: 'PAYPAL', status, reason },
-    });
+    if (payment.checkoutSessionId) await this.prisma.checkoutSession.update({ where: { id: payment.checkoutSessionId }, data: { status } });
+    await this.auditLogs.create({ merchantId, userId, action: 'payment.settled', entity: 'payment', entityId: payment.id, metadata: { provider: 'PAYPAL', status, reason } });
   }
 
   private async findPayment(merchantId: string, paymentId: string) {
@@ -207,9 +153,7 @@ export class PaypalPaymentService {
   }
 
   private async getCredential(merchantId: string, environment: Environment) {
-    const credential = await this.prisma.providerCredential.findFirst({
-      where: { merchantId, provider: 'PAYPAL', environment, status: 'ACTIVE' },
-    });
+    const credential = await this.prisma.providerCredential.findFirst({ where: { merchantId, provider: 'PAYPAL', environment, status: 'ACTIVE' } });
     if (!credential) throw new BadRequestException(`No active PAYPAL credential for ${environment}`);
     return credential;
   }
