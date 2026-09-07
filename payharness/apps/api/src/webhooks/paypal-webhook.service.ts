@@ -1,16 +1,19 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { Environment, PaymentStatus, Prisma, Provider } from '@prisma/client';
 import { createVerify } from 'crypto';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
-import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 const MAX_TRANSMISSION_AGE_MS = 5 * 60 * 1000;
 const PAYPAL_HOST_SUFFIX = '.paypal.com';
 
 @Injectable()
 export class PaypalWebhookService {
-  private readonly certificateCache = new Map<string, { certificate: string; expiresAt: number }>();
+  private readonly certificateCache = new Map<
+    string,
+    { certificate: string; expiresAt: number }
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -74,7 +77,10 @@ export class PaypalWebhookService {
     if (!transmissionId || !transmissionTime || !certUrl || !signature) return false;
 
     const timestamp = Date.parse(transmissionTime);
-    if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > MAX_TRANSMISSION_AGE_MS) {
+    if (
+      !Number.isFinite(timestamp) ||
+      Math.abs(Date.now() - timestamp) > MAX_TRANSMISSION_AGE_MS
+    ) {
       return false;
     }
 
@@ -84,7 +90,10 @@ export class PaypalWebhookService {
     } catch {
       return false;
     }
-    if (parsedCertUrl.protocol !== 'https:' || !parsedCertUrl.hostname.endsWith(PAYPAL_HOST_SUFFIX)) {
+    if (
+      parsedCertUrl.protocol !== 'https:' ||
+      !parsedCertUrl.hostname.endsWith(PAYPAL_HOST_SUFFIX)
+    ) {
       return false;
     }
 
@@ -173,12 +182,18 @@ export class PaypalWebhookService {
     }
     if (!status || payment.status === status) return;
 
-    await this.prisma.payment.update({ where: { id: payment.id }, data: { status } });
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { status },
+    });
     await this.prisma.transaction.updateMany({
       where: { paymentId: payment.id },
       data: { status },
     });
-    if (payment.checkoutSessionId && (status === PaymentStatus.SUCCEEDED || status === PaymentStatus.FAILED)) {
+    if (
+      payment.checkoutSessionId &&
+      (status === PaymentStatus.SUCCEEDED || status === PaymentStatus.FAILED)
+    ) {
       await this.prisma.checkoutSession.update({
         where: { id: payment.checkoutSessionId },
         data: { status },
