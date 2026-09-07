@@ -1,13 +1,18 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CreateWebhookEndpointDto } from './dto/create-webhook-endpoint.dto';
+import { PaypalWebhookService } from './paypal-webhook.service';
 import { WebhooksService } from './webhooks.service';
 
 @Controller('webhooks')
 export class WebhooksController {
-  constructor(private readonly webhooksService: WebhooksService) {}
+  constructor(
+    private readonly webhooksService: WebhooksService,
+    private readonly paypalWebhookService: PaypalWebhookService,
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Post('endpoints')
@@ -59,7 +64,16 @@ export class WebhooksController {
     @Param('provider') provider: string,
     @Param('merchantId') merchantId: string,
     @Body() payload: Record<string, unknown>,
+    @Req() request: Request & { rawBody?: Buffer },
   ) {
+    if (provider.toUpperCase() === 'PAYPAL') {
+      return this.paypalWebhookService.handle(
+        merchantId,
+        request.headers,
+        request.rawBody || Buffer.from(JSON.stringify(payload)),
+        payload,
+      );
+    }
     return this.webhooksService.receiveForMerchant(provider, merchantId, payload);
   }
 }
