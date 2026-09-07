@@ -132,15 +132,19 @@ export class PaypalProviderService {
     const basic = Buffer.from(
       `${credentials.clientId}:${credentials.clientSecret}`,
     ).toString('base64');
-    const response = await this.request<{ access_token: string }>(environment, '/v1/oauth2/token', {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${basic}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
+    const response = await this.request<{ access_token: string }>(
+      environment,
+      '/v1/oauth2/token',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${basic}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+        },
+        body: 'grant_type=client_credentials',
       },
-      body: 'grant_type=client_credentials',
-    });
+    );
     if (!response.access_token) {
       throw new BadRequestException('PayPal OAuth did not return an access token');
     }
