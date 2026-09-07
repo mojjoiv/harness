@@ -79,7 +79,11 @@ export class PaymentsController {
 
   @Get(':id/query')
   query(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paymentsService.queryPayment(user.merchantId as string, user.userId || undefined, id);
+    return this.paymentsService.queryPayment(
+      user.merchantId as string,
+      user.userId || undefined,
+      id,
+    );
   }
 
   private lockEnvironment(user: AuthUser, dto: CreateProviderPaymentDto): CreateProviderPaymentDto {
