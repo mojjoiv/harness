@@ -10,7 +10,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const config = app.get(ConfigService);
   const requestIdMiddleware = new RequestIdMiddleware();
 
