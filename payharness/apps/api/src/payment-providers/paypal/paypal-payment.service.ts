@@ -242,7 +242,10 @@ export class PaypalPaymentService {
     reason: string,
   ) {
     await this.prisma.payment.update({ where: { id: payment.id }, data: { status } });
-    await this.prisma.transaction.updateMany({ where: { paymentId: payment.id }, data: { status } });
+    await this.prisma.transaction.updateMany({
+      where: { paymentId: payment.id },
+      data: { status },
+    });
     if (payment.checkoutSessionId) {
       await this.prisma.checkoutSession.update({
         where: { id: payment.checkoutSessionId },
