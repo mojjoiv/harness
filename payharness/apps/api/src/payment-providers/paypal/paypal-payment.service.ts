@@ -83,7 +83,10 @@ export class PaypalPaymentService {
       const cancelUrl =
         session?.cancelUrl || `${appUrl}/payments/paypal/cancel?paymentId=${payment.id}`;
       const order = await this.paypal.createOrder({
-        credentials: { clientId: publicConfig.clientId, clientSecret: secrets.clientSecret },
+        credentials: {
+          clientId: publicConfig.clientId,
+          clientSecret: secrets.clientSecret,
+        },
         environment: dto.environment,
         amountCents: dto.amountCents,
         currency: dto.currency,
@@ -201,7 +204,13 @@ export class PaypalPaymentService {
       environment: payment.environment,
       orderId: payment.providerReference,
     });
-    return this.applyProviderStatus(merchantId, userId, payment, order.status, 'PayPal order status');
+    return this.applyProviderStatus(
+      merchantId,
+      userId,
+      payment,
+      order.status,
+      'PayPal order status',
+    );
   }
 
   private async applyProviderStatus(
