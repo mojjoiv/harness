@@ -22,7 +22,11 @@ interface PaypalOrderResponse {
   links?: Array<{ href: string; rel: string; method?: string }>;
   purchase_units?: Array<{
     payments?: {
-      captures?: Array<{ id: string; status: string; amount?: { value: string; currency_code: string } }>;
+      captures?: Array<{
+        id: string;
+        status: string;
+        amount?: { value: string; currency_code: string };
+      }>;
     };
   }>;
 }
@@ -125,7 +129,9 @@ export class PaypalProviderService {
     credentials: PaypalCredentials,
     environment: 'SANDBOX' | 'LIVE',
   ): Promise<string> {
-    const basic = Buffer.from(`${credentials.clientId}:${credentials.clientSecret}`).toString('base64');
+    const basic = Buffer.from(
+      `${credentials.clientId}:${credentials.clientSecret}`,
+    ).toString('base64');
     const response = await this.request<{ access_token: string }>(environment, '/v1/oauth2/token', {
       method: 'POST',
       headers: {
