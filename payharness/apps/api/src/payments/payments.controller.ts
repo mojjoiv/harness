@@ -1,4 +1,13 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
@@ -38,7 +47,9 @@ export class PaymentsController {
   @UseInterceptors(PaymentIdempotencyInterceptor)
   paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     if (dto.simulateOutcome) {
-      throw new BadRequestException('PayPal does not support simulated outcomes; use the real PayPal sandbox flow');
+      throw new BadRequestException(
+        'PayPal does not support simulated outcomes; use the real PayPal sandbox flow',
+      );
     }
     return this.paypalPaymentService.createOrder(
       user.merchantId as string,
@@ -68,7 +79,11 @@ export class PaymentsController {
 
   @Get(':id/query')
   query(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paymentsService.queryPayment(user.merchantId as string, user.userId || undefined, id);
+    return this.paymentsService.queryPayment(
+      user.merchantId as string,
+      user.userId || undefined,
+      id,
+    );
   }
 
   private lockEnvironment(user: AuthUser, dto: CreateProviderPaymentDto): CreateProviderPaymentDto {
