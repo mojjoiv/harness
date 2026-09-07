@@ -55,9 +55,10 @@ export class PaypalProviderService {
                 currency_code: typedInput.currency.toUpperCase(),
                 value: (typedInput.amountCents / 100).toFixed(2),
               },
-              custom_id: typeof typedInput.metadata?.paymentReference === 'string'
-                ? typedInput.metadata.paymentReference
-                : undefined,
+              custom_id:
+                typeof typedInput.metadata?.paymentReference === 'string'
+                  ? typedInput.metadata.paymentReference
+                  : undefined,
             },
           ],
           application_context: {
@@ -134,7 +135,9 @@ export class PaypalProviderService {
       },
       body: 'grant_type=client_credentials',
     });
-    if (!response.access_token) throw new BadRequestException('PayPal OAuth did not return an access token');
+    if (!response.access_token) {
+      throw new BadRequestException('PayPal OAuth did not return an access token');
+    }
     return response.access_token;
   }
 
@@ -153,9 +156,10 @@ export class PaypalProviderService {
       body = text;
     }
     if (!response.ok) {
-      const detail = typeof body === 'object' && body !== null
-        ? JSON.stringify(body)
-        : String(body ?? response.statusText);
+      const detail =
+        typeof body === 'object' && body !== null
+          ? JSON.stringify(body)
+          : String(body ?? response.statusText);
       throw new BadRequestException(`PayPal API request failed (${response.status}): ${detail}`);
     }
     return body as T;
