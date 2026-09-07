@@ -6,6 +6,16 @@ interface PaypalCredentials {
   clientSecret: string;
 }
 
+interface PaypalOrderInput {
+  credentials: PaypalCredentials;
+  environment: 'SANDBOX' | 'LIVE';
+  amountCents: number;
+  currency: string;
+  returnUrl: string;
+  cancelUrl: string;
+  metadata?: Record<string, unknown>;
+}
+
 interface PaypalOrderResponse {
   id: string;
   status: string;
@@ -22,19 +32,12 @@ export class PaypalProviderService {
   private readonly sandboxBaseUrl = 'https://api-m.sandbox.paypal.com';
   private readonly liveBaseUrl = 'https://api-m.paypal.com';
 
-  async createOrder(input: {
-    credentials: PaypalCredentials;
-    environment: 'SANDBOX' | 'LIVE';
-    amountCents: number;
-    currency: string;
-    returnUrl: string;
-    cancelUrl: string;
-    metadata?: Record<string, unknown>;
-  }) {
-    const accessToken = await this.getAccessToken(input.credentials, input.environment);
+  async createOrder(input: PaypalOrderInput | Record<string, unknown>) {
+    const typedInput = input as PaypalOrderInput;
+    const accessToken = await this.getAccessToken(typedInput.credentials, typedInput.environment);
     const requestId = randomUUID();
     const response = await this.request<PaypalOrderResponse>(
-      input.environment,
+      typedInput.environment,
       '/v2/checkout/orders',
       {
         method: 'POST',
@@ -49,17 +52,17 @@ export class PaypalProviderService {
           purchase_units: [
             {
               amount: {
-                currency_code: input.currency.toUpperCase(),
-                value: (input.amountCents / 100).toFixed(2),
+                currency_code: typedInput.currency.toUpperCase(),
+                value: (typedInput.amountCents / 100).toFixed(2),
               },
-              custom_id: typeof input.metadata?.paymentReference === 'string'
-                ? input.metadata.paymentReference
+              custom_id: typeof typedInput.metadata?.paymentReference === 'string'
+                ? typedInput.metadata.paymentReference
                 : undefined,
             },
           ],
           application_context: {
-            return_url: input.returnUrl,
-            cancel_url: input.cancelUrl,
+            return_url: typedInput.returnUrl,
+            cancel_url: typedInput.cancelUrl,
             user_action: 'PAY_NOW',
           },
         }),
@@ -73,6 +76,7 @@ export class PaypalProviderService {
 
     return {
       orderId: response.id,
+      providerReference: response.id,
       status: response.status,
       approvalUrl,
     };
