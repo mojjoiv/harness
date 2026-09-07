@@ -48,9 +48,14 @@ export class PaypalWebhookService {
     });
 
     for (const credential of credentials) {
-      const secretConfig = this.crypto.decrypt(
-        credential.encryptedSecretConfig as { iv: string; tag: string; data: string },
-      ) as { webhookId?: string };
+      let secretConfig: { webhookId?: string };
+      try {
+        secretConfig = this.crypto.decrypt(
+          credential.encryptedSecretConfig as { iv: string; tag: string; data: string },
+        ) as { webhookId?: string };
+      } catch {
+        continue;
+      }
       if (!secretConfig.webhookId) continue;
 
       if (await this.verifySignature(headers, rawBody, secretConfig.webhookId)) {
