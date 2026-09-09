@@ -34,7 +34,7 @@
     "google-auth-library": "^9.14.1",
     "nodemailer": "^9.0.5",
     "reflect-metadata": "^0.1.14",
-    "rxjs": "^7.8.1",
+    "rxjs": "^7.8.2",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
