@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { Environment, PaymentStatus, Prisma, Provider } from '@prisma/client';
+import { Environment, PaymentStatus, Provider } from '@prisma/client';
 import { createHash, createVerify, randomBytes } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
@@ -47,7 +47,9 @@ export class PaypalWebhookService {
 
   private stableStringify(value: unknown): string {
     if (value === null || typeof value !== 'object') return JSON.stringify(value);
-    if (Array.isArray(value)) return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
+    }
     const object = value as Record<string, unknown>;
     return `{${Object.keys(object)
       .sort()
