@@ -86,7 +86,10 @@ export class PaymentsController {
         id,
       );
     } catch (error) {
-      if (!(error instanceof BadRequestException) || error.message !== 'Payment is not a PayPal payment') {
+      if (
+        !(error instanceof BadRequestException) ||
+        error.message !== 'Payment is not a PayPal payment'
+      ) {
         throw error;
       }
       return this.paymentsService.queryPayment(
