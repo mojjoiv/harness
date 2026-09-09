@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
@@ -9,6 +9,8 @@ import { WebhooksService } from './webhooks.service';
 
 @Controller('webhooks')
 export class WebhooksController {
+  private readonly logger = new Logger(WebhooksController.name);
+
   constructor(
     private readonly webhooksService: WebhooksService,
     private readonly paypalWebhookService: PaypalWebhookService,
@@ -50,8 +52,33 @@ export class WebhooksController {
   }
 
   @Post('stripe')
-  stripe(@Body() payload: Record<string, unknown>) {
-    return this.webhooksService.receive('STRIPE', payload);
+  async stripe(@Body() payload: Record<string, unknown>) {
+    const eventType = String(payload.type || payload.event || 'unknown');
+    const eventId = typeof payload.id === 'string' ? payload.id : 'unknown';
+    const stripeObject = payload.data && typeof payload.data === 'object' ? payload.data : undefined;
+    const stripeObjectData = stripeObject && 'object' in stripeObject ? stripeObject.object : undefined;
+    const paymentIntentId =
+      stripeObjectData && typeof stripeObjectData === 'object' && stripeObjectData !== null && 'id' in stripeObjectData
+        ? String(stripeObjectData.id)
+        : undefined;
+
+    this.logger.log(
+      `[Stripe webhook] RECEIVED eventType=${eventType} eventId=${eventId} paymentIntentId=${paymentIntentId || 'unknown'}`,
+    );
+
+    try {
+      const result = await this.webhooksService.receive('STRIPE', payload);
+      this.logger.log(
+        `[Stripe webhook] STORED eventType=${eventType} eventId=${eventId} paymentIntentId=${paymentIntentId || 'unknown'} deliveryId=${result.deliveryId}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[Stripe webhook] FAILED eventType=${eventType} eventId=${eventId} paymentIntentId=${paymentIntentId || 'unknown'}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw error;
+    }
   }
 
   @Post('paypal')
@@ -60,13 +87,47 @@ export class WebhooksController {
   }
 
   @Post('provider/:provider/:merchantId')
-  providerCallback(
+  async providerCallback(
     @Param('provider') provider: string,
     @Param('merchantId') merchantId: string,
     @Body() payload: Record<string, unknown>,
     @Req() request: Request & { rawBody?: Buffer },
   ) {
-    if (provider.toUpperCase() === 'PAYPAL') {
+    const normalizedProvider = provider.toUpperCase();
+
+    if (normalizedProvider === 'STRIPE') {
+      const eventType = String(payload.type || payload.event || 'unknown');
+      const eventId = typeof payload.id === 'string' ? payload.id : 'unknown';
+      const stripeObject = payload.data && typeof payload.data === 'object' ? payload.data : undefined;
+      const stripeObjectData = stripeObject && 'object' in stripeObject ? stripeObject.object : undefined;
+      const paymentIntentId =
+        stripeObjectData &&
+        typeof stripeObjectData === 'object' &&
+        stripeObjectData !== null &&
+        'id' in stripeObjectData
+          ? String(stripeObjectData.id)
+          : undefined;
+
+      this.logger.log(
+        `[Stripe provider webhook] RECEIVED merchantId=${merchantId} eventType=${eventType} eventId=${eventId} paymentIntentId=${paymentIntentId || 'unknown'}`,
+      );
+
+      try {
+        const result = await this.webhooksService.receiveForMerchant(provider, merchantId, payload);
+        this.logger.log(
+          `[Stripe provider webhook] STORED merchantId=${merchantId} eventType=${eventType} eventId=${eventId} paymentIntentId=${paymentIntentId || 'unknown'} deliveryId=${result.deliveryId}`,
+        );
+        return result;
+      } catch (error) {
+        this.logger.error(
+          `[Stripe provider webhook] FAILED merchantId=${merchantId} eventType=${eventType} eventId=${eventId} paymentIntentId=${paymentIntentId || 'unknown'}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+        throw error;
+      }
+    }
+
+    if (normalizedProvider === 'PAYPAL') {
       return this.paypalWebhookService.handle(
         merchantId,
         request.headers,
