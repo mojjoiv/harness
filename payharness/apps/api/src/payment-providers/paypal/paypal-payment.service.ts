@@ -213,6 +213,60 @@ export class PaypalPaymentService {
     );
   }
 
+  async refundPayment(merchantId: string, userId: string | undefined, paymentId: string) {
+    const payment = await this.findPayment(merchantId, paymentId);
+    if (payment.provider !== 'PAYPAL') {
+      throw new BadRequestException('Payment is not a PayPal payment');
+    }
+    if (payment.status !== 'SUCCEEDED') {
+      throw new BadRequestException('Only succeeded payments can be refunded');
+    }
+    if (!payment.providerReference) {
+      throw new BadRequestException('PayPal order ID is missing');
+    }
+
+    const credential = await this.getCredential(merchantId, payment.environment);
+    const secrets = this.crypto.decrypt(
+      credential.encryptedSecretConfig as { iv: string; tag: string; data: string },
+    ) as { clientSecret?: string };
+    const publicConfig = credential.publicConfig as { clientId?: string };
+    if (!publicConfig.clientId || !secrets.clientSecret) {
+      throw new BadRequestException('PayPal credentials are incomplete');
+    }
+
+    const order = await this.paypal.getOrder({
+      credentials: { clientId: publicConfig.clientId, clientSecret: secrets.clientSecret },
+      environment: payment.environment,
+      orderId: payment.providerReference,
+    });
+    const capture = order.purchase_units?.flatMap((unit) => unit.payments?.captures || []).find(
+      (candidate) => candidate.status === 'COMPLETED',
+    );
+    if (!capture?.id) {
+      throw new BadRequestException('PayPal capture ID could not be resolved for this payment');
+    }
+
+    const refund = await this.paypal.refundCapture({
+      credentials: { clientId: publicConfig.clientId, clientSecret: secrets.clientSecret },
+      environment: payment.environment,
+      captureId: capture.id,
+      requestId: `payharness-refund-${payment.id}`,
+    });
+
+    if (refund.status !== 'COMPLETED') {
+      throw new BadRequestException(`PayPal refund is not completed: ${refund.status}`);
+    }
+
+    return {
+      paymentId: payment.id,
+      status: 'REFUNDED' as const,
+      provider: 'PAYPAL' as const,
+      refundId: refund.id,
+      amountCents: payment.amountCents,
+      currency: payment.currency,
+    };
+  }
+
   private async applyProviderStatus(
     merchantId: string,
     userId: string | undefined,
