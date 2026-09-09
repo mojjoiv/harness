@@ -10,10 +10,7 @@ export class PaypalCheckoutController {
   ) {}
 
   @Get('success')
-  async success(
-    @Query('paymentId') paymentId?: string,
-    @Query('token') token?: string,
-  ) {
+  async success(@Query('paymentId') paymentId?: string, @Query('token') token?: string) {
     if (!paymentId || !token) {
       throw new BadRequestException('PayPal paymentId and token are required');
     }
