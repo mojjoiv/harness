@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma, Provider } from '@prisma/client';
+import { PaymentStatus, Prisma, Provider } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, paginated } from '../common/pagination/pagination';
@@ -124,7 +124,7 @@ export class WebhooksService {
 
   async receive(provider: Provider, payload: Record<string, unknown>) {
     const eventType = String(payload.type || payload.event || 'provider.event');
-    const eventId = typeof payload.id === 'string' ? payload.id : 'unknown';
+    const eventId = this.providerEventId(payload);
     const correlationId = randomBytes(8).toString('hex');
 
     this.logger.log(
@@ -132,19 +132,19 @@ export class WebhooksService {
     );
 
     try {
-      const delivery = await this.prisma.webhookDelivery.create({
-        data: {
-          provider,
-          eventType,
-          payload: payload as Prisma.InputJsonValue,
-          status: 'PENDING',
-        },
-      });
+      const delivery = await this.claimProviderDelivery(provider, eventId, eventType, payload);
+      if (delivery.duplicate) {
+        this.logger.log(
+          `[Webhook receive] DUPLICATE provider=${provider} eventId=${eventId} deliveryId=${delivery.deliveryId} correlationId=${correlationId}`,
+        );
+        return { received: true, deliveryId: delivery.deliveryId, duplicate: true };
+      }
 
+      await this.processProviderPaymentEvent(provider, payload);
       this.logger.log(
-        `[Webhook receive] STORED provider=${provider} eventType=${eventType} eventId=${eventId} deliveryId=${delivery.id} correlationId=${correlationId}`,
+        `[Webhook receive] STORED provider=${provider} eventType=${eventType} eventId=${eventId} deliveryId=${delivery.deliveryId} correlationId=${correlationId}`,
       );
-      return { received: true, deliveryId: delivery.id };
+      return { received: true, deliveryId: delivery.deliveryId };
     } catch (error) {
       this.logger.error(
         `[Webhook receive] FAILED provider=${provider} eventType=${eventType} eventId=${eventId} correlationId=${correlationId}`,
@@ -161,7 +161,7 @@ export class WebhooksService {
   ) {
     const provider = providerParam.toUpperCase() as Provider;
     const eventType = String(payload.type || payload.event || 'provider.event');
-    const eventId = typeof payload.id === 'string' ? payload.id : 'unknown';
+    const eventId = this.providerEventId(payload);
     const correlationId = randomBytes(8).toString('hex');
 
     this.logger.log(
@@ -192,5 +192,122 @@ export class WebhooksService {
       );
       throw error;
     }
+  }
+
+  private providerEventId(payload: Record<string, unknown>): string {
+    if (typeof payload.id === 'string' && payload.id.trim()) return payload.id;
+    return createHash('sha256').update(this.stableStringify(payload)).digest('hex');
+  }
+
+  private stableStringify(value: unknown): string {
+    if (value === null || typeof value !== 'object') return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
+    const object = value as Record<string, unknown>;
+    return `{${Object.keys(object)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${this.stableStringify(object[key])}`)
+      .join(',')}}`;
+  }
+
+  private async claimProviderDelivery(
+    provider: Provider,
+    eventId: string,
+    eventType: string,
+    payload: Record<string, unknown>,
+  ): Promise<{ deliveryId: string; duplicate: boolean }> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      INSERT INTO "webhook_deliveries"
+        ("id", "provider", "provider_event_id", "event_type", "payload", "status")
+      VALUES
+        (${randomBytes(16).toString('hex')}, ${provider}::"Provider", ${eventId}, ${eventType}, ${JSON.stringify(payload)}::jsonb, 'PENDING'::"Status")
+      ON CONFLICT ("provider", "provider_event_id") DO NOTHING
+      RETURNING "id"
+    `;
+
+    if (rows[0]) return { deliveryId: rows[0].id, duplicate: false };
+
+    const existing = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "webhook_deliveries"
+      WHERE "provider" = ${provider}::"Provider"
+        AND "provider_event_id" = ${eventId}
+      LIMIT 1
+    `;
+    if (!existing[0]) throw new Error('Provider webhook event could not be claimed');
+    return { deliveryId: existing[0].id, duplicate: true };
+  }
+
+  private async processProviderPaymentEvent(
+    provider: Provider,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const merchantId = typeof payload._merchantId === 'string' ? payload._merchantId : undefined;
+    if (!merchantId) return;
+
+    const eventType = String(payload.type || payload.event || '');
+    let providerReference: string | undefined;
+    let status: PaymentStatus | undefined;
+
+    if (provider === Provider.STRIPE) {
+      const data = payload.data as Record<string, unknown> | undefined;
+      const resource = data?.object as Record<string, unknown> | undefined;
+      providerReference = typeof resource?.id === 'string' ? resource.id : undefined;
+      if (eventType === 'payment_intent.succeeded') status = PaymentStatus.SUCCEEDED;
+      if (eventType === 'payment_intent.payment_failed' || eventType === 'payment_intent.canceled') {
+        status = PaymentStatus.FAILED;
+      }
+    }
+
+    if (provider === Provider.MPESA) {
+      const body = payload.Body as Record<string, unknown> | undefined;
+      const callback = body?.stkCallback as Record<string, unknown> | undefined;
+      providerReference =
+        typeof callback?.CheckoutRequestID === 'string' ? callback.CheckoutRequestID : undefined;
+      if (callback && typeof callback.ResultCode !== 'undefined') {
+        status = Number(callback.ResultCode) === 0 ? PaymentStatus.SUCCEEDED : PaymentStatus.FAILED;
+      }
+    }
+
+    if (!providerReference || !status) return;
+
+    const payment = await this.prisma.payment.findFirst({
+      where: { merchantId, provider, providerReference },
+    });
+    if (!payment) return;
+    if (
+      payment.status === PaymentStatus.SUCCEEDED ||
+      payment.status === PaymentStatus.FAILED ||
+      payment.status === status
+    ) {
+      return;
+    }
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { status },
+    });
+    await this.prisma.transaction.updateMany({
+      where: { paymentId: payment.id },
+      data: { status },
+    });
+    if (payment.checkoutSessionId) {
+      await this.prisma.checkoutSession.update({
+        where: { id: payment.checkoutSessionId },
+        data: { status },
+      });
+    }
+    await this.auditLogs.create({
+      merchantId,
+      action: 'payment.settled',
+      entity: 'payment',
+      entityId: payment.id,
+      metadata: {
+        provider,
+        status,
+        eventType,
+        providerEventId: this.providerEventId(payload),
+        providerReference,
+      },
+    });
   }
 }
