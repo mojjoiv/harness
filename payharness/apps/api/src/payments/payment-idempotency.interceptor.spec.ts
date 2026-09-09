@@ -25,7 +25,7 @@ describe('PaymentIdempotencyInterceptor', () => {
       complete: jest.fn().mockResolvedValue(undefined),
       releaseForClientError: jest.fn().mockResolvedValue(undefined),
     };
-    interceptor = new PaymentIdempotencyInterceptor(idempotency as PaymentIdempotencyService);
+    interceptor = new PaymentIdempotencyInterceptor(idempotency as unknown as PaymentIdempotencyService);
   });
 
   it('automatically uses the database checkout session UUID when no header is supplied', async () => {
