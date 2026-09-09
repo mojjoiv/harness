@@ -8,10 +8,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import {
-  AuthUser,
-  CurrentUser,
-} from '../common/decorators/current-user.decorator';
+import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
