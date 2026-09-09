@@ -225,10 +225,7 @@ export class PaypalWebhookService {
       status = PaymentStatus.PENDING;
     }
     if (!status || payment.status === status) return;
-    if (
-      payment.status === PaymentStatus.SUCCEEDED ||
-      payment.status === PaymentStatus.FAILED
-    ) {
+    if (payment.status === PaymentStatus.SUCCEEDED || payment.status === PaymentStatus.FAILED) {
       return;
     }
 

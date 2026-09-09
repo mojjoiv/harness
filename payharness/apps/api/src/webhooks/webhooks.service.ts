@@ -255,7 +255,10 @@ export class WebhooksService {
       const resource = data?.object as Record<string, unknown> | undefined;
       providerReference = typeof resource?.id === 'string' ? resource.id : undefined;
       if (eventType === 'payment_intent.succeeded') status = PaymentStatus.SUCCEEDED;
-      if (eventType === 'payment_intent.payment_failed' || eventType === 'payment_intent.canceled') {
+      if (
+        eventType === 'payment_intent.payment_failed' ||
+        eventType === 'payment_intent.canceled'
+      ) {
         status = PaymentStatus.FAILED;
       }
     }
