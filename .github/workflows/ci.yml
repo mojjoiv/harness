@@ -36,11 +36,6 @@ jobs:
       - name: Lint
         working-directory: payharness
         run: npm run lint
-      - name: Debug Prettier output
-        working-directory: payharness
-        run: |
-          npx prettier --write apps/api/src/payments/payment-idempotency.interceptor.spec.ts apps/api/src/payments/payment-idempotency.interceptor.ts
-          git diff -- apps/api/src/payments/payment-idempotency.interceptor.spec.ts apps/api/src/payments/payment-idempotency.interceptor.ts
       - name: Format check
         working-directory: payharness
         run: npm run format:check:changed
