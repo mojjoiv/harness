@@ -151,7 +151,10 @@ export class RefundService {
     }
   }
 
-  private async refundStripe(merchantId: string, payment: Payment): Promise<string> {
+  private async refundStripe(
+    merchantId: string,
+    payment: Payment,
+  ): Promise<string> {
     if (!payment.providerReference) {
       throw new BadRequestException('Stripe PaymentIntent reference is missing');
     }
@@ -171,7 +174,11 @@ export class RefundService {
     }
 
     const secrets = this.crypto.decrypt(
-      credential.encryptedSecretConfig as { iv: string; tag: string; data: string },
+      credential.encryptedSecretConfig as {
+        iv: string;
+        tag: string;
+        data: string;
+      },
     ) as { secretKey?: string };
     if (!secrets.secretKey) {
       throw new BadRequestException('Stripe secret key is missing');
