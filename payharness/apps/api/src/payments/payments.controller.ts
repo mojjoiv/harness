@@ -78,12 +78,26 @@ export class PaymentsController {
   }
 
   @Get(':id/query')
-  query(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paymentsService.queryPayment(
-      user.merchantId as string,
-      user.userId || undefined,
-      id,
-    );
+  async query(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    try {
+      return await this.paypalPaymentService.queryOrder(
+        user.merchantId as string,
+        user.userId || undefined,
+        id,
+      );
+    } catch (error) {
+      if (
+        !(error instanceof BadRequestException) ||
+        error.message !== 'Payment is not a PayPal payment'
+      ) {
+        throw error;
+      }
+      return this.paymentsService.queryPayment(
+        user.merchantId as string,
+        user.userId || undefined,
+        id,
+      );
+    }
   }
 
   private lockEnvironment(user: AuthUser, dto: CreateProviderPaymentDto): CreateProviderPaymentDto {
