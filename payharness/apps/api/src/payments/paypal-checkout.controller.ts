@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  Controller,
-  Get,
-  NotFoundException,
-  Query,
-} from '@nestjs/common';
+import { BadRequestException, Controller, Get, NotFoundException, Query } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
 
