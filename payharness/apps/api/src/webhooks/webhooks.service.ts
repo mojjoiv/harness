@@ -201,7 +201,9 @@ export class WebhooksService {
 
   private stableStringify(value: unknown): string {
     if (value === null || typeof value !== 'object') return JSON.stringify(value);
-    if (Array.isArray(value)) return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
+    }
     const object = value as Record<string, unknown>;
     return `{${Object.keys(object)
       .sort()
