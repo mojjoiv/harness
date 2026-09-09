@@ -34,7 +34,12 @@ export class StripeProviderService {
       params.set(`metadata[${key}]`, String(value));
     }
 
-    const body = await this.request(input.secretKey, 'POST', '/v1/payment_intents', params.toString());
+    const body = await this.request(
+      input.secretKey,
+      'POST',
+      '/v1/payment_intents',
+      params.toString(),
+    );
     if (!body.id) throw new Error('Stripe did not return a PaymentIntent id');
 
     return {
@@ -46,11 +51,20 @@ export class StripeProviderService {
     };
   }
 
-  async retrievePaymentIntent(secretKey: string, paymentIntentId: string): Promise<StripePaymentIntentResult> {
+  async retrievePaymentIntent(
+    secretKey: string,
+    paymentIntentId: string,
+  ): Promise<StripePaymentIntentResult> {
     if (!secretKey) throw new BadRequestException('Stripe secret key is missing');
-    if (!paymentIntentId.startsWith('pi_')) throw new BadRequestException('Invalid Stripe PaymentIntent reference');
+    if (!paymentIntentId.startsWith('pi_')) {
+      throw new BadRequestException('Invalid Stripe PaymentIntent reference');
+    }
 
-    const body = await this.request(secretKey, 'GET', `/v1/payment_intents/${encodeURIComponent(paymentIntentId)}`);
+    const body = await this.request(
+      secretKey,
+      'GET',
+      `/v1/payment_intents/${encodeURIComponent(paymentIntentId)}`,
+    );
     return {
       id: String(body.id),
       status: String(body.status || 'requires_payment_method'),
@@ -62,7 +76,9 @@ export class StripeProviderService {
 
   async refundPaymentIntent(secretKey: string, paymentIntentId: string) {
     if (!secretKey) throw new BadRequestException('Stripe secret key is missing');
-    if (!paymentIntentId.startsWith('pi_')) throw new BadRequestException('Invalid Stripe PaymentIntent reference');
+    if (!paymentIntentId.startsWith('pi_')) {
+      throw new BadRequestException('Invalid Stripe PaymentIntent reference');
+    }
 
     const params = new URLSearchParams();
     params.set('payment_intent', paymentIntentId);
@@ -92,7 +108,12 @@ export class StripeProviderService {
           headers: {
             Authorization: `Bearer ${secretKey}`,
             Accept: 'application/json',
-            ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) } : {}),
+            ...(body
+              ? {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                  'Content-Length': Buffer.byteLength(body),
+                }
+              : {}),
           },
           timeout: 15000,
         },
@@ -114,8 +135,12 @@ export class StripeProviderService {
               return;
             }
 
-            const message = payload.error?.message || `Stripe request failed with HTTP ${response.statusCode}`;
-            const error = new Error(message) as Error & { statusCode?: number; stripeCode?: string };
+            const message =
+              payload.error?.message || `Stripe request failed with HTTP ${response.statusCode}`;
+            const error = new Error(message) as Error & {
+              statusCode?: number;
+              stripeCode?: string;
+            };
             error.statusCode = response.statusCode;
             error.stripeCode = payload.error?.code;
             reject(error);
