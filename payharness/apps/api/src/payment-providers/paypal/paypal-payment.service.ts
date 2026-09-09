@@ -79,9 +79,11 @@ export class PaypalPaymentService {
     try {
       const appUrl = this.config.get<string>('APP_URL') || '';
       const returnUrl =
-        session?.successUrl || `${appUrl}/payments/paypal/success?paymentId=${payment.id}`;
+        session?.successUrl ||
+        `${appUrl}/payments/paypal/success?paymentId=${payment.id}`;
       const cancelUrl =
-        session?.cancelUrl || `${appUrl}/payments/paypal/cancel?paymentId=${payment.id}`;
+        session?.cancelUrl ||
+        `${appUrl}/payments/paypal/cancel?paymentId=${payment.id}`;
       const order = await this.paypal.createOrder({
         credentials: {
           clientId: publicConfig.clientId,
