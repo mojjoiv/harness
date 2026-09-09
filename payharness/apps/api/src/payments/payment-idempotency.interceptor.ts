@@ -38,20 +38,27 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
     const key = this.resolveKey(request, body, explicitKey);
 
     if (!merchantId) {
-      return throwError(() => new ConflictException('Merchant context is required for payment idempotency.'));
+      return throwError(
+        () => new ConflictException('Merchant context is required for payment idempotency.'),
+      );
     }
     if (!key) {
       return throwError(
-        () => new ConflictException(
-          'A stable payment identifier is required when Idempotency-Key is omitted. Provide checkoutSessionId or metadata.orderId.',
-        ),
+        () =>
+          new ConflictException(
+            'A stable payment identifier is required when Idempotency-Key is omitted. Provide checkoutSessionId or metadata.orderId.',
+          ),
       );
     }
     if (key.length < 8 || key.length > 255) {
-      return throwError(() => new ConflictException('The payment idempotency key must be 8-255 characters long.'));
+      return throwError(
+        () => new ConflictException('The payment idempotency key must be 8-255 characters long.'),
+      );
     }
     if (!environment || typeof environment !== 'string') {
-      return throwError(() => new ConflictException('Payment environment is required for idempotency.'));
+      return throwError(
+        () => new ConflictException('Payment environment is required for idempotency.'),
+      );
     }
 
     return from(this.idempotency.claim(merchantId, environment, key, body)).pipe(
@@ -106,7 +113,8 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
       metadata && typeof metadata === 'object' && !Array.isArray(metadata)
         ? (metadata as Record<string, unknown>)
         : undefined;
-    const orderId = typeof metadataRecord?.orderId === 'string' ? metadataRecord.orderId.trim() : undefined;
+    const orderId =
+      typeof metadataRecord?.orderId === 'string' ? metadataRecord.orderId.trim() : undefined;
     if (orderId) {
       return `payment:${provider}:order:${orderId}`;
     }
