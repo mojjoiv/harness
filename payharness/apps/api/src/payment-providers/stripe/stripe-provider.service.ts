@@ -60,6 +60,23 @@ export class StripeProviderService {
     };
   }
 
+  async refundPaymentIntent(secretKey: string, paymentIntentId: string) {
+    if (!secretKey) throw new BadRequestException('Stripe secret key is missing');
+    if (!paymentIntentId.startsWith('pi_')) throw new BadRequestException('Invalid Stripe PaymentIntent reference');
+
+    const params = new URLSearchParams();
+    params.set('payment_intent', paymentIntentId);
+    const body = await this.request(secretKey, 'POST', '/v1/refunds', params.toString());
+
+    if (!body.id) throw new Error('Stripe did not return a refund id');
+    return {
+      id: String(body.id),
+      status: String(body.status || 'succeeded'),
+      amount: Number(body.amount || 0),
+      currency: String(body.currency || '').toUpperCase(),
+    };
+  }
+
   private request(
     secretKey: string,
     method: 'GET' | 'POST',
