@@ -31,7 +31,8 @@ export class RefundService {
     explicitIdempotencyKey?: string,
   ) {
     const payment = await this.findPayment(merchantId, paymentId);
-    const key = explicitIdempotencyKey?.trim() || `refund:payment:${payment.id}`;
+    const key =
+      explicitIdempotencyKey?.trim() || `refund:payment:${payment.id}`;
     if (key.length < 8 || key.length > 255) {
       throw new ConflictException(
         'The refund idempotency key must be 8-255 characters long.',
@@ -72,7 +73,9 @@ export class RefundService {
 
     try {
       if (payment.status !== 'SUCCEEDED') {
-        throw new BadRequestException('Only succeeded payments can be refunded.');
+        throw new BadRequestException(
+          'Only succeeded payments can be refunded.',
+        );
       }
 
       if (payment.provider === 'MPESA') {
@@ -156,7 +159,9 @@ export class RefundService {
     payment: Payment,
   ): Promise<string> {
     if (!payment.providerReference) {
-      throw new BadRequestException('Stripe PaymentIntent reference is missing');
+      throw new BadRequestException(
+        'Stripe PaymentIntent reference is missing',
+      );
     }
 
     const credential = await this.prisma.providerCredential.findFirst({
