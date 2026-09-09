@@ -12,7 +12,6 @@ describe('PaymentsService', () => {
   const mpesa = { createStkPush: jest.fn() } as any;
   const mpesaVerification = { queryStkStatus: jest.fn(), initiateStkPush: jest.fn() } as any;
   const stripe = { createPaymentIntent: jest.fn() } as any;
-  const paypal = { createOrder: jest.fn() } as any;
   const paypalPaymentService = { createOrder: jest.fn(), captureOrder: jest.fn(), queryOrder: jest.fn() } as any;
   const auditLogs = { create: jest.fn() } as any;
   const webhooks = { forwardToUrl: jest.fn() } as any;
@@ -23,7 +22,7 @@ describe('PaymentsService', () => {
     config.get.mockImplementation((key: string) => (key === 'DATABASE_URL' ? 'postgresql://localhost/payharness' : undefined));
     prisma.merchantSettings.findUnique.mockResolvedValue({ webhookForwardingUrl: 'https://merchant.example/webhook' });
     webhooks.forwardToUrl.mockResolvedValue({ delivered: true });
-    service = new PaymentsService(prisma, config, crypto, mpesa, mpesaVerification, stripe, paypal, paypalPaymentService, auditLogs, webhooks);
+    service = new PaymentsService(prisma, config, crypto, mpesa, mpesaVerification, stripe, paypalPaymentService, auditLogs, webhooks);
     jest.spyOn(service as any, 'getActiveCredential').mockResolvedValue({
       id: 'credential-1', provider: 'MPESA', environment: 'SANDBOX', verificationStatus: 'PENDING',
       oauthVerified: false, accountVerified: false, webhookVerified: false, environmentVerified: false,
