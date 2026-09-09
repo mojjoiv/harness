@@ -129,9 +129,7 @@ describe('PaymentsService', () => {
       providerStatus: 'COMPLETED',
     });
 
-    await expect(
-      service.queryPayment('merchant-1', 'user-1', 'payment-paypal'),
-    ).resolves.toEqual({
+    await expect(service.queryPayment('merchant-1', 'user-1', 'payment-paypal')).resolves.toEqual({
       paymentId: 'payment-paypal',
       status: 'SUCCEEDED',
       providerStatus: 'COMPLETED',
@@ -243,18 +241,19 @@ describe('PaymentsService', () => {
     });
     mpesaVerification.queryStkStatus.mockResolvedValue({ status: 'PENDING' });
 
-    await expect(
-      service.queryPayment('merchant-1', 'user-1', 'payment-pending'),
-    ).resolves.toEqual({ paymentId: 'payment-pending', status: 'PENDING' });
+    await expect(service.queryPayment('merchant-1', 'user-1', 'payment-pending')).resolves.toEqual({
+      paymentId: 'payment-pending',
+      status: 'PENDING',
+    });
     expect(prisma.payment.update).not.toHaveBeenCalled();
   });
 
   it('does not expose another merchant payment', async () => {
     prisma.payment.findFirst.mockResolvedValue(null);
 
-    await expect(
-      service.queryPayment('merchant-2', 'user-2', 'payment-1'),
-    ).rejects.toThrow('Payment not found');
+    await expect(service.queryPayment('merchant-2', 'user-2', 'payment-1')).rejects.toThrow(
+      'Payment not found',
+    );
   });
 
   it('settles a pending payment and forwards the terminal webhook', async () => {
