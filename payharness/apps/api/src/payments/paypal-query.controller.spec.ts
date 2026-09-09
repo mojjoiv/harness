@@ -4,12 +4,8 @@ import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 
 describe('PaymentsController PayPal query', () => {
-  const paymentsService = {
-    queryPayment: jest.fn(),
-  } as unknown as PaymentsService;
-  const paypalPaymentService = {
-    queryOrder: jest.fn(),
-  } as unknown as PaypalPaymentService;
+  const paymentsService = { queryPayment: jest.fn() } as unknown as PaymentsService;
+  const paypalPaymentService = { queryOrder: jest.fn() } as unknown as PaypalPaymentService;
   const controller = new PaymentsController(paymentsService, paypalPaymentService);
 
   beforeEach(() => {
