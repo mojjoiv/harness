@@ -72,7 +72,10 @@ describe('WebhooksService', () => {
 
   it('disables an existing endpoint', async () => {
     const { prisma, auditLogs, deliveryService } = mocks();
-    prisma.webhookEndpoint.findFirst.mockResolvedValue({ id: 'endpoint-1', merchantId: 'merchant-1' });
+    prisma.webhookEndpoint.findFirst.mockResolvedValue({
+      id: 'endpoint-1',
+      merchantId: 'merchant-1',
+    });
     prisma.webhookEndpoint.update.mockResolvedValue({
       id: 'endpoint-1',
       status: 'INACTIVE',
