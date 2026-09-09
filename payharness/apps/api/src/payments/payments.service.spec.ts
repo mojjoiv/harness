@@ -13,6 +13,7 @@ describe('PaymentsService', () => {
   const mpesaVerification = { queryStkStatus: jest.fn(), initiateStkPush: jest.fn() } as any;
   const stripe = { createPaymentIntent: jest.fn() } as any;
   const paypal = { createOrder: jest.fn() } as any;
+  const paypalPaymentService = { createOrder: jest.fn(), captureOrder: jest.fn(), queryOrder: jest.fn() } as any;
   const auditLogs = { create: jest.fn() } as any;
   const webhooks = { forwardToUrl: jest.fn() } as any;
   let service: PaymentsService;
@@ -22,12 +23,48 @@ describe('PaymentsService', () => {
     config.get.mockImplementation((key: string) => (key === 'DATABASE_URL' ? 'postgresql://localhost/payharness' : undefined));
     prisma.merchantSettings.findUnique.mockResolvedValue({ webhookForwardingUrl: 'https://merchant.example/webhook' });
     webhooks.forwardToUrl.mockResolvedValue({ delivered: true });
-    service = new PaymentsService(prisma, config, crypto, mpesa, mpesaVerification, stripe, paypal, auditLogs, webhooks);
+    service = new PaymentsService(prisma, config, crypto, mpesa, mpesaVerification, stripe, paypal, paypalPaymentService, auditLogs, webhooks);
     jest.spyOn(service as any, 'getActiveCredential').mockResolvedValue({
       id: 'credential-1', provider: 'MPESA', environment: 'SANDBOX', verificationStatus: 'PENDING',
       oauthVerified: false, accountVerified: false, webhookVerified: false, environmentVerified: false,
       publicConfig: { shortcode: '174379' }, encryptedSecretConfig: {},
     });
+  });
+
+  it('dispatches unified payment creation to M-Pesa', async () => {
+    const createMpesaSpy = jest.spyOn(service, 'createMpesaStk').mockResolvedValue({ paymentId: 'payment-1' } as any);
+    const dto = { provider: 'MPESA', amountCents: 1000, currency: 'KES', environment: 'SANDBOX' } as any;
+    await expect(service.createPayment('merchant-1', 'user-1', dto)).resolves.toEqual({ paymentId: 'payment-1' });
+    expect(createMpesaSpy).toHaveBeenCalledWith('merchant-1', 'user-1', dto);
+  });
+
+  it('dispatches unified payment creation to Stripe', async () => {
+    const createStripeSpy = jest.spyOn(service, 'createStripeIntent').mockResolvedValue({ paymentId: 'payment-2' } as any);
+    const dto = { provider: 'STRIPE', amountCents: 1000, currency: 'USD', environment: 'SANDBOX' } as any;
+    await expect(service.createPayment('merchant-1', 'user-1', dto)).resolves.toEqual({ paymentId: 'payment-2' });
+    expect(createStripeSpy).toHaveBeenCalledWith('merchant-1', 'user-1', dto);
+  });
+
+  it('dispatches unified payment creation to PayPal', async () => {
+    const createPaypalSpy = jest.spyOn(service, 'createPaypalOrder').mockResolvedValue({ paymentId: 'payment-3' } as any);
+    const dto = { provider: 'PAYPAL', amountCents: 1000, currency: 'USD', environment: 'SANDBOX' } as any;
+    await expect(service.createPayment('merchant-1', 'user-1', dto)).resolves.toEqual({ paymentId: 'payment-3' });
+    expect(createPaypalSpy).toHaveBeenCalledWith('merchant-1', 'user-1', dto);
+  });
+
+  it('rejects simulated PayPal outcomes through unified creation', async () => {
+    await expect(service.createPayment('merchant-1', 'user-1', {
+      provider: 'PAYPAL', amountCents: 1000, currency: 'USD', environment: 'SANDBOX', simulateOutcome: 'SUCCEEDED',
+    } as any)).rejects.toThrow('PayPal does not support simulated outcomes');
+    expect(paypalPaymentService.createOrder).not.toHaveBeenCalled();
+  });
+
+  it('routes generic payment queries to the stored PayPal provider', async () => {
+    prisma.payment.findFirst.mockResolvedValue({ id: 'payment-paypal', merchantId: 'merchant-1', provider: 'PAYPAL', environment: 'SANDBOX' });
+    paypalPaymentService.queryOrder.mockResolvedValue({ paymentId: 'payment-paypal', status: 'SUCCEEDED', providerStatus: 'COMPLETED' });
+    const result = await service.queryPayment('merchant-1', 'user-1', 'payment-paypal');
+    expect(result).toEqual({ paymentId: 'payment-paypal', status: 'SUCCEEDED', providerStatus: 'COMPLETED' });
+    expect(paypalPaymentService.queryOrder).toHaveBeenCalledWith('merchant-1', 'user-1', 'payment-paypal');
   });
 
   it('blocks LIVE M-Pesa STK requests when the credential is not fully verified', async () => {
