@@ -1,15 +1,19 @@
-import { Body, Controller, Get, Param, Post, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, UseGuards, UseInterceptors } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
 import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor';
 import { PaymentsService } from './payments.service';
+import { RefundService } from './refund.service';
 
 @UseGuards(MerchantAuthGuard)
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly refundService: RefundService,
+  ) {}
 
   @Post()
   @UseInterceptors(PaymentIdempotencyInterceptor)
@@ -58,6 +62,20 @@ export class PaymentsController {
       user.merchantId as string,
       user.userId || undefined,
       id,
+    );
+  }
+
+  @Post(':id/refund')
+  refund(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.refundService.refund(
+      user.merchantId as string,
+      user.userId || undefined,
+      id,
+      idempotencyKey,
     );
   }
 
