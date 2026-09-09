@@ -8,7 +8,6 @@ import { PrismaService } from '../common/prisma.service';
 import { MpesaProviderService } from '../payment-providers/mpesa/mpesa-provider.service';
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
 import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
-import { PaypalProviderService } from '../payment-providers/paypal/paypal-provider.service';
 import { StripeProviderService } from '../payment-providers/stripe/stripe-provider.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -25,7 +24,6 @@ export class PaymentsService {
     private readonly mpesa: MpesaProviderService,
     private readonly mpesaVerification: MpesaVerificationService,
     private readonly stripe: StripeProviderService,
-    private readonly paypal: PaypalProviderService,
     private readonly paypalPaymentService: PaypalPaymentService,
     private readonly auditLogs: AuditLogsService,
     private readonly webhooks: WebhooksService,
