@@ -224,11 +224,19 @@ export class PaymentsService {
     return this.paypalPaymentService.createOrder(merchantId, userId, dto);
   }
 
-  async capturePaypalOrder(merchantId: string, userId: string | undefined, paymentId: string) {
+  async capturePaypalOrder(
+    merchantId: string,
+    userId: string | undefined,
+    paymentId: string,
+  ) {
     return this.paypalPaymentService.captureOrder(merchantId, userId, paymentId);
   }
 
-  async queryPaypalOrder(merchantId: string, userId: string | undefined, paymentId: string) {
+  async queryPaypalOrder(
+    merchantId: string,
+    userId: string | undefined,
+    paymentId: string,
+  ) {
     return this.paypalPaymentService.queryOrder(merchantId, userId, paymentId);
   }
 
