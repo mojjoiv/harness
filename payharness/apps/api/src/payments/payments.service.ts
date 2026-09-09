@@ -69,11 +69,6 @@ export class PaymentsService {
       case 'STRIPE':
         return this.createStripeIntent(merchantId, userId, providerDto);
       case 'PAYPAL':
-        if (dto.simulateOutcome) {
-          throw new BadRequestException(
-            'PayPal does not support simulated outcomes; use the real PayPal sandbox flow',
-          );
-        }
         return this.createPaypalOrder(merchantId, userId, providerDto);
       default:
         throw new BadRequestException(`Unsupported payment provider: ${dto.provider}`);
@@ -223,6 +218,11 @@ export class PaymentsService {
   ) {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] createPaypalOrder`, { merchantId });
+    if (dto.simulateOutcome) {
+      throw new BadRequestException(
+        'PayPal does not support simulated outcomes; use the real PayPal sandbox flow',
+      );
+    }
     return this.paypalPaymentService.createOrder(merchantId, userId, dto);
   }
 
