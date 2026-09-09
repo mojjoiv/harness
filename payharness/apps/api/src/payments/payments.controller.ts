@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Headers, Param, Post, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -99,7 +108,11 @@ export class PaymentsController {
 
   @Get(':id')
   get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paymentsService.getPayment(user.merchantId as string, user.userId || undefined, id);
+    return this.paymentsService.getPayment(
+      user.merchantId as string,
+      user.userId || undefined,
+      id,
+    );
   }
 
   private lockEnvironment<T extends CreateProviderPaymentDto>(user: AuthUser, dto: T): T {
