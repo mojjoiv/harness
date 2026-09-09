@@ -1,4 +1,4 @@
-import { PaymentStatus, Provider } from '@prisma/client';
+import { PaymentStatus } from '@prisma/client';
 import { PaypalWebhookService } from './paypal-webhook.service';
 
 describe('PaypalWebhookService', () => {
