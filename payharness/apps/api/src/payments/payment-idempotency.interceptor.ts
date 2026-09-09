@@ -93,8 +93,11 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
     }
 
     const metadata = body.metadata;
-    const orderId = metadata && typeof metadata === 'object' && typeof metadata.orderId === 'string'
-      ? metadata.orderId.trim()
+    const metadataRecord = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? metadata as Record<string, unknown>
+      : undefined;
+    const orderId = typeof metadataRecord?.orderId === 'string'
+      ? metadataRecord.orderId.trim()
       : undefined;
     if (orderId) {
       return `payment:${provider}:order:${orderId}`;
