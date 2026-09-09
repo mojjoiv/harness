@@ -1,4 +1,4 @@
-import { PaymentStatus, Provider } from '@prisma/client';
+import { PaymentStatus } from '@prisma/client';
 import { PaypalWebhookService } from './paypal-webhook.service';
 
 describe('PaypalWebhookService', () => {
@@ -10,6 +10,7 @@ describe('PaypalWebhookService', () => {
         payment: { findFirst: jest.fn(), update: jest.fn() },
         transaction: { updateMany: jest.fn() },
         checkoutSession: { update: jest.fn() },
+        $queryRaw: jest.fn(),
       },
       crypto: { decrypt: jest.fn() },
       auditLogs: { create: jest.fn() },
@@ -19,22 +20,15 @@ describe('PaypalWebhookService', () => {
   it('records a verified completion and settles the PayPal payment', async () => {
     const { prisma, crypto, auditLogs } = mocks();
     prisma.providerCredential.findMany.mockResolvedValue([
-      {
-        id: 'credential-1',
-        environment: 'SANDBOX',
-        encryptedSecretConfig: {},
-      },
+      { id: 'credential-1', environment: 'SANDBOX', encryptedSecretConfig: {} },
     ]);
     crypto.decrypt.mockReturnValue({ webhookId: '5MY207380F799633P' });
-    prisma.webhookDelivery.create.mockResolvedValue({ id: 'delivery-1' });
+    prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
     prisma.payment.findFirst.mockResolvedValue({
       id: 'payment-1',
       status: PaymentStatus.PENDING,
       checkoutSessionId: 'checkout-1',
     });
-    prisma.payment.update.mockResolvedValue({});
-    prisma.transaction.updateMany.mockResolvedValue({});
-    prisma.checkoutSession.update.mockResolvedValue({});
     auditLogs.create.mockResolvedValue({});
 
     const service = new PaypalWebhookService(prisma as any, crypto as any, auditLogs as any);
@@ -59,12 +53,7 @@ describe('PaypalWebhookService', () => {
     );
 
     expect(result).toEqual({ received: true, deliveryId: 'delivery-1' });
-    expect(prisma.webhookDelivery.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        provider: Provider.PAYPAL,
-        eventType: 'PAYMENT.CAPTURE.COMPLETED',
-      }),
-    });
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     expect(prisma.payment.update).toHaveBeenCalledWith({
       where: { id: 'payment-1' },
       data: { status: PaymentStatus.SUCCEEDED },
@@ -79,14 +68,37 @@ describe('PaypalWebhookService', () => {
     });
   });
 
+  it('returns the existing delivery for a duplicate PayPal event', async () => {
+    const { prisma, crypto, auditLogs } = mocks();
+    prisma.providerCredential.findMany.mockResolvedValue([
+      { id: 'credential-1', environment: 'SANDBOX', encryptedSecretConfig: {} },
+    ]);
+    crypto.decrypt.mockReturnValue({ webhookId: '5MY207380F799633P' });
+    prisma.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'delivery-1' }]);
+
+    const service = new PaypalWebhookService(prisma as any, crypto as any, auditLogs as any);
+    jest.spyOn(service as any, 'verifySignature').mockResolvedValue(true);
+
+    await expect(
+      service.handle(
+        'merchant-1',
+        {
+          'paypal-transmission-id': 'transmission-1',
+          'paypal-transmission-time': new Date().toISOString(),
+          'paypal-cert-url': 'https://api-m.sandbox.paypal.com/cert',
+          'paypal-transmission-sig': 'signature',
+        },
+        Buffer.from('{}'),
+        { id: 'WH-EVENT-1', event_type: 'PAYMENT.CAPTURE.COMPLETED' },
+      ),
+    ).resolves.toEqual({ received: true, deliveryId: 'delivery-1', duplicate: true });
+    expect(prisma.payment.findFirst).not.toHaveBeenCalled();
+  });
+
   it('rejects a webhook when no configured PayPal webhook ID verifies it', async () => {
     const { prisma, crypto, auditLogs } = mocks();
     prisma.providerCredential.findMany.mockResolvedValue([
-      {
-        id: 'credential-1',
-        environment: 'SANDBOX',
-        encryptedSecretConfig: {},
-      },
+      { id: 'credential-1', environment: 'SANDBOX', encryptedSecretConfig: {} },
     ]);
     crypto.decrypt.mockReturnValue({});
 
@@ -97,6 +109,6 @@ describe('PaypalWebhookService', () => {
         event_type: 'PAYMENT.CAPTURE.COMPLETED',
       }),
     ).rejects.toThrow('Invalid PayPal webhook signature');
-    expect(prisma.webhookDelivery.create).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
 });
