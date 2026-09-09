@@ -10,7 +10,10 @@ const PAYPAL_HOST_SUFFIX = '.paypal.com';
 
 @Injectable()
 export class PaypalWebhookService {
-  private readonly certificateCache = new Map<string, { certificate: string; expiresAt: number }>();
+  private readonly certificateCache = new Map<
+    string,
+    { certificate: string; expiresAt: number }
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
