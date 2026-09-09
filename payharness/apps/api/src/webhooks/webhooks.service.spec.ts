@@ -154,6 +154,7 @@ describe('WebhooksService', () => {
 
   it('settles a Stripe payment from a first-seen webhook event', async () => {
     const { prisma, auditLogs, deliveryService } = mocks();
+    prisma.merchant.findUnique.mockResolvedValue({ id: 'merchant-1' });
     prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
     prisma.payment.findFirst.mockResolvedValue({
       id: 'payment-1',
