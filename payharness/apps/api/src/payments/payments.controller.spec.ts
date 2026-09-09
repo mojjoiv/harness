@@ -1,24 +1,57 @@
-import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 
-describe('PaymentsController environment safety', () => {
+describe('PaymentsController environment safety and orchestration', () => {
   let controller: PaymentsController;
   let paymentsService: jest.Mocked<
-    Pick<PaymentsService, 'createMpesaStk' | 'createStripeIntent' | 'queryPayment'>
+    Pick<
+      PaymentsService,
+      | 'createPayment'
+      | 'createMpesaStk'
+      | 'createStripeIntent'
+      | 'createPaypalOrder'
+      | 'capturePaypalOrder'
+      | 'queryPaypalOrder'
+      | 'queryPayment'
+      | 'getPayment'
+    >
   >;
-  let paypalPaymentService: jest.Mocked<Pick<PaypalPaymentService, 'createOrder'>>;
 
   beforeEach(() => {
     paymentsService = {
+      createPayment: jest.fn(),
       createMpesaStk: jest.fn(),
       createStripeIntent: jest.fn(),
+      createPaypalOrder: jest.fn(),
+      capturePaypalOrder: jest.fn(),
+      queryPaypalOrder: jest.fn(),
       queryPayment: jest.fn(),
+      getPayment: jest.fn(),
     };
-    paypalPaymentService = { createOrder: jest.fn() };
-    controller = new PaymentsController(
-      paymentsService as unknown as PaymentsService,
-      paypalPaymentService as unknown as PaypalPaymentService,
+    controller = new PaymentsController(paymentsService as unknown as PaymentsService);
+  });
+
+  it('routes unified payment creation to the orchestration service', () => {
+    const user = {
+      userId: 'user-1',
+      merchantId: 'merchant-1',
+      role: 'DEVELOPER',
+      type: 'api_key',
+      environment: 'SANDBOX',
+    } as any;
+    const dto = {
+      provider: 'STRIPE',
+      amountCents: 1000,
+      currency: 'USD',
+      environment: 'LIVE',
+    } as any;
+
+    controller.create(user, dto);
+
+    expect(paymentsService.createPayment).toHaveBeenCalledWith(
+      'merchant-1',
+      'user-1',
+      expect.objectContaining({ provider: 'STRIPE', environment: 'SANDBOX' }),
     );
   });
 
@@ -87,30 +120,22 @@ describe('PaymentsController environment safety', () => {
 
     controller.paypalOrder(user, dto);
 
-    expect(paypalPaymentService.createOrder).toHaveBeenCalledWith(
+    expect(paymentsService.createPaypalOrder).toHaveBeenCalledWith(
       'merchant-2',
       'user-2',
       expect.objectContaining({ environment: 'LIVE' }),
     );
   });
 
-  it('rejects simulated PayPal outcomes', () => {
-    const user = {
-      userId: 'user-3',
-      merchantId: 'merchant-3',
-      role: 'DEVELOPER',
-      type: 'api_key',
-      environment: 'SANDBOX',
-    } as any;
+  it('delegates the canonical payment resource endpoint to the service', () => {
+    const user = { userId: 'user-4', merchantId: 'merchant-4', type: 'merchant' } as any;
+    controller.get(user, 'payment-4');
+    expect(paymentsService.getPayment).toHaveBeenCalledWith('merchant-4', 'user-4', 'payment-4');
+  });
 
-    expect(() =>
-      controller.paypalOrder(user, {
-        amountCents: 1000,
-        currency: 'USD',
-        environment: 'SANDBOX',
-        simulateOutcome: 'SUCCEEDED',
-      } as any),
-    ).toThrow('PayPal does not support simulated outcomes');
-    expect(paypalPaymentService.createOrder).not.toHaveBeenCalled();
+  it('delegates the generic payment query endpoint to the service', () => {
+    const user = { userId: 'user-5', merchantId: 'merchant-5', type: 'merchant' } as any;
+    controller.query(user, 'payment-5');
+    expect(paymentsService.queryPayment).toHaveBeenCalledWith('merchant-5', 'user-5', 'payment-5');
   });
 });
