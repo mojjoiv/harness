@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { Environment, PaymentStatus, Prisma, Provider } from '@prisma/client';
-import { createVerify } from 'crypto';
+import { createHash, createVerify, randomBytes } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
@@ -25,17 +25,60 @@ export class PaypalWebhookService {
     payload: Record<string, unknown>,
   ) {
     const credential = await this.findVerifiedCredential(merchantId, headers, rawBody);
-    const delivery = await this.prisma.webhookDelivery.create({
-      data: {
-        provider: Provider.PAYPAL,
-        eventType: String(payload.event_type || payload.type || 'provider.event'),
-        payload: { ...payload, _merchantId: merchantId } as Prisma.InputJsonValue,
-        status: 'PENDING',
-      },
+    const eventId = this.providerEventId(payload);
+    const eventType = String(payload.event_type || payload.type || 'provider.event');
+    const delivery = await this.claimProviderDelivery(eventId, eventType, {
+      ...payload,
+      _merchantId: merchantId,
     });
 
+    if (delivery.duplicate) {
+      return { received: true, deliveryId: delivery.deliveryId, duplicate: true };
+    }
+
     await this.processPaymentEvent(merchantId, credential.environment, payload);
-    return { received: true, deliveryId: delivery.id };
+    return { received: true, deliveryId: delivery.deliveryId };
+  }
+
+  private providerEventId(payload: Record<string, unknown>): string {
+    if (typeof payload.id === 'string' && payload.id.trim()) return payload.id;
+    return createHash('sha256').update(this.stableStringify(payload)).digest('hex');
+  }
+
+  private stableStringify(value: unknown): string {
+    if (value === null || typeof value !== 'object') return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
+    const object = value as Record<string, unknown>;
+    return `{${Object.keys(object)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${this.stableStringify(object[key])}`)
+      .join(',')}}`;
+  }
+
+  private async claimProviderDelivery(
+    eventId: string,
+    eventType: string,
+    payload: Record<string, unknown>,
+  ): Promise<{ deliveryId: string; duplicate: boolean }> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      INSERT INTO "webhook_deliveries"
+        ("id", "provider", "provider_event_id", "event_type", "payload", "status")
+      VALUES
+        (${randomBytes(16).toString('hex')}, ${Provider.PAYPAL}::"Provider", ${eventId}, ${eventType}, ${JSON.stringify(payload)}::jsonb, 'PENDING'::"Status")
+      ON CONFLICT ("provider", "provider_event_id") DO NOTHING
+      RETURNING "id"
+    `;
+    if (rows[0]) return { deliveryId: rows[0].id, duplicate: false };
+
+    const existing = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT "id"
+      FROM "webhook_deliveries"
+      WHERE "provider" = ${Provider.PAYPAL}::"Provider"
+        AND "provider_event_id" = ${eventId}
+      LIMIT 1
+    `;
+    if (!existing[0]) throw new Error('PayPal webhook event could not be claimed');
+    return { deliveryId: existing[0].id, duplicate: true };
   }
 
   private async findVerifiedCredential(
@@ -180,6 +223,12 @@ export class PaypalWebhookService {
       status = PaymentStatus.PENDING;
     }
     if (!status || payment.status === status) return;
+    if (
+      payment.status === PaymentStatus.SUCCEEDED ||
+      payment.status === PaymentStatus.FAILED
+    ) {
+      return;
+    }
 
     await this.prisma.payment.update({
       where: { id: payment.id },
