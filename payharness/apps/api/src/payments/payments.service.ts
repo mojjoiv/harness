@@ -226,6 +226,14 @@ export class PaymentsService {
     return this.paypalPaymentService.createOrder(merchantId, userId, dto);
   }
 
+  async capturePaypalOrder(merchantId: string, userId: string | undefined, paymentId: string) {
+    return this.paypalPaymentService.captureOrder(merchantId, userId, paymentId);
+  }
+
+  async queryPaypalOrder(merchantId: string, userId: string | undefined, paymentId: string) {
+    return this.paypalPaymentService.queryOrder(merchantId, userId, paymentId);
+  }
+
   async queryPayment(merchantId: string, userId: string | undefined, paymentId: string) {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] queryPayment`, { merchantId, paymentId });
@@ -234,7 +242,7 @@ export class PaymentsService {
       if (!payment) throw new NotFoundException('Payment not found');
 
       if (payment.provider === 'PAYPAL') {
-        return this.paypalPaymentService.queryOrder(merchantId, userId, paymentId);
+        return this.queryPaypalOrder(merchantId, userId, paymentId);
       }
 
       if (payment.provider === 'STRIPE') {
