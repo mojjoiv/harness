@@ -164,7 +164,9 @@ export class PaypalProviderService {
         body: '{}',
       },
     );
-    if (!response.id) throw new Error('PayPal did not return a refund id');
+    if (!response.id) {
+      throw new Error('PayPal did not return a refund id');
+    }
     return response;
   }
 
