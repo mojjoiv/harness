@@ -37,7 +37,12 @@ export class RefundService {
     }
 
     const existingRefund = await this.prisma.transaction.findFirst({
-      where: { paymentId: payment.id, merchantId, type: 'REFUND', status: 'SUCCEEDED' },
+      where: {
+        paymentId: payment.id,
+        merchantId,
+        type: 'REFUND',
+        status: 'SUCCEEDED',
+      },
     });
     if (existingRefund) {
       return {
@@ -125,7 +130,8 @@ export class RefundService {
       await this.idempotency.complete(claim, response);
       return response;
     } catch (error) {
-      const status = error?.getStatus?.() || error?.status || 500;
+      const typedError = error as { getStatus?: () => number; status?: number };
+      const status = typedError.getStatus?.() || typedError.status || 500;
       if (status >= 400 && status < 500) {
         await this.idempotency.releaseForClientError(claim);
       }
@@ -157,7 +163,10 @@ export class RefundService {
       throw new BadRequestException('Stripe secret key is missing');
     }
 
-    const refund = await this.stripe.refundPaymentIntent(secrets.secretKey, payment.providerReference);
+    const refund = await this.stripe.refundPaymentIntent(
+      secrets.secretKey,
+      payment.providerReference,
+    );
     if (refund.status !== 'succeeded') {
       throw new BadRequestException(`Stripe refund is not completed: ${refund.status}`);
     }
