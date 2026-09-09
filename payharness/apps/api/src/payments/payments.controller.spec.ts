@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
@@ -7,7 +8,9 @@ describe('PaymentsController environment safety', () => {
   let paymentsService: jest.Mocked<
     Pick<PaymentsService, 'createMpesaStk' | 'createStripeIntent' | 'queryPayment'>
   >;
-  let paypalPaymentService: jest.Mocked<Pick<PaypalPaymentService, 'createOrder'>>;
+  let paypalPaymentService: jest.Mocked<
+    Pick<PaypalPaymentService, 'createOrder' | 'queryOrder'>
+  >;
 
   beforeEach(() => {
     paymentsService = {
@@ -15,7 +18,7 @@ describe('PaymentsController environment safety', () => {
       createStripeIntent: jest.fn(),
       queryPayment: jest.fn(),
     };
-    paypalPaymentService = { createOrder: jest.fn() };
+    paypalPaymentService = { createOrder: jest.fn(), queryOrder: jest.fn() };
     controller = new PaymentsController(
       paymentsService as unknown as PaymentsService,
       paypalPaymentService as unknown as PaypalPaymentService,
@@ -112,5 +115,61 @@ describe('PaymentsController environment safety', () => {
       } as any),
     ).toThrow('PayPal does not support simulated outcomes');
     expect(paypalPaymentService.createOrder).not.toHaveBeenCalled();
+  });
+
+  it('uses the PayPal query flow for PayPal payments', async () => {
+    paypalPaymentService.queryOrder.mockResolvedValue({
+      paymentId: 'payment-1',
+      status: 'SUCCEEDED',
+      providerStatus: 'SUCCEEDED',
+    });
+
+    const result = await controller.query(
+      { merchantId: 'merchant-1', userId: 'user-1' } as any,
+      'payment-1',
+    );
+
+    expect(result).toEqual({
+      paymentId: 'payment-1',
+      status: 'SUCCEEDED',
+      providerStatus: 'SUCCEEDED',
+    });
+    expect(paymentsService.queryPayment).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the existing provider query flow for non-PayPal payments', async () => {
+    paypalPaymentService.queryOrder.mockRejectedValue(
+      new BadRequestException('Payment is not a PayPal payment'),
+    );
+    paymentsService.queryPayment.mockResolvedValue({
+      paymentId: 'payment-2',
+      status: 'PENDING',
+    });
+
+    const result = await controller.query(
+      { merchantId: 'merchant-1', userId: 'user-1' } as any,
+      'payment-2',
+    );
+
+    expect(result).toEqual({ paymentId: 'payment-2', status: 'PENDING' });
+    expect(paymentsService.queryPayment).toHaveBeenCalledWith(
+      'merchant-1',
+      'user-1',
+      'payment-2',
+    );
+  });
+
+  it('does not mask real PayPal query failures', async () => {
+    paypalPaymentService.queryOrder.mockRejectedValue(
+      new BadRequestException('PayPal credentials are incomplete'),
+    );
+
+    await expect(
+      controller.query(
+        { merchantId: 'merchant-1', userId: 'user-1' } as any,
+        'payment-3',
+      ),
+    ).rejects.toThrow('PayPal credentials are incomplete');
+    expect(paymentsService.queryPayment).not.toHaveBeenCalled();
   });
 });
