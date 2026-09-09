@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, Provider } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
@@ -11,6 +11,8 @@ import { WebhookDeliveryService } from './webhook-delivery.service';
 
 @Injectable()
 export class WebhooksService {
+  private readonly logger = new Logger(WebhooksService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
@@ -121,15 +123,35 @@ export class WebhooksService {
   }
 
   async receive(provider: Provider, payload: Record<string, unknown>) {
-    const delivery = await this.prisma.webhookDelivery.create({
-      data: {
-        provider,
-        eventType: String(payload.type || payload.event || 'provider.event'),
-        payload: payload as Prisma.InputJsonValue,
-        status: 'PENDING',
-      },
-    });
-    return { received: true, deliveryId: delivery.id };
+    const eventType = String(payload.type || payload.event || 'provider.event');
+    const eventId = typeof payload.id === 'string' ? payload.id : 'unknown';
+    const correlationId = randomBytes(8).toString('hex');
+
+    this.logger.log(
+      `[Webhook receive] START provider=${provider} eventType=${eventType} eventId=${eventId} correlationId=${correlationId}`,
+    );
+
+    try {
+      const delivery = await this.prisma.webhookDelivery.create({
+        data: {
+          provider,
+          eventType,
+          payload: payload as Prisma.InputJsonValue,
+          status: 'PENDING',
+        },
+      });
+
+      this.logger.log(
+        `[Webhook receive] STORED provider=${provider} eventType=${eventType} eventId=${eventId} deliveryId=${delivery.id} correlationId=${correlationId}`,
+      );
+      return { received: true, deliveryId: delivery.id };
+    } catch (error) {
+      this.logger.error(
+        `[Webhook receive] FAILED provider=${provider} eventType=${eventType} eventId=${eventId} correlationId=${correlationId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw error;
+    }
   }
 
   async receiveForMerchant(
@@ -138,14 +160,37 @@ export class WebhooksService {
     payload: Record<string, unknown>,
   ) {
     const provider = providerParam.toUpperCase() as Provider;
-    const merchant = await this.prisma.merchant.findUnique({
-      where: { id: merchantId },
-      select: { id: true },
-    });
-    if (!merchant) {
-      throw new NotFoundException('Unknown merchant');
-    }
+    const eventType = String(payload.type || payload.event || 'provider.event');
+    const eventId = typeof payload.id === 'string' ? payload.id : 'unknown';
+    const correlationId = randomBytes(8).toString('hex');
 
-    return this.receive(provider, { ...payload, _merchantId: merchantId });
+    this.logger.log(
+      `[Provider webhook] START provider=${provider} merchantId=${merchantId} eventType=${eventType} eventId=${eventId} correlationId=${correlationId}`,
+    );
+
+    try {
+      const merchant = await this.prisma.merchant.findUnique({
+        where: { id: merchantId },
+        select: { id: true },
+      });
+      if (!merchant) {
+        this.logger.error(
+          `[Provider webhook] UNKNOWN MERCHANT provider=${provider} merchantId=${merchantId} eventType=${eventType} eventId=${eventId} correlationId=${correlationId}`,
+        );
+        throw new NotFoundException('Unknown merchant');
+      }
+
+      const result = await this.receive(provider, { ...payload, _merchantId: merchantId });
+      this.logger.log(
+        `[Provider webhook] COMPLETE provider=${provider} merchantId=${merchantId} eventType=${eventType} eventId=${eventId} deliveryId=${result.deliveryId} correlationId=${correlationId}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[Provider webhook] FAILED provider=${provider} merchantId=${merchantId} eventType=${eventType} eventId=${eventId} correlationId=${correlationId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw error;
+    }
   }
 }
