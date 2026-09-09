@@ -58,7 +58,10 @@ export class WebhooksController {
     const stripeObject = payload.data && typeof payload.data === 'object' ? payload.data : undefined;
     const stripeObjectData = stripeObject && 'object' in stripeObject ? stripeObject.object : undefined;
     const paymentIntentId =
-      stripeObjectData && typeof stripeObjectData === 'object' && stripeObjectData !== null && 'id' in stripeObjectData
+      stripeObjectData &&
+      typeof stripeObjectData === 'object' &&
+      stripeObjectData !== null &&
+      'id' in stripeObjectData
         ? String(stripeObjectData.id)
         : undefined;
 
