@@ -96,7 +96,7 @@ export class PaymentsController {
     );
   }
 
-  private lockEnvironment(user: AuthUser, dto: CreateProviderPaymentDto): CreateProviderPaymentDto {
+  private lockEnvironment<T extends CreateProviderPaymentDto>(user: AuthUser, dto: T): T {
     if (user.type === 'api_key' && user.environment) {
       return { ...dto, environment: user.environment };
     }
