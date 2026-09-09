@@ -92,7 +92,10 @@ export class PaypalPaymentService {
         currency: dto.currency,
         returnUrl,
         cancelUrl,
-        metadata: { ...(dto.metadata || {}), paymentReference: payment.id },
+        metadata: {
+          ...(dto.metadata || {}),
+          paymentReference: payment.id,
+        },
       });
       await this.prisma.payment.update({
         where: { id: payment.id },
@@ -125,7 +128,10 @@ export class PaypalPaymentService {
         providerStatus: order.status,
       };
     } catch (error) {
-      await this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED' } });
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: 'FAILED' },
+      });
       await this.prisma.transaction.updateMany({
         where: { paymentId: payment.id },
         data: { status: 'FAILED' },
@@ -161,7 +167,10 @@ export class PaypalPaymentService {
       throw new BadRequestException('PayPal credentials are incomplete');
     }
     const order = await this.paypal.captureOrder({
-      credentials: { clientId: publicConfig.clientId, clientSecret: secrets.clientSecret },
+      credentials: {
+        clientId: publicConfig.clientId,
+        clientSecret: secrets.clientSecret,
+      },
       environment: payment.environment,
       orderId: payment.providerReference,
     });
@@ -200,7 +209,10 @@ export class PaypalPaymentService {
       throw new BadRequestException('PayPal credentials are incomplete');
     }
     const order = await this.paypal.getOrder({
-      credentials: { clientId: publicConfig.clientId, clientSecret: secrets.clientSecret },
+      credentials: {
+        clientId: publicConfig.clientId,
+        clientSecret: secrets.clientSecret,
+      },
       environment: payment.environment,
       orderId: payment.providerReference,
     });
@@ -235,7 +247,10 @@ export class PaypalPaymentService {
     }
 
     const order = await this.paypal.getOrder({
-      credentials: { clientId: publicConfig.clientId, clientSecret: secrets.clientSecret },
+      credentials: {
+        clientId: publicConfig.clientId,
+        clientSecret: secrets.clientSecret,
+      },
       environment: payment.environment,
       orderId: payment.providerReference,
     });
@@ -243,11 +258,16 @@ export class PaypalPaymentService {
       ?.flatMap((unit) => unit.payments?.captures || [])
       .find((candidate) => candidate.status === 'COMPLETED');
     if (!capture?.id) {
-      throw new BadRequestException('PayPal capture ID could not be resolved for this payment');
+      throw new BadRequestException(
+        'PayPal capture ID could not be resolved for this payment',
+      );
     }
 
     const refund = await this.paypal.refundCapture({
-      credentials: { clientId: publicConfig.clientId, clientSecret: secrets.clientSecret },
+      credentials: {
+        clientId: publicConfig.clientId,
+        clientSecret: secrets.clientSecret,
+      },
       environment: payment.environment,
       captureId: capture.id,
       requestId: `payharness-refund-${payment.id}`,
@@ -275,14 +295,26 @@ export class PaypalPaymentService {
     reason: string,
   ) {
     if (providerStatus === 'COMPLETED') {
-      await this.settle(payment, merchantId, userId, 'SUCCEEDED', `${reason}: COMPLETED`);
+      await this.settle(
+        payment,
+        merchantId,
+        userId,
+        'SUCCEEDED',
+        `${reason}: COMPLETED`,
+      );
       return { paymentId: payment.id, status: 'SUCCEEDED' as const, providerStatus };
     }
     if (['VOIDED', 'PAYER_ACTION_REQUIRED'].includes(providerStatus)) {
       return { paymentId: payment.id, status: 'PENDING' as const, providerStatus };
     }
     if (['CANCELLED', 'FAILED'].includes(providerStatus)) {
-      await this.settle(payment, merchantId, userId, 'FAILED', `${reason}: ${providerStatus}`);
+      await this.settle(
+        payment,
+        merchantId,
+        userId,
+        'FAILED',
+        `${reason}: ${providerStatus}`,
+      );
       return { paymentId: payment.id, status: 'FAILED' as const, providerStatus };
     }
     return { paymentId: payment.id, status: 'PENDING' as const, providerStatus };
@@ -295,7 +327,10 @@ export class PaypalPaymentService {
     status: 'SUCCEEDED' | 'FAILED',
     reason: string,
   ) {
-    await this.prisma.payment.update({ where: { id: payment.id }, data: { status } });
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { status },
+    });
     await this.prisma.transaction.updateMany({
       where: { paymentId: payment.id },
       data: { status },
@@ -328,8 +363,9 @@ export class PaypalPaymentService {
     const credential = await this.prisma.providerCredential.findFirst({
       where: { merchantId, provider: 'PAYPAL', environment, status: 'ACTIVE' },
     });
-    if (!credential)
+    if (!credential) {
       throw new BadRequestException(`No active PAYPAL credential for ${environment}`);
+    }
     return credential;
   }
 }
