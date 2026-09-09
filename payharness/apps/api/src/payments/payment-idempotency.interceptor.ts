@@ -41,9 +41,11 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
       return throwError(() => new ConflictException('Merchant context is required for payment idempotency.'));
     }
     if (!key) {
-      return throwError(() => new ConflictException(
-        'A stable payment identifier is required when Idempotency-Key is omitted. Provide checkoutSessionId or metadata.orderId.',
-      ));
+      return throwError(
+        () => new ConflictException(
+          'A stable payment identifier is required when Idempotency-Key is omitted. Provide checkoutSessionId or metadata.orderId.',
+        ),
+      );
     }
     if (key.length < 8 || key.length > 255) {
       return throwError(() => new ConflictException('The payment idempotency key must be 8-255 characters long.'));
@@ -56,12 +58,15 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
       mergeMap(({ claim, replay }) => {
         if (replay !== undefined) return from([replay]);
         return next.handle().pipe(
-          mergeMap((response) => from(this.idempotency.complete(claim, response)).pipe(mergeMap(() => from([response])))),
+          mergeMap((response) =>
+            from(this.idempotency.complete(claim, response)).pipe(mergeMap(() => from([response]))),
+          ),
           catchError((error) => {
             const status = error?.getStatus?.() || error?.status || 500;
-            const release = status >= 400 && status < 500
-              ? this.idempotency.releaseForClientError(claim)
-              : Promise.resolve();
+            const release =
+              status >= 400 && status < 500
+                ? this.idempotency.releaseForClientError(claim)
+                : Promise.resolve();
             return from(release).pipe(mergeMap(() => throwError(() => error)));
           }),
         );
@@ -69,43 +74,47 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
     );
   }
 
-  private resolveKey(request: PaymentRequest, body: Record<string, unknown>, explicitKey: unknown): string | undefined {
+  private resolveKey(
+    request: PaymentRequest,
+    body: Record<string, unknown>,
+    explicitKey: unknown,
+  ): string | undefined {
     if (typeof explicitKey === 'string' && explicitKey.trim()) {
       return explicitKey.trim();
     }
 
     const route = request.route?.path || request.path || '';
-    const provider = typeof body.provider === 'string'
-      ? body.provider.toLowerCase()
-      : route.includes('stripe')
-        ? 'stripe'
-        : route.includes('mpesa')
-          ? 'mpesa'
-          : route.includes('paypal')
-            ? 'paypal'
-            : 'payment';
+    const provider =
+      typeof body.provider === 'string'
+        ? body.provider.toLowerCase()
+        : route.includes('stripe')
+          ? 'stripe'
+          : route.includes('mpesa')
+            ? 'mpesa'
+            : route.includes('paypal')
+              ? 'paypal'
+              : 'payment';
 
-    const checkoutSessionId = typeof body.checkoutSessionId === 'string'
-      ? body.checkoutSessionId.trim()
-      : undefined;
+    const checkoutSessionId =
+      typeof body.checkoutSessionId === 'string' ? body.checkoutSessionId.trim() : undefined;
     if (checkoutSessionId) {
       return `payment:${provider}:checkout-session:${checkoutSessionId}`;
     }
 
     const metadata = body.metadata;
-    const metadataRecord = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
-      ? metadata as Record<string, unknown>
-      : undefined;
-    const orderId = typeof metadataRecord?.orderId === 'string'
-      ? metadataRecord.orderId.trim()
-      : undefined;
+    const metadataRecord =
+      metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : undefined;
+    const orderId = typeof metadataRecord?.orderId === 'string' ? metadataRecord.orderId.trim() : undefined;
     if (orderId) {
       return `payment:${provider}:order:${orderId}`;
     }
 
-    const paypalOrderId = provider === 'paypal' && typeof request.params?.id === 'string'
-      ? request.params.id.trim()
-      : undefined;
+    const paypalOrderId =
+      provider === 'paypal' && typeof request.params?.id === 'string'
+        ? request.params.id.trim()
+        : undefined;
     if (paypalOrderId) {
       return `payment:paypal:capture:${paypalOrderId}`;
     }
