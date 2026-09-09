@@ -1,16 +1,7 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  UseGuards,
-  UseInterceptors,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards, UseInterceptors } from '@nestjs/common';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
-import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
+import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
 import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor';
 import { PaymentsService } from './payments.service';
@@ -18,10 +9,17 @@ import { PaymentsService } from './payments.service';
 @UseGuards(MerchantAuthGuard)
 @Controller('payments')
 export class PaymentsController {
-  constructor(
-    private readonly paymentsService: PaymentsService,
-    private readonly paypalPaymentService: PaypalPaymentService,
-  ) {}
+  constructor(private readonly paymentsService: PaymentsService) {}
+
+  @Post()
+  @UseInterceptors(PaymentIdempotencyInterceptor)
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreatePaymentDto) {
+    return this.paymentsService.createPayment(
+      user.merchantId as string,
+      user.userId || undefined,
+      this.lockEnvironment(user, dto),
+    );
+  }
 
   @Post('mpesa/stk')
   @UseInterceptors(PaymentIdempotencyInterceptor)
@@ -46,12 +44,7 @@ export class PaymentsController {
   @Post('paypal/order')
   @UseInterceptors(PaymentIdempotencyInterceptor)
   paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
-    if (dto.simulateOutcome) {
-      throw new BadRequestException(
-        'PayPal does not support simulated outcomes; use the real PayPal sandbox flow',
-      );
-    }
-    return this.paypalPaymentService.createOrder(
+    return this.paymentsService.createPaypalOrder(
       user.merchantId as string,
       user.userId || undefined,
       this.lockEnvironment(user, dto),
@@ -61,7 +54,7 @@ export class PaymentsController {
   @Post('paypal/:id/capture')
   @UseInterceptors(PaymentIdempotencyInterceptor)
   paypalCapture(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paypalPaymentService.captureOrder(
+    return this.paymentsService.capturePaypalOrder(
       user.merchantId as string,
       user.userId || undefined,
       id,
@@ -70,7 +63,7 @@ export class PaymentsController {
 
   @Get('paypal/:id/query')
   paypalQuery(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paypalPaymentService.queryOrder(
+    return this.paymentsService.queryPaypalOrder(
       user.merchantId as string,
       user.userId || undefined,
       id,
@@ -78,29 +71,20 @@ export class PaymentsController {
   }
 
   @Get(':id/query')
-  async query(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    try {
-      return await this.paypalPaymentService.queryOrder(
-        user.merchantId as string,
-        user.userId || undefined,
-        id,
-      );
-    } catch (error) {
-      if (
-        !(error instanceof BadRequestException) ||
-        error.message !== 'Payment is not a PayPal payment'
-      ) {
-        throw error;
-      }
-      return this.paymentsService.queryPayment(
-        user.merchantId as string,
-        user.userId || undefined,
-        id,
-      );
-    }
+  query(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.paymentsService.queryPayment(
+      user.merchantId as string,
+      user.userId || undefined,
+      id,
+    );
   }
 
-  private lockEnvironment(user: AuthUser, dto: CreateProviderPaymentDto): CreateProviderPaymentDto {
+  @Get(':id')
+  get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.paymentsService.getPayment(user.merchantId as string, user.userId || undefined, id);
+  }
+
+  private lockEnvironment<T extends CreateProviderPaymentDto>(user: AuthUser, dto: T): T {
     if (user.type === 'api_key' && user.environment) {
       return { ...dto, environment: user.environment };
     }
