@@ -77,7 +77,9 @@ export class PaypalProviderService {
       },
     );
 
-    const approvalUrl = response.links?.find((link) => link.rel === 'approve')?.href;
+    const approvalUrl = response.links?.find(
+      (link) => link.rel === 'approve',
+    )?.href;
     if (!approvalUrl) {
       throw new BadRequestException('PayPal did not return an approval URL');
     }
@@ -95,7 +97,10 @@ export class PaypalProviderService {
     environment: 'SANDBOX' | 'LIVE';
     orderId: string;
   }) {
-    const accessToken = await this.getAccessToken(input.credentials, input.environment);
+    const accessToken = await this.getAccessToken(
+      input.credentials,
+      input.environment,
+    );
     return this.request<PaypalOrderResponse>(
       input.environment,
       `/v2/checkout/orders/${encodeURIComponent(input.orderId)}/capture`,
@@ -117,7 +122,10 @@ export class PaypalProviderService {
     environment: 'SANDBOX' | 'LIVE';
     orderId: string;
   }) {
-    const accessToken = await this.getAccessToken(input.credentials, input.environment);
+    const accessToken = await this.getAccessToken(
+      input.credentials,
+      input.environment,
+    );
     return this.request<PaypalOrderResponse>(
       input.environment,
       `/v2/checkout/orders/${encodeURIComponent(input.orderId)}`,
@@ -134,7 +142,10 @@ export class PaypalProviderService {
     captureId: string;
     requestId: string;
   }) {
-    const accessToken = await this.getAccessToken(input.credentials, input.environment);
+    const accessToken = await this.getAccessToken(
+      input.credentials,
+      input.environment,
+    );
     const response = await this.request<{
       id: string;
       status: string;
@@ -161,9 +172,9 @@ export class PaypalProviderService {
     credentials: PaypalCredentials,
     environment: 'SANDBOX' | 'LIVE',
   ): Promise<string> {
-    const basic = Buffer.from(`${credentials.clientId}:${credentials.clientSecret}`).toString(
-      'base64',
-    );
+    const basic = Buffer.from(
+      `${credentials.clientId}:${credentials.clientSecret}`,
+    ).toString('base64');
     const response = await this.request<{ access_token: string }>(
       environment,
       '/v1/oauth2/token',
