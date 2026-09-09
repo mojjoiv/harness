@@ -67,9 +67,7 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
         if (replay !== undefined) return from([replay]);
         return next.handle().pipe(
           mergeMap((response) =>
-            from(this.idempotency.complete(claim, response)).pipe(
-              mergeMap(() => from([response])),
-            ),
+            from(this.idempotency.complete(claim, response)).pipe(mergeMap(() => from([response]))),
           ),
           catchError((error) => {
             const status = error?.getStatus?.() || error?.status || 500;
