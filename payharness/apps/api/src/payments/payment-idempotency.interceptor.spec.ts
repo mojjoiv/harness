@@ -7,9 +7,9 @@ describe('PaymentIdempotencyInterceptor', () => {
   let interceptor: PaymentIdempotencyInterceptor;
   let idempotency: jest.Mocked<Pick<PaymentIdempotencyService, 'claim' | 'complete' | 'releaseForClientError'>>;
 
-  const createContext = (request: any) => ({
+  const createContext = (request: Record<string, unknown>) => ({
     switchToHttp: () => ({ getRequest: () => request }),
-  }) as any;
+  }) as unknown as import('@nestjs/common').ExecutionContext;
 
   beforeEach(() => {
     idempotency = {
