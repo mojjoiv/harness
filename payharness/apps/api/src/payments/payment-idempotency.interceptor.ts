@@ -17,23 +17,29 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest();
     const merchantId = request.user?.merchantId as string | undefined;
     const header = request.headers?.['idempotency-key'];
-    const key = Array.isArray(header) ? header[0] : header;
+    const explicitKey = Array.isArray(header) ? header[0] : header;
     const body = request.body || {};
     const environment = request.user?.type === 'api_key' && request.user?.environment
       ? request.user.environment
       : body.environment;
+    const key = this.resolveKey(request, body, explicitKey);
 
     if (!merchantId) {
       return throwError(() => new ConflictException('Merchant context is required for payment idempotency.'));
     }
-    if (!key || typeof key !== 'string' || key.trim().length < 8 || key.length > 255) {
-      return throwError(() => new ConflictException('Idempotency-Key header is required and must be 8-255 characters long.'));
+    if (!key) {
+      return throwError(() => new ConflictException(
+        'A stable payment identifier is required when Idempotency-Key is omitted. Provide checkoutSessionId or metadata.orderId.',
+      ));
+    }
+    if (key.length < 8 || key.length > 255) {
+      return throwError(() => new ConflictException('The payment idempotency key must be 8-255 characters long.'));
     }
     if (!environment || typeof environment !== 'string') {
       return throwError(() => new ConflictException('Payment environment is required for idempotency.'));
     }
 
-    return from(this.idempotency.claim(merchantId, environment, key.trim(), body)).pipe(
+    return from(this.idempotency.claim(merchantId, environment, key, body)).pipe(
       mergeMap(({ claim, replay }) => {
         if (replay !== undefined) return from([replay]);
         return next.handle().pipe(
@@ -48,5 +54,46 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
         );
       }),
     );
+  }
+
+  private resolveKey(request: any, body: Record<string, any>, explicitKey: unknown): string | undefined {
+    if (typeof explicitKey === 'string' && explicitKey.trim()) {
+      return explicitKey.trim();
+    }
+
+    const route = request.route?.path || request.path || '';
+    const provider = typeof body.provider === 'string'
+      ? body.provider.toLowerCase()
+      : route.includes('stripe')
+        ? 'stripe'
+        : route.includes('mpesa')
+          ? 'mpesa'
+          : route.includes('paypal')
+            ? 'paypal'
+            : 'payment';
+
+    const checkoutSessionId = typeof body.checkoutSessionId === 'string'
+      ? body.checkoutSessionId.trim()
+      : undefined;
+    if (checkoutSessionId) {
+      return `payment:${provider}:checkout-session:${checkoutSessionId}`;
+    }
+
+    const metadata = body.metadata;
+    const orderId = metadata && typeof metadata === 'object' && typeof metadata.orderId === 'string'
+      ? metadata.orderId.trim()
+      : undefined;
+    if (orderId) {
+      return `payment:${provider}:order:${orderId}`;
+    }
+
+    const paypalOrderId = provider === 'paypal' && typeof request.params?.id === 'string'
+      ? request.params.id.trim()
+      : undefined;
+    if (paypalOrderId) {
+      return `payment:paypal:capture:${paypalOrderId}`;
+    }
+
+    return undefined;
   }
 }
