@@ -33,7 +33,9 @@ export class RefundService {
     const payment = await this.findPayment(merchantId, paymentId);
     const key = explicitIdempotencyKey?.trim() || `refund:payment:${payment.id}`;
     if (key.length < 8 || key.length > 255) {
-      throw new ConflictException('The refund idempotency key must be 8-255 characters long.');
+      throw new ConflictException(
+        'The refund idempotency key must be 8-255 characters long.',
+      );
     }
 
     const existingRefund = await this.prisma.transaction.findFirst({
@@ -60,7 +62,11 @@ export class RefundService {
       merchantId,
       payment.environment,
       key,
-      { paymentId: payment.id, operation: 'refund', amountCents: payment.amountCents },
+      {
+        paymentId: payment.id,
+        operation: 'refund',
+        amountCents: payment.amountCents,
+      },
     );
     if (replay !== undefined) return replay;
 
@@ -79,10 +85,16 @@ export class RefundService {
       if (payment.provider === 'STRIPE') {
         refundId = await this.refundStripe(merchantId, payment);
       } else if (payment.provider === 'PAYPAL') {
-        const result = await this.paypal.refundPayment(merchantId, userId, payment.id);
+        const result = await this.paypal.refundPayment(
+          merchantId,
+          userId,
+          payment.id,
+        );
         refundId = result.refundId;
       } else {
-        throw new BadRequestException(`Unsupported payment provider: ${payment.provider}`);
+        throw new BadRequestException(
+          `Unsupported payment provider: ${payment.provider}`,
+        );
       }
 
       await this.prisma.transaction.create({
@@ -153,7 +165,9 @@ export class RefundService {
       },
     });
     if (!credential) {
-      throw new BadRequestException(`No active STRIPE credential for ${payment.environment}`);
+      throw new BadRequestException(
+        `No active STRIPE credential for ${payment.environment}`,
+      );
     }
 
     const secrets = this.crypto.decrypt(
@@ -168,7 +182,9 @@ export class RefundService {
       payment.providerReference,
     );
     if (refund.status !== 'succeeded') {
-      throw new BadRequestException(`Stripe refund is not completed: ${refund.status}`);
+      throw new BadRequestException(
+        `Stripe refund is not completed: ${refund.status}`,
+      );
     }
     return refund.id;
   }
