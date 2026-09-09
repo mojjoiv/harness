@@ -239,9 +239,9 @@ export class PaypalPaymentService {
       environment: payment.environment,
       orderId: payment.providerReference,
     });
-    const capture = order.purchase_units?.flatMap((unit) => unit.payments?.captures || []).find(
-      (candidate) => candidate.status === 'COMPLETED',
-    );
+    const capture = order.purchase_units
+      ?.flatMap((unit) => unit.payments?.captures || [])
+      .find((candidate) => candidate.status === 'COMPLETED');
     if (!capture?.id) {
       throw new BadRequestException('PayPal capture ID could not be resolved for this payment');
     }
