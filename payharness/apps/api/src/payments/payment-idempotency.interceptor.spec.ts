@@ -32,32 +32,35 @@ describe('PaymentIdempotencyInterceptor', () => {
     );
   });
 
-  it('automatically uses the database checkout session UUID when no header is supplied', async () => {
-    const request = {
-      user: { merchantId: 'merchant-1', type: 'api_key', environment: 'SANDBOX' },
-      headers: {},
-      body: {
-        provider: 'STRIPE',
-        checkoutSessionId: '7f4b8b7e-2c2e-4f8f-a8b7-4b3f2a6c9d10',
-        amountCents: 1000,
-        currency: 'USD',
-      },
-      route: { path: '/payments' },
-    };
+  it(
+    'automatically uses the database checkout session UUID when no header is supplied',
+    async () => {
+      const request = {
+        user: { merchantId: 'merchant-1', type: 'api_key', environment: 'SANDBOX' },
+        headers: {},
+        body: {
+          provider: 'STRIPE',
+          checkoutSessionId: '7f4b8b7e-2c2e-4f8f-a8b7-4b3f2a6c9d10',
+          amountCents: 1000,
+          currency: 'USD',
+        },
+        route: { path: '/payments' },
+      };
 
-    await lastValueFrom(
-      interceptor.intercept(createContext(request), {
-        handle: () => of({ id: 'payment-1' }),
-      }),
-    );
+      await lastValueFrom(
+        interceptor.intercept(createContext(request), {
+          handle: () => of({ id: 'payment-1' }),
+        }),
+      );
 
-    expect(idempotency.claim).toHaveBeenCalledWith(
-      'merchant-1',
-      'SANDBOX',
-      'payment:stripe:checkout-session:7f4b8b7e-2c2e-4f8f-a8b7-4b3f2a6c9d10',
-      request.body,
-    );
-  });
+      expect(idempotency.claim).toHaveBeenCalledWith(
+        'merchant-1',
+        'SANDBOX',
+        'payment:stripe:checkout-session:7f4b8b7e-2c2e-4f8f-a8b7-4b3f2a6c9d10',
+        request.body,
+      );
+    },
+  );
 
   it('automatically uses a merchant orderId when no checkout session exists', async () => {
     const request = {
@@ -133,22 +136,25 @@ describe('PaymentIdempotencyInterceptor', () => {
     );
   });
 
-  it('rejects a new payment that has no stable identifier when the header is omitted', async () => {
-    const request = {
-      user: { merchantId: 'merchant-1', type: 'api_key', environment: 'SANDBOX' },
-      headers: {},
-      body: { provider: 'STRIPE', amountCents: 1000, currency: 'USD' },
-      route: { path: '/payments' },
-    };
+  it(
+    'rejects a new payment that has no stable identifier when the header is omitted',
+    async () => {
+      const request = {
+        user: { merchantId: 'merchant-1', type: 'api_key', environment: 'SANDBOX' },
+        headers: {},
+        body: { provider: 'STRIPE', amountCents: 1000, currency: 'USD' },
+        route: { path: '/payments' },
+      };
 
-    await expect(
-      lastValueFrom(
-        interceptor.intercept(createContext(request), {
-          handle: () => of({ id: 'payment-1' }),
-        }),
-      ),
-    ).rejects.toBeInstanceOf(ConflictException);
+      await expect(
+        lastValueFrom(
+          interceptor.intercept(createContext(request), {
+            handle: () => of({ id: 'payment-1' }),
+          }),
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
 
-    expect(idempotency.claim).not.toHaveBeenCalled();
-  });
+      expect(idempotency.claim).not.toHaveBeenCalled();
+    },
+  );
 });
