@@ -32,9 +32,10 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
     const header = request.headers?.['idempotency-key'];
     const explicitKey = Array.isArray(header) ? header[0] : header;
     const body = request.body || {};
-    const environment = request.user?.type === 'api_key' && request.user?.environment
-      ? request.user.environment
-      : body.environment;
+    const environment =
+      request.user?.type === 'api_key' && request.user?.environment
+        ? request.user.environment
+        : body.environment;
     const key = this.resolveKey(request, body, explicitKey);
 
     if (!merchantId) {
@@ -66,7 +67,9 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
         if (replay !== undefined) return from([replay]);
         return next.handle().pipe(
           mergeMap((response) =>
-            from(this.idempotency.complete(claim, response)).pipe(mergeMap(() => from([response]))),
+            from(this.idempotency.complete(claim, response)).pipe(
+              mergeMap(() => from([response])),
+            ),
           ),
           catchError((error) => {
             const status = error?.getStatus?.() || error?.status || 500;
