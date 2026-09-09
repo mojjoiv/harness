@@ -1,5 +1,6 @@
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { RefundService } from './refund.service';
 
 describe('PaymentsController environment safety and orchestration', () => {
   let controller: PaymentsController;
@@ -16,6 +17,7 @@ describe('PaymentsController environment safety and orchestration', () => {
       | 'getPayment'
     >
   >;
+  let refundService: jest.Mocked<Pick<RefundService, 'refund'>>;
 
   beforeEach(() => {
     paymentsService = {
@@ -28,7 +30,13 @@ describe('PaymentsController environment safety and orchestration', () => {
       queryPayment: jest.fn(),
       getPayment: jest.fn(),
     };
-    controller = new PaymentsController(paymentsService as unknown as PaymentsService);
+    refundService = {
+      refund: jest.fn(),
+    };
+    controller = new PaymentsController(
+      paymentsService as unknown as PaymentsService,
+      refundService as unknown as RefundService,
+    );
   });
 
   it('routes unified payment creation to the orchestration service', () => {
@@ -124,6 +132,23 @@ describe('PaymentsController environment safety and orchestration', () => {
       'merchant-2',
       'user-2',
       expect.objectContaining({ environment: 'LIVE' }),
+    );
+  });
+
+  it('delegates the refund endpoint to the refund service', () => {
+    const user = {
+      userId: 'user-6',
+      merchantId: 'merchant-6',
+      type: 'merchant',
+    } as any;
+
+    controller.refund(user, 'payment-6', 'refund-key-6');
+
+    expect(refundService.refund).toHaveBeenCalledWith(
+      'merchant-6',
+      'user-6',
+      'payment-6',
+      'refund-key-6',
     );
   });
 
