@@ -43,7 +43,13 @@ describe('RefundService', () => {
     prisma.payment.findFirst.mockResolvedValue(payment);
     prisma.transaction.findFirst.mockResolvedValue(null);
     idempotency.claim.mockResolvedValue({
-      claim: { id: 'claim-1', merchantId: 'merchant-1', environment: 'SANDBOX', key: 'refund:payment:payment-1', requestHash: 'hash' },
+      claim: {
+        id: 'claim-1',
+        merchantId: 'merchant-1',
+        environment: 'SANDBOX',
+        key: 'refund:payment:payment-1',
+        requestHash: 'hash',
+      },
     });
     stripe.refundPaymentIntent.mockResolvedValue({
       id: 're_test_123',
@@ -67,7 +73,9 @@ describe('RefundService', () => {
     });
     expect(stripe.refundPaymentIntent).toHaveBeenCalledWith('sk_test', 'pi_test_123');
     expect(prisma.transaction.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ type: 'REFUND', status: 'SUCCEEDED' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ type: 'REFUND', status: 'SUCCEEDED' }),
+      }),
     );
     expect(idempotency.complete).toHaveBeenCalled();
     expect(auditLogs.create).toHaveBeenCalledWith(
@@ -76,7 +84,11 @@ describe('RefundService', () => {
   });
 
   it('refunds a succeeded PayPal payment through the PayPal capture', async () => {
-    prisma.payment.findFirst.mockResolvedValue({ ...payment, provider: 'PAYPAL', providerReference: 'ORDER-1' });
+    prisma.payment.findFirst.mockResolvedValue({
+      ...payment,
+      provider: 'PAYPAL',
+      providerReference: 'ORDER-1',
+    });
     paypal.refundPayment.mockResolvedValue({ refundId: 'PAYPAL-REFUND-1' });
 
     await expect(service.refund('merchant-1', undefined, 'payment-1')).resolves.toMatchObject({
