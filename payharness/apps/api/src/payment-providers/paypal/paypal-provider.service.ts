@@ -189,7 +189,9 @@ export class PaypalProviderService {
       },
     );
     if (!response.access_token) {
-      throw new BadRequestException('PayPal OAuth did not return an access token');
+      throw new BadRequestException(
+        'PayPal OAuth did not return an access token',
+      );
     }
     return response.access_token;
   }
@@ -199,7 +201,8 @@ export class PaypalProviderService {
     path: string,
     init: RequestInit,
   ): Promise<T> {
-    const baseUrl = environment === 'SANDBOX' ? this.sandboxBaseUrl : this.liveBaseUrl;
+    const baseUrl =
+      environment === 'SANDBOX' ? this.sandboxBaseUrl : this.liveBaseUrl;
     const response = await fetch(`${baseUrl}${path}`, init);
     const text = await response.text();
     let body: unknown = undefined;
@@ -213,7 +216,9 @@ export class PaypalProviderService {
         typeof body === 'object' && body !== null
           ? JSON.stringify(body)
           : String(body ?? response.statusText);
-      throw new BadRequestException(`PayPal API request failed (${response.status}): ${detail}`);
+      throw new BadRequestException(
+        `PayPal API request failed (${response.status}): ${detail}`,
+      );
     }
     return body as T;
   }
