@@ -51,7 +51,10 @@ describe('PaymentsController environment safety and orchestration', () => {
     expect(paymentsService.createPayment).toHaveBeenCalledWith(
       'merchant-1',
       'user-1',
-      expect.objectContaining({ provider: 'STRIPE', environment: 'SANDBOX' }),
+      expect.objectContaining({
+        provider: 'STRIPE',
+        environment: 'SANDBOX',
+      }),
     );
   });
 
@@ -63,7 +66,6 @@ describe('PaymentsController environment safety and orchestration', () => {
       type: 'api_key',
       environment: 'SANDBOX',
     } as any;
-
     const dto = {
       amountCents: 1000,
       currency: 'KES',
@@ -87,7 +89,6 @@ describe('PaymentsController environment safety and orchestration', () => {
       role: 'OWNER',
       type: 'merchant',
     } as any;
-
     const dto = {
       amountCents: 1000,
       currency: 'KES',
@@ -111,7 +112,6 @@ describe('PaymentsController environment safety and orchestration', () => {
       type: 'api_key',
       environment: 'LIVE',
     } as any;
-
     const dto = {
       amountCents: 2500,
       currency: 'USD',
@@ -128,14 +128,34 @@ describe('PaymentsController environment safety and orchestration', () => {
   });
 
   it('delegates the canonical payment resource endpoint to the service', () => {
-    const user = { userId: 'user-4', merchantId: 'merchant-4', type: 'merchant' } as any;
+    const user = {
+      userId: 'user-4',
+      merchantId: 'merchant-4',
+      type: 'merchant',
+    } as any;
+
     controller.get(user, 'payment-4');
-    expect(paymentsService.getPayment).toHaveBeenCalledWith('merchant-4', 'user-4', 'payment-4');
+
+    expect(paymentsService.getPayment).toHaveBeenCalledWith(
+      'merchant-4',
+      'user-4',
+      'payment-4',
+    );
   });
 
   it('delegates the generic payment query endpoint to the service', () => {
-    const user = { userId: 'user-5', merchantId: 'merchant-5', type: 'merchant' } as any;
+    const user = {
+      userId: 'user-5',
+      merchantId: 'merchant-5',
+      type: 'merchant',
+    } as any;
+
     controller.query(user, 'payment-5');
-    expect(paymentsService.queryPayment).toHaveBeenCalledWith('merchant-5', 'user-5', 'payment-5');
+
+    expect(paymentsService.queryPayment).toHaveBeenCalledWith(
+      'merchant-5',
+      'user-5',
+      'payment-5',
+    );
   });
 });
