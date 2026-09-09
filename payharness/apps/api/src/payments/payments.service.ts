@@ -7,9 +7,11 @@ import { CredentialCryptoService } from '../common/crypto/credential-crypto.serv
 import { PrismaService } from '../common/prisma.service';
 import { MpesaProviderService } from '../payment-providers/mpesa/mpesa-provider.service';
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
+import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
 import { PaypalProviderService } from '../payment-providers/paypal/paypal-provider.service';
 import { StripeProviderService } from '../payment-providers/stripe/stripe-provider.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
 
 @Injectable()
@@ -24,6 +26,7 @@ export class PaymentsService {
     private readonly mpesaVerification: MpesaVerificationService,
     private readonly stripe: StripeProviderService,
     private readonly paypal: PaypalProviderService,
+    private readonly paypalPaymentService: PaypalPaymentService,
     private readonly auditLogs: AuditLogsService,
     private readonly webhooks: WebhooksService,
   ) {
@@ -51,6 +54,30 @@ export class PaymentsService {
     Render Service: ${renderService}
     PaymentsService instrumentation loaded ✅
     createRealMpesaStk instrumentation enabled ✅`);
+  }
+
+  async createPayment(
+    merchantId: string,
+    userId: string | undefined,
+    dto: CreatePaymentDto,
+  ) {
+    const providerDto: CreateProviderPaymentDto = dto;
+
+    switch (dto.provider) {
+      case 'MPESA':
+        return this.createMpesaStk(merchantId, userId, providerDto);
+      case 'STRIPE':
+        return this.createStripeIntent(merchantId, userId, providerDto);
+      case 'PAYPAL':
+        if (dto.simulateOutcome) {
+          throw new BadRequestException(
+            'PayPal does not support simulated outcomes; use the real PayPal sandbox flow',
+          );
+        }
+        return this.createPaypalOrder(merchantId, userId, providerDto);
+      default:
+        throw new BadRequestException(`Unsupported payment provider: ${dto.provider}`);
+    }
   }
 
   async createMpesaStk(
@@ -196,9 +223,7 @@ export class PaymentsService {
   ) {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] createPaypalOrder`, { merchantId });
-    return this.process(merchantId, userId, 'PAYPAL', dto, (input) =>
-      this.paypal.createOrder(input),
-    );
+    return this.paypalPaymentService.createOrder(merchantId, userId, dto);
   }
 
   async queryPayment(merchantId: string, userId: string | undefined, paymentId: string) {
@@ -208,14 +233,16 @@ export class PaymentsService {
       const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, merchantId } });
       if (!payment) throw new NotFoundException('Payment not found');
 
+      if (payment.provider === 'PAYPAL') {
+        return this.paypalPaymentService.queryOrder(merchantId, userId, paymentId);
+      }
+
       if (payment.provider === 'STRIPE') {
         return this.queryStripePayment(merchantId, userId, payment, correlationId);
       }
 
       if (payment.provider !== 'MPESA')
-        throw new BadRequestException(
-          'Only M-Pesa and Stripe payments support status queries right now',
-        );
+        throw new BadRequestException(`Unsupported payment provider: ${payment.provider}`);
       if (payment.status !== 'PENDING') return { paymentId: payment.id, status: payment.status };
       if (!payment.providerReference)
         throw new BadRequestException('This payment has no Safaricom CheckoutRequestID to query');
@@ -251,6 +278,36 @@ export class PaymentsService {
       );
       throw error;
     }
+  }
+
+  async getPayment(merchantId: string, userId: string | undefined, paymentId: string) {
+    const payment = await this.prisma.payment.findFirst({
+      where: { id: paymentId, merchantId },
+      include: { transactions: true },
+    });
+    if (!payment) throw new NotFoundException('Payment not found');
+
+    const status = await this.queryPayment(merchantId, userId, paymentId);
+    const refreshedPayment = await this.prisma.payment.findFirst({
+      where: { id: paymentId, merchantId },
+      include: { transactions: true },
+    });
+    if (!refreshedPayment) throw new NotFoundException('Payment not found');
+
+    return {
+      paymentId: refreshedPayment.id,
+      provider: refreshedPayment.provider,
+      environment: refreshedPayment.environment,
+      status: refreshedPayment.status,
+      amountCents: refreshedPayment.amountCents,
+      currency: refreshedPayment.currency,
+      customerId: refreshedPayment.customerId,
+      checkoutSessionId: refreshedPayment.checkoutSessionId,
+      providerReference: refreshedPayment.providerReference,
+      metadata: refreshedPayment.metadata,
+      transactions: refreshedPayment.transactions,
+      providerStatus: 'providerStatus' in status ? status.providerStatus : undefined,
+    };
   }
 
   private async queryStripePayment(
