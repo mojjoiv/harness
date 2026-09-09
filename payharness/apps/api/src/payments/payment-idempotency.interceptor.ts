@@ -9,13 +9,26 @@ import { Observable, from, throwError } from 'rxjs';
 import { catchError, mergeMap } from 'rxjs/operators';
 import { PaymentIdempotencyService } from './payment-idempotency.service';
 
+type PaymentRequest = {
+  user?: {
+    merchantId?: string;
+    type?: string;
+    environment?: string;
+  };
+  headers?: Record<string, string | string[] | undefined>;
+  body?: Record<string, unknown>;
+  params?: Record<string, string | undefined>;
+  route?: { path?: string };
+  path?: string;
+};
+
 @Injectable()
 export class PaymentIdempotencyInterceptor implements NestInterceptor {
   constructor(private readonly idempotency: PaymentIdempotencyService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const request = context.switchToHttp().getRequest();
-    const merchantId = request.user?.merchantId as string | undefined;
+    const request = context.switchToHttp().getRequest<PaymentRequest>();
+    const merchantId = request.user?.merchantId;
     const header = request.headers?.['idempotency-key'];
     const explicitKey = Array.isArray(header) ? header[0] : header;
     const body = request.body || {};
@@ -56,7 +69,7 @@ export class PaymentIdempotencyInterceptor implements NestInterceptor {
     );
   }
 
-  private resolveKey(request: any, body: Record<string, any>, explicitKey: unknown): string | undefined {
+  private resolveKey(request: PaymentRequest, body: Record<string, unknown>, explicitKey: unknown): string | undefined {
     if (typeof explicitKey === 'string' && explicitKey.trim()) {
       return explicitKey.trim();
     }
