@@ -125,6 +125,35 @@ export class PaypalProviderService {
     );
   }
 
+  async refundCapture(input: {
+    credentials: PaypalCredentials;
+    environment: 'SANDBOX' | 'LIVE';
+    captureId: string;
+    requestId: string;
+  }) {
+    const accessToken = await this.getAccessToken(input.credentials, input.environment);
+    const response = await this.request<{
+      id: string;
+      status: string;
+      amount?: { value: string; currency_code: string };
+    }>(
+      input.environment,
+      `/v2/payments/captures/${encodeURIComponent(input.captureId)}/refund`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'PayPal-Request-Id': input.requestId,
+          Prefer: 'return=representation',
+        },
+        body: '{}',
+      },
+    );
+    if (!response.id) throw new Error('PayPal did not return a refund id');
+    return response;
+  }
+
   private async getAccessToken(
     credentials: PaypalCredentials,
     environment: 'SANDBOX' | 'LIVE',
