@@ -5,7 +5,9 @@ import { PaymentIdempotencyService } from './payment-idempotency.service';
 
 describe('PaymentIdempotencyInterceptor', () => {
   let interceptor: PaymentIdempotencyInterceptor;
-  let idempotency: jest.Mocked<Pick<PaymentIdempotencyService, 'claim' | 'complete' | 'releaseForClientError'>>;
+  let idempotency: jest.Mocked<
+    Pick<PaymentIdempotencyService, 'claim' | 'complete' | 'releaseForClientError'>
+  >;
 
   const createContext = (request: Record<string, unknown>) => ({
     switchToHttp: () => ({ getRequest: () => request }),
@@ -25,7 +27,9 @@ describe('PaymentIdempotencyInterceptor', () => {
       complete: jest.fn().mockResolvedValue(undefined),
       releaseForClientError: jest.fn().mockResolvedValue(undefined),
     };
-    interceptor = new PaymentIdempotencyInterceptor(idempotency as unknown as PaymentIdempotencyService);
+    interceptor = new PaymentIdempotencyInterceptor(
+      idempotency as unknown as PaymentIdempotencyService,
+    );
   });
 
   it('automatically uses the database checkout session UUID when no header is supplied', async () => {
@@ -41,9 +45,11 @@ describe('PaymentIdempotencyInterceptor', () => {
       route: { path: '/payments' },
     };
 
-    await lastValueFrom(interceptor.intercept(createContext(request), {
-      handle: () => of({ id: 'payment-1' }),
-    }));
+    await lastValueFrom(
+      interceptor.intercept(createContext(request), {
+        handle: () => of({ id: 'payment-1' }),
+      }),
+    );
 
     expect(idempotency.claim).toHaveBeenCalledWith(
       'merchant-1',
@@ -65,9 +71,11 @@ describe('PaymentIdempotencyInterceptor', () => {
       route: { path: '/payments' },
     };
 
-    await lastValueFrom(interceptor.intercept(createContext(request), {
-      handle: () => of({ id: 'payment-1' }),
-    }));
+    await lastValueFrom(
+      interceptor.intercept(createContext(request), {
+        handle: () => of({ id: 'payment-1' }),
+      }),
+    );
 
     expect(idempotency.claim).toHaveBeenCalledWith(
       'merchant-1',
@@ -86,9 +94,11 @@ describe('PaymentIdempotencyInterceptor', () => {
       route: { path: '/payments/paypal/:id/capture' },
     };
 
-    await lastValueFrom(interceptor.intercept(createContext(request), {
-      handle: () => of({ id: 'payment-1' }),
-    }));
+    await lastValueFrom(
+      interceptor.intercept(createContext(request), {
+        handle: () => of({ id: 'payment-1' }),
+      }),
+    );
 
     expect(idempotency.claim).toHaveBeenCalledWith(
       'merchant-1',
@@ -109,9 +119,11 @@ describe('PaymentIdempotencyInterceptor', () => {
       route: { path: '/payments' },
     };
 
-    await lastValueFrom(interceptor.intercept(createContext(request), {
-      handle: () => of({ id: 'payment-1' }),
-    }));
+    await lastValueFrom(
+      interceptor.intercept(createContext(request), {
+        handle: () => of({ id: 'payment-1' }),
+      }),
+    );
 
     expect(idempotency.claim).toHaveBeenCalledWith(
       'merchant-1',
@@ -129,9 +141,13 @@ describe('PaymentIdempotencyInterceptor', () => {
       route: { path: '/payments' },
     };
 
-    await expect(lastValueFrom(interceptor.intercept(createContext(request), {
-      handle: () => of({ id: 'payment-1' }),
-    }))).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      lastValueFrom(
+        interceptor.intercept(createContext(request), {
+          handle: () => of({ id: 'payment-1' }),
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
 
     expect(idempotency.claim).not.toHaveBeenCalled();
   });
