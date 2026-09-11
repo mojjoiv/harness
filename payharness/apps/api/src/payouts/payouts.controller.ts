@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -24,7 +25,7 @@ export class PayoutsController {
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     if (!idempotencyKey) {
-      throw new Error('Idempotency-Key header is required');
+      throw new BadRequestException('Idempotency-Key header is required');
     }
 
     return this.payoutsService.createPayout(
