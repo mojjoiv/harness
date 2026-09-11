@@ -95,7 +95,7 @@ export class PaymentsController {
       user.merchantId as string,
       user.userId || undefined,
       id,
-      idempotencyKey || dto.idempotencyKey,
+      idempotencyKey,
       dto.amountCents,
     );
   }
