@@ -227,7 +227,12 @@ export class PaypalPaymentService {
     );
   }
 
-  async refundPayment(merchantId: string, userId: string | undefined, paymentId: string) {
+  async refundPayment(
+    merchantId: string,
+    userId: string | undefined,
+    paymentId: string,
+    amountCents?: number,
+  ) {
     const payment = await this.findPayment(merchantId, paymentId);
     if (payment.provider !== 'PAYPAL') {
       throw new BadRequestException('Payment is not a PayPal payment');
@@ -272,19 +277,25 @@ export class PaypalPaymentService {
       },
       environment: payment.environment,
       captureId: capture.id,
-      requestId: `payharness-refund-${payment.id}`,
+      requestId: `payharness-refund-${payment.id}-${amountCents || 'full'}`,
+      amountCents,
+      currency: payment.currency,
     });
 
     if (refund.status !== 'COMPLETED') {
       throw new BadRequestException(`PayPal refund is not completed: ${refund.status}`);
     }
 
+    const refundedAmountCents = refund.amount?.value
+      ? Math.round(Number(refund.amount.value) * 100)
+      : amountCents || payment.amountCents;
+
     return {
       paymentId: payment.id,
       status: 'REFUNDED' as const,
       provider: 'PAYPAL' as const,
       refundId: refund.id,
-      amountCents: payment.amountCents,
+      amountCents: refundedAmountCents,
       currency: payment.currency,
     };
   }
