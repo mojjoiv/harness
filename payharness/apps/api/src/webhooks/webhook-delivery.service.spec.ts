@@ -127,6 +127,7 @@ describe('WebhookDeliveryService', () => {
 
     const service = new WebhookDeliveryService(prisma as any, configMock() as any);
     jest.spyOn(service as any, 'postJson').mockRejectedValue(new Error('connection refused'));
+    jest.spyOn(service as any, 'isRetryableError').mockReturnValue(true);
     jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
 
     const result = await service.deliver('delivery-1');
