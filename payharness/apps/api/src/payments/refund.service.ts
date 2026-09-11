@@ -29,37 +29,78 @@ export class RefundService {
     userId: string | undefined,
     paymentId: string,
     explicitIdempotencyKey?: string,
+    requestedAmountCents?: number,
   ) {
     const payment = await this.findPayment(merchantId, paymentId);
-    const key = explicitIdempotencyKey?.trim() || `refund:payment:${payment.id}`;
+    const isFullRefund = requestedAmountCents === undefined;
+    if (
+      requestedAmountCents !== undefined &&
+      (!Number.isInteger(requestedAmountCents) || requestedAmountCents <= 0)
+    ) {
+      throw new BadRequestException('Refund amount must be a positive integer in cents.');
+    }
+
+    const key =
+      explicitIdempotencyKey?.trim() ||
+      (isFullRefund
+        ? `refund:payment:${payment.id}`
+        : `refund:payment:${payment.id}:amount:${requestedAmountCents}`);
     if (key.length < 8 || key.length > 255) {
       throw new ConflictException('The refund idempotency key must be 8-255 characters long.');
     }
 
-    const existingRefund = await this.prisma.transaction.findFirst({
+    if (isFullRefund) {
+      const existingRefund = await this.prisma.transaction.findFirst({
+        where: {
+          paymentId: payment.id,
+          merchantId,
+          type: 'REFUND',
+          status: 'SUCCEEDED',
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (existingRefund && existingRefund.amountCents === payment.amountCents) {
+        return {
+          paymentId: payment.id,
+          status: 'REFUNDED' as const,
+          provider: payment.provider,
+          refundId: existingRefund.reference,
+          amountCents: existingRefund.amountCents,
+          currency: existingRefund.currency,
+          idempotent: true,
+        };
+      }
+    }
+
+    const successfulRefunds = await this.prisma.transaction.findMany({
       where: {
         paymentId: payment.id,
         merchantId,
         type: 'REFUND',
         status: 'SUCCEEDED',
       },
+      select: { amountCents: true },
     });
-    if (existingRefund) {
-      return {
-        paymentId: payment.id,
-        status: 'REFUNDED' as const,
-        provider: payment.provider,
-        refundId: existingRefund.reference,
-        amountCents: existingRefund.amountCents,
-        currency: existingRefund.currency,
-        idempotent: true,
-      };
+    const refundedAmountCents = successfulRefunds.reduce(
+      (total, transaction) => total + transaction.amountCents,
+      0,
+    );
+    const remainingAmountCents = payment.amountCents - refundedAmountCents;
+    const amountCents = requestedAmountCents ?? remainingAmountCents;
+
+    if (amountCents <= 0) {
+      throw new ConflictException('Payment has already been fully refunded.');
+    }
+    if (amountCents > remainingAmountCents) {
+      throw new ConflictException(
+        `Refund amount exceeds the remaining refundable amount of ${remainingAmountCents} cents.`,
+      );
     }
 
     const { claim, replay } = await this.idempotency.claim(merchantId, payment.environment, key, {
       paymentId: payment.id,
       operation: 'refund',
-      amountCents: payment.amountCents,
+      amountCents,
     });
     if (replay !== undefined) return replay;
 
@@ -75,13 +116,30 @@ export class RefundService {
       }
 
       let refundId: string;
+      let providerRefundAmountCents = amountCents;
       if (payment.provider === 'STRIPE') {
-        refundId = await this.refundStripe(merchantId, payment);
+        const refund = await this.refundStripe(merchantId, payment, amountCents);
+        refundId = refund.id;
+        providerRefundAmountCents = refund.amount || amountCents;
       } else if (payment.provider === 'PAYPAL') {
-        const result = await this.paypal.refundPayment(merchantId, userId, payment.id);
+        const result = await this.paypal.refundPayment(
+          merchantId,
+          userId,
+          payment.id,
+          amountCents,
+        );
         refundId = result.refundId;
+        providerRefundAmountCents = result.amountCents;
       } else {
         throw new BadRequestException(`Unsupported payment provider: ${payment.provider}`);
+      }
+
+      if (
+        !Number.isInteger(providerRefundAmountCents) ||
+        providerRefundAmountCents <= 0 ||
+        providerRefundAmountCents > amountCents
+      ) {
+        throw new BadRequestException('Provider returned an invalid refund amount.');
       }
 
       await this.prisma.transaction.create({
@@ -89,24 +147,30 @@ export class RefundService {
           merchantId,
           paymentId: payment.id,
           type: 'REFUND',
-          amountCents: payment.amountCents,
+          amountCents: providerRefundAmountCents,
           currency: payment.currency,
           status: 'SUCCEEDED',
           reference: refundId,
           metadata: {
-            operation: 'full_refund',
+            operation: isFullRefund ? 'full_refund' : 'partial_refund',
             provider: payment.provider,
             originalPaymentId: payment.id,
+            requestedAmountCents: amountCents,
+            refundedAmountCents: providerRefundAmountCents,
           } as Prisma.InputJsonValue,
         },
       });
 
+      const totalRefundedAmountCents = refundedAmountCents + providerRefundAmountCents;
+      const fullyRefunded = totalRefundedAmountCents === payment.amountCents;
       const response = {
         paymentId: payment.id,
-        status: 'REFUNDED' as const,
+        status: fullyRefunded ? ('REFUNDED' as const) : ('PARTIALLY_REFUNDED' as const),
         provider: payment.provider,
         refundId,
-        amountCents: payment.amountCents,
+        amountCents: providerRefundAmountCents,
+        refundedAmountCents: totalRefundedAmountCents,
+        remainingAmountCents: payment.amountCents - totalRefundedAmountCents,
         currency: payment.currency,
         idempotent: false,
       };
@@ -121,7 +185,9 @@ export class RefundService {
           provider: payment.provider,
           environment: payment.environment,
           refundId,
-          amountCents: payment.amountCents,
+          amountCents: providerRefundAmountCents,
+          refundedAmountCents: totalRefundedAmountCents,
+          remainingAmountCents: payment.amountCents - totalRefundedAmountCents,
           currency: payment.currency,
         },
       });
@@ -138,7 +204,11 @@ export class RefundService {
     }
   }
 
-  private async refundStripe(merchantId: string, payment: Payment): Promise<string> {
+  private async refundStripe(
+    merchantId: string,
+    payment: Payment,
+    amountCents: number,
+  ): Promise<{ id: string; amount: number }> {
     if (!payment.providerReference) {
       throw new BadRequestException('Stripe PaymentIntent reference is missing');
     }
@@ -169,11 +239,12 @@ export class RefundService {
     const refund = await this.stripe.refundPaymentIntent(
       secrets.secretKey,
       payment.providerReference,
+      amountCents,
     );
     if (refund.status !== 'succeeded') {
       throw new BadRequestException(`Stripe refund is not completed: ${refund.status}`);
     }
-    return refund.id;
+    return { id: refund.id, amount: refund.amount };
   }
 
   private async findPayment(merchantId: string, paymentId: string) {
