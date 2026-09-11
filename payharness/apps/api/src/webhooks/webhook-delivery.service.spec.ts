@@ -111,9 +111,9 @@ describe('WebhookDeliveryService', () => {
     const prisma = prismaMock();
     prisma.webhookDelivery.findUnique.mockResolvedValue({
       id: 'delivery-1',
-      status: 'FAILED',
-      attempts: 3,
-      responseCode: 500,
+      status: 'PENDING',
+      attempts: 0,
+      responseCode: null,
       endpoint: {
         id: 'endpoint-1',
         url: 'https://merchant.example/webhook',
