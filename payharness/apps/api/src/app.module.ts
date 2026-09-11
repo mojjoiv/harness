@@ -8,6 +8,7 @@ import { ProviderCredentialsModule } from './provider-credentials/provider-crede
 import { ProviderAvailabilityModule } from './provider-availability/provider-availability.module';
 import { CheckoutSessionsModule } from './checkout-sessions/checkout-sessions.module';
 import { PaymentsModule } from './payments/payments.module';
+import { PayoutsModule } from './payouts/payouts.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { WebhookDeliveriesModule } from './webhook-deliveries/webhook-deliveries.module';
@@ -41,6 +42,7 @@ import { PlatformModule } from './platform/platform.module';
     PaymentProvidersModule,
     CheckoutSessionsModule,
     PaymentsModule,
+    PayoutsModule,
     TransactionsModule,
     WebhooksModule,
     WebhookDeliveriesModule,
