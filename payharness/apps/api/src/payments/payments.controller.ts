@@ -12,6 +12,7 @@ import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorat
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
+import { RefundPaymentDto } from './dto/refund-payment.dto';
 import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor';
 import { PaymentsService } from './payments.service';
 import { RefundService } from './refund.service';
@@ -87,13 +88,15 @@ export class PaymentsController {
   refund(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
+    @Body() dto: RefundPaymentDto,
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     return this.refundService.refund(
       user.merchantId as string,
       user.userId || undefined,
       id,
-      idempotencyKey,
+      idempotencyKey || dto.idempotencyKey,
+      dto.amountCents,
     );
   }
 
