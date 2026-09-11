@@ -141,11 +141,21 @@ export class PaypalProviderService {
     environment: 'SANDBOX' | 'LIVE';
     captureId: string;
     requestId: string;
+    amountCents?: number;
+    currency?: string;
   }) {
     const accessToken = await this.getAccessToken(
       input.credentials,
       input.environment,
     );
+    if (
+      input.amountCents !== undefined &&
+      (!Number.isInteger(input.amountCents) || input.amountCents <= 0)
+    ) {
+      throw new BadRequestException(
+        'PayPal refund amount must be a positive integer in cents',
+      );
+    }
     const response = await this.request<{
       id: string;
       status: string;
@@ -161,7 +171,16 @@ export class PaypalProviderService {
           'PayPal-Request-Id': input.requestId,
           Prefer: 'return=representation',
         },
-        body: '{}',
+        body: JSON.stringify(
+          input.amountCents === undefined
+            ? {}
+            : {
+                amount: {
+                  value: (input.amountCents / 100).toFixed(2),
+                  currency_code: input.currency?.toUpperCase(),
+                },
+              },
+        ),
       },
     );
     if (!response.id) {
