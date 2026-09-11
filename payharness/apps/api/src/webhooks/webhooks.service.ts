@@ -1,11 +1,10 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PaymentStatus, Prisma, Provider } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
-import { createHash, randomBytes } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, paginated } from '../common/pagination/pagination';
 import { PrismaService } from '../common/prisma.service';
+import { createHash, randomBytes } from 'crypto';
 import { CreateWebhookEndpointDto } from './dto/create-webhook-endpoint.dto';
 import { WebhookDeliveryService } from './webhook-delivery.service';
 
@@ -21,12 +20,13 @@ export class WebhooksService {
 
   async createEndpoint(merchantId: string, userId: string, dto: CreateWebhookEndpointDto) {
     const secret = `whsec_${randomBytes(24).toString('hex')}`;
+    const secretHash = createHash('sha256').update(secret).digest('hex');
     const endpoint = await this.prisma.webhookEndpoint.create({
       data: {
         merchantId,
         url: dto.url,
         events: dto.events,
-        secretHash: await bcrypt.hash(secret, 12),
+        secretHash,
       },
     });
     await this.auditLogs.create({
@@ -39,6 +39,31 @@ export class WebhooksService {
     const { secretHash: _secretHash, ...safeEndpoint } = endpoint;
     void _secretHash;
     return { ...safeEndpoint, secret };
+  }
+
+  async rotateEndpointSecret(merchantId: string, userId: string, id: string) {
+    const endpoint = await this.prisma.webhookEndpoint.findFirst({
+      where: { id, merchantId },
+    });
+    if (!endpoint) throw new NotFoundException('Webhook endpoint not found');
+
+    const secret = `whsec_${randomBytes(24).toString('hex')}`;
+    const secretHash = createHash('sha256').update(secret).digest('hex');
+    const { secretHash: _secretHash, ...updated } = await this.prisma.webhookEndpoint.update({
+      where: { id },
+      data: { secretHash },
+    });
+    void _secretHash;
+
+    await this.auditLogs.create({
+      merchantId,
+      userId,
+      action: 'webhook.secret_rotated',
+      entity: 'webhook_endpoint',
+      entityId: id,
+    });
+
+    return { ...updated, secret };
   }
 
   async listEndpoints(merchantId: string, query: PaginationQueryDto) {
@@ -63,13 +88,37 @@ export class WebhooksService {
     );
   }
 
+  async listDeliveries(merchantId: string, query: PaginationQueryDto) {
+    const pagination = getPagination(query, ['createdAt', 'status', 'eventType']);
+    const [deliveries, total] = await Promise.all([
+      this.prisma.webhookDelivery.findMany({
+        where: { endpoint: { merchantId } },
+        orderBy: { [pagination.sort]: pagination.order },
+        skip: pagination.skip,
+        take: pagination.take,
+        select: {
+          id: true,
+          webhookEndpointId: true,
+          eventType: true,
+          status: true,
+          attempts: true,
+          responseCode: true,
+          responseBody: true,
+          createdAt: true,
+          deliveredAt: true,
+        },
+      }),
+      this.prisma.webhookDelivery.count({ where: { endpoint: { merchantId } } }),
+    ]);
+
+    return paginated(deliveries, total, pagination);
+  }
+
   async disableEndpoint(merchantId: string, id: string) {
     const endpoint = await this.prisma.webhookEndpoint.findFirst({
       where: { id, merchantId },
     });
-    if (!endpoint) {
-      throw new NotFoundException('Webhook endpoint not found');
-    }
+    if (!endpoint) throw new NotFoundException('Webhook endpoint not found');
     const { secretHash: _secretHash, ...updated } = await this.prisma.webhookEndpoint.update({
       where: { id },
       data: { status: 'INACTIVE' },
@@ -82,9 +131,7 @@ export class WebhooksService {
     const endpoint = await this.prisma.webhookEndpoint.findFirst({
       where: { id, merchantId },
     });
-    if (!endpoint) {
-      throw new NotFoundException('Webhook endpoint not found');
-    }
+    if (!endpoint) throw new NotFoundException('Webhook endpoint not found');
     const payload = {
       type: 'webhook.test',
       endpointId: id,
@@ -105,16 +152,10 @@ export class WebhooksService {
 
   async retryDelivery(merchantId: string, deliveryId: string) {
     const delivery = await this.prisma.webhookDelivery.findFirst({
-      where: {
-        id: deliveryId,
-        endpoint: { merchantId },
-      },
+      where: { id: deliveryId, endpoint: { merchantId } },
       select: { id: true },
     });
-    if (!delivery) {
-      throw new NotFoundException('Webhook delivery not found');
-    }
-
+    if (!delivery) throw new NotFoundException('Webhook delivery not found');
     return this.deliveryService.deliver(delivery.id);
   }
 
@@ -154,32 +195,15 @@ export class WebhooksService {
     }
   }
 
-  async receiveForMerchant(
-    providerParam: string,
-    merchantId: string,
-    payload: Record<string, unknown>,
-  ) {
+  async receiveForMerchant(providerParam: string, merchantId: string, payload: Record<string, unknown>) {
     const provider = providerParam.toUpperCase() as Provider;
     const eventType = String(payload.type || payload.event || 'provider.event');
     const eventId = this.providerEventId(payload);
     const correlationId = randomBytes(8).toString('hex');
 
-    this.logger.log(
-      `[Provider webhook] START provider=${provider} merchantId=${merchantId} eventType=${eventType} eventId=${eventId} correlationId=${correlationId}`,
-    );
-
     try {
-      const merchant = await this.prisma.merchant.findUnique({
-        where: { id: merchantId },
-        select: { id: true },
-      });
-      if (!merchant) {
-        this.logger.error(
-          `[Provider webhook] UNKNOWN MERCHANT provider=${provider} merchantId=${merchantId} eventType=${eventType} eventId=${eventId} correlationId=${correlationId}`,
-        );
-        throw new NotFoundException('Unknown merchant');
-      }
-
+      const merchant = await this.prisma.merchant.findUnique({ where: { id: merchantId }, select: { id: true } });
+      if (!merchant) throw new NotFoundException('Unknown merchant');
       const result = await this.receive(provider, { ...payload, _merchantId: merchantId });
       this.logger.log(
         `[Provider webhook] COMPLETE provider=${provider} merchantId=${merchantId} eventType=${eventType} eventId=${eventId} deliveryId=${result.deliveryId} correlationId=${correlationId}`,
@@ -201,9 +225,7 @@ export class WebhooksService {
 
   private stableStringify(value: unknown): string {
     if (value === null || typeof value !== 'object') return JSON.stringify(value);
-    if (Array.isArray(value)) {
-      return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
-    }
+    if (Array.isArray(value)) return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
     const object = value as Record<string, unknown>;
     return `{${Object.keys(object)
       .sort()
@@ -225,27 +247,20 @@ export class WebhooksService {
       ON CONFLICT ("provider", "provider_event_id") DO NOTHING
       RETURNING "id"
     `;
-
     if (rows[0]) return { deliveryId: rows[0].id, duplicate: false };
 
     const existing = await this.prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT "id"
-      FROM "webhook_deliveries"
-      WHERE "provider" = ${provider}::"Provider"
-        AND "provider_event_id" = ${eventId}
+      SELECT "id" FROM "webhook_deliveries"
+      WHERE "provider" = ${provider}::"Provider" AND "provider_event_id" = ${eventId}
       LIMIT 1
     `;
     if (!existing[0]) throw new Error('Provider webhook event could not be claimed');
     return { deliveryId: existing[0].id, duplicate: true };
   }
 
-  private async processProviderPaymentEvent(
-    provider: Provider,
-    payload: Record<string, unknown>,
-  ): Promise<void> {
+  private async processProviderPaymentEvent(provider: Provider, payload: Record<string, unknown>): Promise<void> {
     const merchantId = typeof payload._merchantId === 'string' ? payload._merchantId : undefined;
     if (!merchantId) return;
-
     const eventType = String(payload.type || payload.event || '');
     let providerReference: string | undefined;
     let status: PaymentStatus | undefined;
@@ -255,10 +270,7 @@ export class WebhooksService {
       const resource = data?.object as Record<string, unknown> | undefined;
       providerReference = typeof resource?.id === 'string' ? resource.id : undefined;
       if (eventType === 'payment_intent.succeeded') status = PaymentStatus.SUCCEEDED;
-      if (
-        eventType === 'payment_intent.payment_failed' ||
-        eventType === 'payment_intent.canceled'
-      ) {
+      if (eventType === 'payment_intent.payment_failed' || eventType === 'payment_intent.canceled') {
         status = PaymentStatus.FAILED;
       }
     }
@@ -266,40 +278,21 @@ export class WebhooksService {
     if (provider === Provider.MPESA) {
       const body = payload.Body as Record<string, unknown> | undefined;
       const callback = body?.stkCallback as Record<string, unknown> | undefined;
-      providerReference =
-        typeof callback?.CheckoutRequestID === 'string' ? callback.CheckoutRequestID : undefined;
+      providerReference = typeof callback?.CheckoutRequestID === 'string' ? callback.CheckoutRequestID : undefined;
       if (callback && typeof callback.ResultCode !== 'undefined') {
         status = Number(callback.ResultCode) === 0 ? PaymentStatus.SUCCEEDED : PaymentStatus.FAILED;
       }
     }
 
     if (!providerReference || !status) return;
-
-    const payment = await this.prisma.payment.findFirst({
-      where: { merchantId, provider, providerReference },
-    });
+    const payment = await this.prisma.payment.findFirst({ where: { merchantId, provider, providerReference } });
     if (!payment) return;
-    if (
-      payment.status === PaymentStatus.SUCCEEDED ||
-      payment.status === PaymentStatus.FAILED ||
-      payment.status === status
-    ) {
-      return;
-    }
+    if (payment.status === PaymentStatus.SUCCEEDED || payment.status === PaymentStatus.FAILED || payment.status === status) return;
 
-    await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: { status },
-    });
-    await this.prisma.transaction.updateMany({
-      where: { paymentId: payment.id },
-      data: { status },
-    });
+    await this.prisma.payment.update({ where: { id: payment.id }, data: { status } });
+    await this.prisma.transaction.updateMany({ where: { paymentId: payment.id }, data: { status } });
     if (payment.checkoutSessionId) {
-      await this.prisma.checkoutSession.update({
-        where: { id: payment.checkoutSessionId },
-        data: { status },
-      });
+      await this.prisma.checkoutSession.update({ where: { id: payment.checkoutSessionId }, data: { status } });
     }
     await this.auditLogs.create({
       merchantId,

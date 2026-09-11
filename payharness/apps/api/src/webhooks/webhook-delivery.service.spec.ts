@@ -11,28 +11,54 @@ describe('WebhookDeliveryService', () => {
     };
   }
 
-  it('delivers a pending webhook and records the response', async () => {
+  function configMock() {
+    return {
+      get: jest.fn((key: string) => {
+        if (key === 'WEBHOOK_MAX_ATTEMPTS') return '3';
+        if (key === 'WEBHOOK_RETRY_DELAYS_MS') return '0,0,0';
+        return undefined;
+      }),
+    };
+  }
+
+  it('delivers a pending webhook, signs it, and records the response', async () => {
     const prisma = prismaMock();
     prisma.webhookDelivery.findUnique.mockResolvedValue({
       id: 'delivery-1',
       status: 'PENDING',
       attempts: 0,
       responseCode: null,
-      endpoint: { id: 'endpoint-1', url: 'https://merchant.example/webhook', status: 'ACTIVE' },
+      endpoint: {
+        id: 'endpoint-1',
+        url: 'https://merchant.example/webhook',
+        status: 'ACTIVE',
+        secretHash: 'secret-hash',
+      },
+      eventType: 'payment.succeeded',
       payload: { type: 'payment.succeeded' },
     });
     prisma.webhookDelivery.update.mockResolvedValue({});
 
-    const service = new WebhookDeliveryService(prisma as any);
-    jest.spyOn(service as any, 'postJson').mockResolvedValue({ statusCode: 200, body: 'ok' });
+    const service = new WebhookDeliveryService(prisma as any, configMock() as any);
+    const postJson = jest
+      .spyOn(service as any, 'postJson')
+      .mockResolvedValue({ statusCode: 200, body: 'ok' });
 
     const result = await service.deliver('delivery-1');
 
-    expect(result).toEqual({ delivered: true, deliveryId: 'delivery-1', attempts: 1, responseCode: 200 });
-    expect(prisma.webhookDelivery.update).toHaveBeenLastCalledWith({
-      where: { id: 'delivery-1' },
-      data: expect.objectContaining({ status: 'SUCCEEDED', responseCode: 200, responseBody: 'ok' }),
+    expect(result).toEqual({
+      delivered: true,
+      deliveryId: 'delivery-1',
+      attempts: 1,
+      responseCode: 200,
+      signatureAlgorithm: 'HMAC-SHA256',
     });
+    expect(postJson).toHaveBeenCalledWith(
+      'https://merchant.example/webhook',
+      { type: 'payment.succeeded' },
+      'secret-hash',
+      'payment.succeeded',
+    );
   });
 
   it('does not send a webhook twice after it has succeeded', async () => {
@@ -46,7 +72,7 @@ describe('WebhookDeliveryService', () => {
       payload: { type: 'payment.succeeded' },
     });
 
-    const service = new WebhookDeliveryService(prisma as any);
+    const service = new WebhookDeliveryService(prisma as any, configMock() as any);
     const postJson = jest.spyOn(service as any, 'postJson');
 
     const result = await service.deliver('delivery-1');
@@ -66,7 +92,7 @@ describe('WebhookDeliveryService', () => {
       payload: { paymentId: 'payment-1', event: 'payment.succeeded' },
     });
 
-    const service = new WebhookDeliveryService(prisma as any);
+    const service = new WebhookDeliveryService(prisma as any, configMock() as any);
     const postJson = jest.spyOn(service as any, 'postJson');
 
     const result = await service.deliverToUrl(
@@ -81,20 +107,27 @@ describe('WebhookDeliveryService', () => {
     expect(prisma.webhookDelivery.create).not.toHaveBeenCalled();
   });
 
-  it('retries failed delivery and marks it failed after the final attempt', async () => {
+  it('retries connection failures and marks delivery failed after the final attempt', async () => {
     const prisma = prismaMock();
     prisma.webhookDelivery.findUnique.mockResolvedValue({
       id: 'delivery-1',
-      status: 'FAILED',
-      attempts: 3,
-      responseCode: 500,
-      endpoint: { id: 'endpoint-1', url: 'https://merchant.example/webhook', status: 'ACTIVE' },
+      status: 'PENDING',
+      attempts: 0,
+      responseCode: null,
+      endpoint: {
+        id: 'endpoint-1',
+        url: 'https://merchant.example/webhook',
+        status: 'ACTIVE',
+        secretHash: 'secret-hash',
+      },
+      eventType: 'payment.failed',
       payload: { type: 'payment.failed' },
     });
     prisma.webhookDelivery.update.mockResolvedValue({});
 
-    const service = new WebhookDeliveryService(prisma as any);
+    const service = new WebhookDeliveryService(prisma as any, configMock() as any);
     jest.spyOn(service as any, 'postJson').mockRejectedValue(new Error('connection refused'));
+    jest.spyOn(service as any, 'isRetryableError').mockReturnValue(true);
     jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
 
     const result = await service.deliver('delivery-1');
@@ -110,5 +143,33 @@ describe('WebhookDeliveryService', () => {
       where: { id: 'delivery-1' },
       data: expect.objectContaining({ status: 'FAILED' }),
     });
+  });
+
+  it('does not retry a permanent 4xx response', async () => {
+    const prisma = prismaMock();
+    prisma.webhookDelivery.findUnique.mockResolvedValue({
+      id: 'delivery-4xx',
+      status: 'PENDING',
+      attempts: 0,
+      endpoint: {
+        id: 'endpoint-1',
+        url: 'https://merchant.example/webhook',
+        status: 'ACTIVE',
+        secretHash: 'secret-hash',
+      },
+      eventType: 'payment.failed',
+      payload: { type: 'payment.failed' },
+    });
+    prisma.webhookDelivery.update.mockResolvedValue({});
+
+    const service = new WebhookDeliveryService(prisma as any, configMock() as any);
+    jest.spyOn(service as any, 'postJson').mockRejectedValue(new Error('Webhook endpoint responded with 400'));
+
+    const isRetryable = jest.spyOn(service as any, 'isRetryableError').mockReturnValue(false);
+    const result = await service.deliver('delivery-4xx');
+
+    expect(result).toMatchObject({ delivered: false, deliveryId: 'delivery-4xx', attempts: 1 });
+    expect((service as any).postJson).toHaveBeenCalledTimes(1);
+    expect(isRetryable).toHaveBeenCalled();
   });
 });
