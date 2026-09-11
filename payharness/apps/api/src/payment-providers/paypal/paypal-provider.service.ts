@@ -38,7 +38,10 @@ export class PaypalProviderService {
 
   async createOrder(input: PaypalOrderInput | Record<string, unknown>) {
     const typedInput = input as PaypalOrderInput;
-    const accessToken = await this.getAccessToken(typedInput.credentials, typedInput.environment);
+    const accessToken = await this.getAccessToken(
+      typedInput.credentials,
+      typedInput.environment,
+    );
     const requestId = randomUUID();
     const response = await this.request<PaypalOrderResponse>(
       typedInput.environment,
@@ -74,7 +77,9 @@ export class PaypalProviderService {
       },
     );
 
-    const approvalUrl = response.links?.find((link) => link.rel === 'approve')?.href;
+    const approvalUrl = response.links?.find(
+      (link) => link.rel === 'approve',
+    )?.href;
     if (!approvalUrl) {
       throw new BadRequestException('PayPal did not return an approval URL');
     }
@@ -92,7 +97,10 @@ export class PaypalProviderService {
     environment: 'SANDBOX' | 'LIVE';
     orderId: string;
   }) {
-    const accessToken = await this.getAccessToken(input.credentials, input.environment);
+    const accessToken = await this.getAccessToken(
+      input.credentials,
+      input.environment,
+    );
     return this.request<PaypalOrderResponse>(
       input.environment,
       `/v2/checkout/orders/${encodeURIComponent(input.orderId)}/capture`,
@@ -114,7 +122,10 @@ export class PaypalProviderService {
     environment: 'SANDBOX' | 'LIVE';
     orderId: string;
   }) {
-    const accessToken = await this.getAccessToken(input.credentials, input.environment);
+    const accessToken = await this.getAccessToken(
+      input.credentials,
+      input.environment,
+    );
     return this.request<PaypalOrderResponse>(
       input.environment,
       `/v2/checkout/orders/${encodeURIComponent(input.orderId)}`,
@@ -125,24 +136,64 @@ export class PaypalProviderService {
     );
   }
 
+  async refundCapture(input: {
+    credentials: PaypalCredentials;
+    environment: 'SANDBOX' | 'LIVE';
+    captureId: string;
+    requestId: string;
+  }) {
+    const accessToken = await this.getAccessToken(
+      input.credentials,
+      input.environment,
+    );
+    const response = await this.request<{
+      id: string;
+      status: string;
+      amount?: { value: string; currency_code: string };
+    }>(
+      input.environment,
+      `/v2/payments/captures/${encodeURIComponent(input.captureId)}/refund`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'PayPal-Request-Id': input.requestId,
+          Prefer: 'return=representation',
+        },
+        body: '{}',
+      },
+    );
+    if (!response.id) {
+      throw new Error('PayPal did not return a refund id');
+    }
+    return response;
+  }
+
   private async getAccessToken(
     credentials: PaypalCredentials,
     environment: 'SANDBOX' | 'LIVE',
   ): Promise<string> {
-    const basic = Buffer.from(`${credentials.clientId}:${credentials.clientSecret}`).toString(
-      'base64',
-    );
-    const response = await this.request<{ access_token: string }>(environment, '/v1/oauth2/token', {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${basic}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
+    const basic = Buffer.from(
+      `${credentials.clientId}:${credentials.clientSecret}`,
+    ).toString('base64');
+    const response = await this.request<{ access_token: string }>(
+      environment,
+      '/v1/oauth2/token',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${basic}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+        },
+        body: 'grant_type=client_credentials',
       },
-      body: 'grant_type=client_credentials',
-    });
+    );
     if (!response.access_token) {
-      throw new BadRequestException('PayPal OAuth did not return an access token');
+      throw new BadRequestException(
+        'PayPal OAuth did not return an access token',
+      );
     }
     return response.access_token;
   }
@@ -152,7 +203,8 @@ export class PaypalProviderService {
     path: string,
     init: RequestInit,
   ): Promise<T> {
-    const baseUrl = environment === 'SANDBOX' ? this.sandboxBaseUrl : this.liveBaseUrl;
+    const baseUrl =
+      environment === 'SANDBOX' ? this.sandboxBaseUrl : this.liveBaseUrl;
     const response = await fetch(`${baseUrl}${path}`, init);
     const text = await response.text();
     let body: unknown = undefined;
@@ -166,7 +218,9 @@ export class PaypalProviderService {
         typeof body === 'object' && body !== null
           ? JSON.stringify(body)
           : String(body ?? response.statusText);
-      throw new BadRequestException(`PayPal API request failed (${response.status}): ${detail}`);
+      throw new BadRequestException(
+        `PayPal API request failed (${response.status}): ${detail}`,
+      );
     }
     return body as T;
   }

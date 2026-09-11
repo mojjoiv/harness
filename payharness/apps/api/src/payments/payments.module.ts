@@ -9,6 +9,7 @@ import { PaymentsService } from './payments.service';
 import { PaymentIdempotencyService } from './payment-idempotency.service';
 import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
+import { RefundService } from './refund.service';
 
 @Module({
   imports: [AuditLogsModule, PaymentProvidersModule, WebhooksModule],
@@ -19,6 +20,7 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
     PaymentIdempotencyService,
     PaymentIdempotencyInterceptor,
     PaymentReconciliationService,
+    RefundService,
   ],
 })
 export class PaymentsModule {}

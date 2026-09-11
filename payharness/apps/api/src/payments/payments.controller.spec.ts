@@ -1,5 +1,6 @@
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { RefundService } from './refund.service';
 
 describe('PaymentsController environment safety and orchestration', () => {
   let controller: PaymentsController;
@@ -16,6 +17,7 @@ describe('PaymentsController environment safety and orchestration', () => {
       | 'getPayment'
     >
   >;
+  let refundService: jest.Mocked<Pick<RefundService, 'refund'>>;
 
   beforeEach(() => {
     paymentsService = {
@@ -28,7 +30,13 @@ describe('PaymentsController environment safety and orchestration', () => {
       queryPayment: jest.fn(),
       getPayment: jest.fn(),
     };
-    controller = new PaymentsController(paymentsService as unknown as PaymentsService);
+    refundService = {
+      refund: jest.fn(),
+    };
+    controller = new PaymentsController(
+      paymentsService as unknown as PaymentsService,
+      refundService as unknown as RefundService,
+    );
   });
 
   it('routes unified payment creation to the orchestration service', () => {
@@ -127,6 +135,23 @@ describe('PaymentsController environment safety and orchestration', () => {
     );
   });
 
+  it('delegates the refund endpoint to the refund service', () => {
+    const user = {
+      userId: 'user-6',
+      merchantId: 'merchant-6',
+      type: 'merchant',
+    } as any;
+
+    controller.refund(user, 'payment-6', 'refund-key-6');
+
+    expect(refundService.refund).toHaveBeenCalledWith(
+      'merchant-6',
+      'user-6',
+      'payment-6',
+      'refund-key-6',
+    );
+  });
+
   it('delegates the canonical payment resource endpoint to the service', () => {
     const user = {
       userId: 'user-4',
@@ -136,7 +161,11 @@ describe('PaymentsController environment safety and orchestration', () => {
 
     controller.get(user, 'payment-4');
 
-    expect(paymentsService.getPayment).toHaveBeenCalledWith('merchant-4', 'user-4', 'payment-4');
+    expect(paymentsService.getPayment).toHaveBeenCalledWith(
+      'merchant-4',
+      'user-4',
+      'payment-4',
+    );
   });
 
   it('delegates the generic payment query endpoint to the service', () => {
@@ -148,6 +177,10 @@ describe('PaymentsController environment safety and orchestration', () => {
 
     controller.query(user, 'payment-5');
 
-    expect(paymentsService.queryPayment).toHaveBeenCalledWith('merchant-5', 'user-5', 'payment-5');
+    expect(paymentsService.queryPayment).toHaveBeenCalledWith(
+      'merchant-5',
+      'user-5',
+      'payment-5',
+    );
   });
 });

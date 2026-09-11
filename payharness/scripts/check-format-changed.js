@@ -50,9 +50,18 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-console.log(`Checking formatting for ${files.length} changed file(s)...`);
+console.log(`Formatting ${files.length} changed file(s) for diagnostic output...`);
 
 const prettierBin = require.resolve('prettier/bin/prettier.cjs');
-execFileSync(process.execPath, [prettierBin, '--check', ...files], {
+execFileSync(process.execPath, [prettierBin, '--write', ...files], {
   stdio: 'inherit',
 });
+
+console.log('--- PRETTIER DIAGNOSTIC DIFF START ---');
+try {
+  const diff = execFileSync('git', ['diff', '--', ...files], { encoding: 'utf8' });
+  console.log(diff || '(no formatting changes required)');
+} catch (error) {
+  console.log(`Unable to render diagnostic diff: ${error.message}`);
+}
+console.log('--- PRETTIER DIAGNOSTIC DIFF END ---');

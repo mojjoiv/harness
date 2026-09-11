@@ -1,15 +1,28 @@
-import { Body, Controller, Get, Param, Post, UseGuards, UseInterceptors } from '@nestjs/common';
-import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
 import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor';
 import { PaymentsService } from './payments.service';
+import { RefundService } from './refund.service';
 
 @UseGuards(MerchantAuthGuard)
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly refundService: RefundService,
+  ) {}
 
   @Post()
   @UseInterceptors(PaymentIdempotencyInterceptor)
@@ -23,7 +36,10 @@ export class PaymentsController {
 
   @Post('mpesa/stk')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  mpesaStk(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
+  mpesaStk(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: CreateProviderPaymentDto,
+  ) {
     return this.paymentsService.createMpesaStk(
       user.merchantId as string,
       user.userId || undefined,
@@ -33,7 +49,10 @@ export class PaymentsController {
 
   @Post('stripe/intent')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  stripeIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
+  stripeIntent(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: CreateProviderPaymentDto,
+  ) {
     return this.paymentsService.createStripeIntent(
       user.merchantId as string,
       user.userId || undefined,
@@ -43,7 +62,10 @@ export class PaymentsController {
 
   @Post('paypal/order')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
+  paypalOrder(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: CreateProviderPaymentDto,
+  ) {
     return this.paymentsService.createPaypalOrder(
       user.merchantId as string,
       user.userId || undefined,
@@ -58,6 +80,20 @@ export class PaymentsController {
       user.merchantId as string,
       user.userId || undefined,
       id,
+    );
+  }
+
+  @Post(':id/refund')
+  refund(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.refundService.refund(
+      user.merchantId as string,
+      user.userId || undefined,
+      id,
+      idempotencyKey,
     );
   }
 
@@ -81,10 +117,17 @@ export class PaymentsController {
 
   @Get(':id')
   get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paymentsService.getPayment(user.merchantId as string, user.userId || undefined, id);
+    return this.paymentsService.getPayment(
+      user.merchantId as string,
+      user.userId || undefined,
+      id,
+    );
   }
 
-  private lockEnvironment<T extends CreateProviderPaymentDto>(user: AuthUser, dto: T): T {
+  private lockEnvironment<T extends CreateProviderPaymentDto>(
+    user: AuthUser,
+    dto: T,
+  ): T {
     if (user.type === 'api_key' && user.environment) {
       return { ...dto, environment: user.environment };
     }
