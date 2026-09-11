@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Environment, Prisma, Provider } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../common/prisma.service';
