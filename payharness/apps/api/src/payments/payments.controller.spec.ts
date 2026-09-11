@@ -135,20 +135,39 @@ describe('PaymentsController environment safety and orchestration', () => {
     );
   });
 
-  it('delegates the refund endpoint to the refund service', () => {
+  it('delegates a full refund to the refund service', () => {
     const user = {
       userId: 'user-6',
       merchantId: 'merchant-6',
       type: 'merchant',
     } as any;
 
-    controller.refund(user, 'payment-6', 'refund-key-6');
+    controller.refund(user, 'payment-6', {} as any);
 
     expect(refundService.refund).toHaveBeenCalledWith(
       'merchant-6',
       'user-6',
       'payment-6',
-      'refund-key-6',
+      undefined,
+      undefined,
+    );
+  });
+
+  it('delegates a partial refund amount to the refund service', () => {
+    const user = {
+      userId: 'user-7',
+      merchantId: 'merchant-7',
+      type: 'merchant',
+    } as any;
+
+    controller.refund(user, 'payment-7', { amountCents: 300 } as any, 'refund-key-7');
+
+    expect(refundService.refund).toHaveBeenCalledWith(
+      'merchant-7',
+      'user-7',
+      'payment-7',
+      'refund-key-7',
+      300,
     );
   });
 
