@@ -40,6 +40,18 @@ export class WebhooksController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('endpoints/:id/rotate-secret')
+  rotateEndpointSecret(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.webhooksService.rotateEndpointSecret(user.merchantId, user.userId, id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('deliveries')
+  listDeliveries(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
+    return this.webhooksService.listDeliveries(user.merchantId, query);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Patch('endpoints/:id/disable')
   disableEndpoint(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.webhooksService.disableEndpoint(user.merchantId, id);
