@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PaymentReceiptService } from './payment-receipt.service';
 
 const receipt = {
@@ -69,7 +70,10 @@ describe('PaymentReceiptService', () => {
     prisma.payment.findFirst
       .mockResolvedValueOnce({ id: 'payment-1', status: 'SUCCEEDED' })
       .mockResolvedValueOnce({ status: 'SUCCEEDED' });
-    prisma.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([receipt]);
+    prisma.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([receipt]);
     prisma.$executeRaw.mockResolvedValue(1);
 
     await expect(service.getReceipt('merchant-1', 'payment-1')).resolves.toEqual(receipt);
@@ -81,7 +85,12 @@ describe('PaymentReceiptService', () => {
       .mockResolvedValueOnce({ id: 'payment-1', status: 'SUCCEEDED' })
       .mockResolvedValueOnce({ status: 'SUCCEEDED' });
     prisma.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([receipt]);
-    prisma.$executeRaw.mockRejectedValueOnce({ code: 'P2002' });
+    prisma.$executeRaw.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.22.0',
+      }),
+    );
 
     await expect(service.getReceipt('merchant-1', 'payment-1')).resolves.toEqual(receipt);
   });
