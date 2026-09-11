@@ -45,30 +45,6 @@ export class PaymentReceiptService {
     const existing = await this.findReceipt(merchantId, paymentId);
     if (existing) return existing;
 
-    const rows = await this.prisma.$queryRaw<PaymentReceipt[]>(Prisma.sql`
-      SELECT
-        r.id,
-        r.merchant_id AS "merchantId",
-        r.payment_id AS "paymentId",
-        r.receipt_number AS "receiptNumber",
-        r.amount_cents AS "amountCents",
-        r.currency,
-        r.provider,
-        r.provider_reference AS "providerReference",
-        r.payment_status AS "paymentStatus",
-        r.customer_id AS "customerId",
-        r.customer_name AS "customerName",
-        r.customer_email AS "customerEmail",
-        r.customer_phone AS "customerPhone",
-        r.issued_at AS "issuedAt"
-      FROM payment_receipts r
-      WHERE r.merchant_id = ${merchantId}
-        AND r.payment_id = ${paymentId}
-      LIMIT 1
-    `);
-
-    if (rows[0]) return rows[0];
-
     const payment = await this.prisma.payment.findFirst({
       where: { id: paymentId, merchantId },
       select: { status: true },
@@ -134,10 +110,7 @@ export class PaymentReceiptService {
     return receipt;
   }
 
-  private async findReceipt(
-    merchantId: string,
-    paymentId: string,
-  ): Promise<PaymentReceipt | null> {
+  private async findReceipt(merchantId: string, paymentId: string): Promise<PaymentReceipt | null> {
     const rows = await this.prisma.$queryRaw<PaymentReceipt[]>(Prisma.sql`
       SELECT
         r.id,
