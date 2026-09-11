@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, WebhookDelivery } from '@prisma/client';
 import { createHash, createHmac } from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import * as http from 'http';
 import * as https from 'https';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma.service';
 
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -25,7 +25,6 @@ export class WebhookDeliveryService {
       where: { id: deliveryId },
       include: { endpoint: true },
     });
-
     if (!delivery) throw new NotFoundException('Webhook delivery not found');
     if (!delivery.endpoint) throw new BadRequestException('Webhook delivery has no destination endpoint');
     if (delivery.status === 'SUCCEEDED') {
@@ -40,7 +39,6 @@ export class WebhookDeliveryService {
     if (delivery.endpoint.status !== 'ACTIVE') {
       throw new BadRequestException('Webhook endpoint is not active');
     }
-
     return this.deliverRecord(delivery, delivery.endpoint.url, delivery.endpoint.secretHash);
   }
 
@@ -77,7 +75,6 @@ export class WebhookDeliveryService {
         status: 'PENDING',
       },
     });
-
     return this.deliverRecord(delivery, url);
   }
 
@@ -94,7 +91,9 @@ export class WebhookDeliveryService {
 
   private maxAttempts() {
     const configured = Number(this.config.get<string>('WEBHOOK_MAX_ATTEMPTS'));
-    return Number.isInteger(configured) && configured > 0 ? Math.min(configured, 10) : DEFAULT_MAX_ATTEMPTS;
+    return Number.isInteger(configured) && configured > 0
+      ? Math.min(configured, 10)
+      : DEFAULT_MAX_ATTEMPTS;
   }
 
   private retryDelays() {
@@ -112,11 +111,13 @@ export class WebhookDeliveryService {
     const maxAttempts = this.maxAttempts();
     const retryDelays = this.retryDelays();
     let lastError = 'Webhook delivery failed';
+    let completedAttempts = delivery.attempts;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const delay = retryDelays[attempt - 1] ?? retryDelays[retryDelays.length - 1] ?? 0;
       if (delay > 0) await this.sleep(delay);
 
+      completedAttempts = attempt;
       await this.prisma.webhookDelivery.update({
         where: { id: delivery.id },
         data: { attempts: attempt, status: 'PENDING' },
@@ -133,7 +134,6 @@ export class WebhookDeliveryService {
             deliveredAt: new Date(),
           },
         });
-
         return {
           delivered: true,
           deliveryId: delivery.id,
@@ -147,14 +147,10 @@ export class WebhookDeliveryService {
         this.logger.warn(
           `Webhook delivery ${delivery.id} attempt ${attempt}/${maxAttempts} failed (retryable=${retryable}): ${lastError}`,
         );
-
         if (!retryable || attempt === maxAttempts) {
           await this.prisma.webhookDelivery.update({
             where: { id: delivery.id },
-            data: {
-              status: 'FAILED',
-              responseBody: lastError.slice(0, MAX_RESPONSE_BODY),
-            },
+            data: { status: 'FAILED', responseBody: lastError.slice(0, MAX_RESPONSE_BODY) },
           });
           break;
         }
@@ -164,13 +160,13 @@ export class WebhookDeliveryService {
     return {
       delivered: false,
       deliveryId: delivery.id,
-      attempts: delivery.attempts,
+      attempts: completedAttempts,
       error: lastError,
     };
   }
 
-  private isRetryableError(error: unknown) {
-    return error instanceof RetryableWebhookError || error instanceof Error;
+  private isRetryableError(error: unknown): boolean {
+    return error instanceof RetryableWebhookError;
   }
 
   private postJson(
@@ -231,7 +227,6 @@ export class WebhookDeliveryService {
           });
         },
       );
-
       request.on('error', (error) => reject(new RetryableWebhookError(error.message)));
       request.on('timeout', () => request.destroy(new RetryableWebhookError('Webhook request timed out')));
       request.write(body);
