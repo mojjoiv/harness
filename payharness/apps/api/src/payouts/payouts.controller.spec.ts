@@ -7,7 +7,7 @@ describe('PayoutsController', () => {
     const service = { createPayout: jest.fn() };
     const controller = new PayoutsController(service as never);
 
-    await expect(
+    expect(() =>
       controller.create(
         { merchantId: 'merchant-1' } as never,
         {
@@ -18,7 +18,7 @@ describe('PayoutsController', () => {
           recipientType: 'mobile_money',
         },
       ),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).toThrow(BadRequestException);
   });
 
   it('passes the merchant id and idempotency key to the service', async () => {
