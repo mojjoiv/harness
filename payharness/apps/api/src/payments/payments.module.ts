@@ -4,6 +4,8 @@ import { PaymentProvidersModule } from '../payment-providers/payment-providers.m
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
 import { PaypalCheckoutController } from './paypal-checkout.controller';
+import { PaymentReceiptController } from './payment-receipt.controller';
+import { PaymentReceiptService } from './payment-receipt.service';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { PaymentIdempotencyService } from './payment-idempotency.service';
@@ -13,10 +15,15 @@ import { RefundService } from './refund.service';
 
 @Module({
   imports: [AuditLogsModule, PaymentProvidersModule, WebhooksModule],
-  controllers: [PaymentsController, PaypalCheckoutController],
+  controllers: [
+    PaymentsController,
+    PaypalCheckoutController,
+    PaymentReceiptController,
+  ],
   providers: [
     PaymentsService,
     PaypalPaymentService,
+    PaymentReceiptService,
     PaymentIdempotencyService,
     PaymentIdempotencyInterceptor,
     PaymentReconciliationService,
