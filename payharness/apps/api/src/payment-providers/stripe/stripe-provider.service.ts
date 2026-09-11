@@ -74,21 +74,29 @@ export class StripeProviderService {
     };
   }
 
-  async refundPaymentIntent(secretKey: string, paymentIntentId: string) {
+  async refundPaymentIntent(
+    secretKey: string,
+    paymentIntentId: string,
+    amountCents?: number,
+  ) {
     if (!secretKey) throw new BadRequestException('Stripe secret key is missing');
     if (!paymentIntentId.startsWith('pi_')) {
       throw new BadRequestException('Invalid Stripe PaymentIntent reference');
     }
+    if (amountCents !== undefined && (!Number.isInteger(amountCents) || amountCents <= 0)) {
+      throw new BadRequestException('Stripe refund amount must be a positive integer in cents');
+    }
 
     const params = new URLSearchParams();
     params.set('payment_intent', paymentIntentId);
+    if (amountCents !== undefined) params.set('amount', String(amountCents));
     const body = await this.request(secretKey, 'POST', '/v1/refunds', params.toString());
 
     if (!body.id) throw new Error('Stripe did not return a refund id');
     return {
       id: String(body.id),
       status: String(body.status || 'succeeded'),
-      amount: Number(body.amount || 0),
+      amount: Number(body.amount || amountCents || 0),
       currency: String(body.currency || '').toUpperCase(),
     };
   }
