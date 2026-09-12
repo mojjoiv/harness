@@ -5,10 +5,15 @@ import {
   PayoutExecutionResult,
   PayoutProvider,
 } from './payout-provider.interface';
+import { MpesaPayoutProvider } from './mpesa-payout.provider';
 
 @Injectable()
 export class PayoutProviderRegistry {
   private readonly providers = new Map<Provider, PayoutProvider>();
+
+  constructor(private readonly mpesaProvider: MpesaPayoutProvider) {
+    this.register(mpesaProvider);
+  }
 
   register(provider: PayoutProvider): void {
     this.providers.set(provider.provider, provider);
