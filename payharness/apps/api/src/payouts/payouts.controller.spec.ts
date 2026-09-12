@@ -54,7 +54,11 @@ describe('PayoutsController', () => {
       ),
     ).resolves.toEqual(payout);
 
-    expect(service.createPayout).toHaveBeenCalledWith('merchant-1', dto, 'payout-1');
+    expect(service.createPayout).toHaveBeenCalledWith(
+      'merchant-1',
+      dto,
+      'payout-1',
+    );
   });
 
   it('lists payouts for the authenticated merchant', async () => {
@@ -74,6 +78,39 @@ describe('PayoutsController', () => {
     expect(service.listPayouts).toHaveBeenCalledWith('merchant-1', query);
   });
 
+  it('reports payouts for the authenticated merchant', async () => {
+    const result = {
+      totalCount: 2,
+      totalVolumeCents: 10000,
+      successfulCount: 1,
+      successfulVolumeCents: 6000,
+      failedCount: 1,
+      failedVolumeCents: 4000,
+      pendingCount: 0,
+      pendingVolumeCents: 0,
+      successRate: 50,
+      byStatus: {},
+      byProvider: {},
+      byCurrency: {},
+    };
+    const service = { reportPayouts: jest.fn().mockResolvedValue(result) };
+    const controller = new PayoutsController(
+      service as never,
+      { executePayout: jest.fn() } as never,
+      reconciliationService as never,
+    );
+    const query = {
+      startDate: '2026-09-01T00:00:00.000Z',
+      endDate: '2026-09-12T23:59:59.999Z',
+    };
+
+    await expect(
+      controller.report({ merchantId: 'merchant-1' } as never, query),
+    ).resolves.toEqual(result);
+
+    expect(service.reportPayouts).toHaveBeenCalledWith('merchant-1', query);
+  });
+
   it('executes a payout for the authenticated merchant', async () => {
     const payout = { id: 'payout-1', status: 'SUCCEEDED' };
     const service = { createPayout: jest.fn() };
@@ -88,7 +125,10 @@ describe('PayoutsController', () => {
       controller.execute({ merchantId: 'merchant-1' } as never, 'payout-1'),
     ).resolves.toEqual(payout);
 
-    expect(executionService.executePayout).toHaveBeenCalledWith('merchant-1', 'payout-1');
+    expect(executionService.executePayout).toHaveBeenCalledWith(
+      'merchant-1',
+      'payout-1',
+    );
   });
 
   it('runs stale payout reconciliation for the authenticated merchant', async () => {
