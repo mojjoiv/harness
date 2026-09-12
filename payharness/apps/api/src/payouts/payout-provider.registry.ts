@@ -5,18 +5,31 @@ import {
   PayoutExecutionResult,
   PayoutProvider,
 } from './payout-provider.interface';
+import {
+  PayoutReconciliationProvider,
+  PayoutReconciliationResult,
+} from './payout-reconciliation.interface';
 import { MpesaPayoutProvider } from './mpesa-payout.provider';
 
 @Injectable()
 export class PayoutProviderRegistry {
   private readonly providers = new Map<Provider, PayoutProvider>();
+  private readonly reconciliationProviders = new Map<
+    Provider,
+    PayoutReconciliationProvider
+  >();
 
   constructor(private readonly mpesaProvider: MpesaPayoutProvider) {
     this.register(mpesaProvider);
+    this.registerReconciliation(mpesaProvider);
   }
 
   register(provider: PayoutProvider): void {
     this.providers.set(provider.provider, provider);
+  }
+
+  registerReconciliation(provider: PayoutReconciliationProvider): void {
+    this.reconciliationProviders.set(provider.provider, provider);
   }
 
   async execute(input: PayoutExecutionInput): Promise<PayoutExecutionResult> {
@@ -28,5 +41,17 @@ export class PayoutProviderRegistry {
     }
 
     return provider.execute(input);
+  }
+
+  async reconcile(input: PayoutExecutionInput): Promise<PayoutReconciliationResult> {
+    const provider = this.reconciliationProviders.get(input.provider);
+    if (!provider) {
+      return {
+        status: 'UNSUPPORTED',
+        details: { reason: 'Provider does not expose payout reconciliation' },
+      };
+    }
+
+    return provider.reconcile(input);
   }
 }
