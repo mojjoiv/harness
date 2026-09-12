@@ -39,6 +39,7 @@ describe('MpesaPayoutProvider', () => {
   let provider: MpesaPayoutProvider;
 
   beforeEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
     prisma.providerCredential.findFirst.mockResolvedValue(credential);
     crypto.decrypt.mockReturnValue({
@@ -51,9 +52,9 @@ describe('MpesaPayoutProvider', () => {
   });
 
   it('submits a B2C payout and extracts the provider reference', async () => {
-    jest.spyOn(provider as never, 'generateAccessToken').mockResolvedValue('access-token');
+    jest.spyOn(provider as any, 'generateAccessToken').mockResolvedValue('access-token');
     jest
-      .spyOn(provider as never, 'request')
+      .spyOn(provider as any, 'request')
       .mockResolvedValue({ ResponseCode: '0', ConversationID: 'AG_123456' });
 
     await expect(provider.execute(input)).resolves.toEqual({
@@ -86,18 +87,19 @@ describe('MpesaPayoutProvider', () => {
 
   it('hides M-Pesa authentication errors behind the unified payout error', async () => {
     jest
-      .spyOn(provider as never, 'generateAccessToken')
+      .spyOn(provider as any, 'generateAccessToken')
       .mockRejectedValue(new Error('Safaricom invalid consumer key'));
 
-    await expect(provider.execute(input)).rejects.toBeInstanceOf(PayoutProviderExecutionError);
-    await expect(provider.execute(input)).rejects.toMatchObject({
+    const errorPromise = provider.execute(input);
+    await expect(errorPromise).rejects.toBeInstanceOf(PayoutProviderExecutionError);
+    await expect(errorPromise).rejects.toMatchObject({
       publicMessage: 'M-Pesa authentication failed',
     });
   });
 
   it('maps a provider rejection to a generic payout failure', async () => {
-    jest.spyOn(provider as never, 'generateAccessToken').mockResolvedValue('access-token');
-    jest.spyOn(provider as never, 'request').mockResolvedValue({
+    jest.spyOn(provider as any, 'generateAccessToken').mockResolvedValue('access-token');
+    jest.spyOn(provider as any, 'request').mockResolvedValue({
       ResponseCode: '1',
       ResponseDescription: 'Insufficient funds',
     });
@@ -109,8 +111,8 @@ describe('MpesaPayoutProvider', () => {
   });
 
   it('maps timeout or network errors to a generic payout failure', async () => {
-    jest.spyOn(provider as never, 'generateAccessToken').mockResolvedValue('access-token');
-    jest.spyOn(provider as never, 'request').mockRejectedValue(new Error('socket timeout'));
+    jest.spyOn(provider as any, 'generateAccessToken').mockResolvedValue('access-token');
+    jest.spyOn(provider as any, 'request').mockRejectedValue(new Error('socket timeout'));
 
     await expect(provider.execute(input)).rejects.toMatchObject({
       publicMessage: 'M-Pesa payout could not be processed',
@@ -119,8 +121,8 @@ describe('MpesaPayoutProvider', () => {
   });
 
   it('rejects malformed B2C responses without a provider reference', async () => {
-    jest.spyOn(provider as never, 'generateAccessToken').mockResolvedValue('access-token');
-    jest.spyOn(provider as never, 'request').mockResolvedValue({
+    jest.spyOn(provider as any, 'generateAccessToken').mockResolvedValue('access-token');
+    jest.spyOn(provider as any, 'request').mockResolvedValue({
       ResponseCode: '0',
       ResponseDescription: 'Accepted',
     });
@@ -132,7 +134,7 @@ describe('MpesaPayoutProvider', () => {
   });
 
   it('rejects non-KES payouts before contacting Safaricom', async () => {
-    const request = jest.spyOn(provider as never, 'request');
+    const request = jest.spyOn(provider as any, 'request');
 
     await expect(provider.execute({ ...input, currency: 'USD' })).rejects.toMatchObject({
       publicMessage: 'M-Pesa payout only supports KES',
