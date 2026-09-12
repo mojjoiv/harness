@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../common/prisma.service';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 
-type PayoutRecord = {
+export type PayoutRecord = {
   id: string;
   merchantId: string;
   amountCents: number;

@@ -11,12 +11,16 @@ import {
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePayoutDto } from './dto/create-payout.dto';
+import { PayoutExecutionService } from './payout-execution.service';
 import { PayoutsService } from './payouts.service';
 
 @UseGuards(MerchantAuthGuard)
 @Controller('payouts')
 export class PayoutsController {
-  constructor(private readonly payoutsService: PayoutsService) {}
+  constructor(
+    private readonly payoutsService: PayoutsService,
+    private readonly payoutExecutionService: PayoutExecutionService,
+  ) {}
 
   @Post()
   create(
@@ -33,6 +37,11 @@ export class PayoutsController {
       dto,
       idempotencyKey,
     );
+  }
+
+  @Post(':id/execute')
+  execute(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.payoutExecutionService.executePayout(user.merchantId as string, id);
   }
 
   @Get(':id')
