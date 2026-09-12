@@ -90,8 +90,8 @@ export class MpesaPayoutProvider implements PayoutProvider {
     const commandId = String(
       secrets.commandId || publicConfig.commandId || 'BusinessPayment',
     );
-    const resultUrl = this.callbackUrl(input.merchantId);
-    const timeoutUrl = this.callbackUrl(input.merchantId);
+    const resultUrl = this.callbackUrl(input.merchantId, 'result');
+    const timeoutUrl = this.callbackUrl(input.merchantId, 'timeout');
 
     let accessToken: string;
     try {
@@ -284,7 +284,6 @@ export class MpesaPayoutProvider implements PayoutProvider {
     const digits = phone.replace(/\D/g, '');
     if (digits.startsWith('0') && digits.length === 10) return `254${digits.slice(1)}`;
     if (digits.startsWith('254') && digits.length === 12) return digits;
-    if (digits.startsWith('+254') && digits.length === 13) return digits.slice(1);
     throw new PayoutProviderExecutionError(
       `Invalid Kenyan M-Pesa phone number: ${phone}`,
       'Invalid M-Pesa recipient phone number',
@@ -307,9 +306,9 @@ export class MpesaPayoutProvider implements PayoutProvider {
     return typeof value === 'string' && value.trim() ? value : null;
   }
 
-  private callbackUrl(merchantId: string): string {
+  private callbackUrl(merchantId: string, type: 'result' | 'timeout'): string {
     const appUrl = this.config.get<string>('APP_URL') || 'http://localhost:3000';
-    return `${appUrl.replace(/\/$/, '')}/webhooks/provider/MPESA/${merchantId}`;
+    return `${appUrl.replace(/\/$/, '')}/webhooks/provider/MPESA/${merchantId}/${type}`;
   }
 
   private providerError(message: string): MpesaError {
