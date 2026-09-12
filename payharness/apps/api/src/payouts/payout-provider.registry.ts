@@ -10,6 +10,7 @@ import {
   PayoutReconciliationResult,
 } from './payout-reconciliation.interface';
 import { MpesaPayoutProvider } from './mpesa-payout.provider';
+import { MpesaPayoutReconciliationProvider } from './mpesa-payout-reconciliation.provider';
 
 @Injectable()
 export class PayoutProviderRegistry {
@@ -19,9 +20,12 @@ export class PayoutProviderRegistry {
     PayoutReconciliationProvider
   >();
 
-  constructor(private readonly mpesaProvider: MpesaPayoutProvider) {
+  constructor(
+    private readonly mpesaProvider: MpesaPayoutProvider,
+    private readonly mpesaReconciliationProvider: MpesaPayoutReconciliationProvider,
+  ) {
     this.register(mpesaProvider);
-    this.registerReconciliation(mpesaProvider);
+    this.registerReconciliation(mpesaReconciliationProvider);
   }
 
   register(provider: PayoutProvider): void {
