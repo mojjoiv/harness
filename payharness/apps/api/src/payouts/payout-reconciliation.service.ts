@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -16,14 +16,33 @@ export type PayoutReconciliationSummary = {
 };
 
 @Injectable()
-export class PayoutReconciliationService {
+export class PayoutReconciliationService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PayoutReconciliationService.name);
+  private interval: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly providers: PayoutProviderRegistry,
     private readonly config: ConfigService,
   ) {}
+
+  onModuleInit(): void {
+    if (!this.enabled()) return;
+
+    this.interval = setInterval(() => {
+      void this.reconcileStalePayouts().catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.error(`Automatic payout reconciliation failed: ${message}`);
+      });
+    }, this.intervalMs());
+  }
+
+  onModuleDestroy(): void {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+  }
 
   async reconcileStalePayouts(merchantId?: string): Promise<PayoutReconciliationSummary> {
     const staleAfterMs = this.staleAfterMs();
@@ -205,8 +224,20 @@ export class PayoutReconciliationService {
       recipientType: payout.recipientType,
       recipientPhone: payout.recipientPhone,
       recipientName: payout.recipientName,
+      providerReference: payout.providerReference,
       metadata: payout.metadata,
     };
+  }
+
+  private enabled(): boolean {
+    return String(this.config.get<string>('PAYOUT_RECONCILIATION_ENABLED') ?? 'true') === 'true';
+  }
+
+  private intervalMs(): number {
+    const configured = Number(
+      this.config.get<string>('PAYOUT_RECONCILIATION_INTERVAL_MS') || 300000,
+    );
+    return Number.isFinite(configured) && configured > 0 ? configured : 300000;
   }
 
   private staleAfterMs(): number {
