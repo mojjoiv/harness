@@ -6,11 +6,13 @@ import {
   Headers,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePayoutDto } from './dto/create-payout.dto';
+import { ListPayoutsDto } from './dto/list-payouts.dto';
 import { PayoutExecutionService } from './payout-execution.service';
 import { PayoutReconciliationService } from './payout-reconciliation.service';
 import { PayoutsService } from './payouts.service';
@@ -39,6 +41,11 @@ export class PayoutsController {
       dto,
       idempotencyKey,
     );
+  }
+
+  @Get()
+  list(@CurrentUser() user: AuthUser, @Query() query: ListPayoutsDto) {
+    return this.payoutsService.listPayouts(user.merchantId as string, query);
   }
 
   @Post('reconciliation/run')
