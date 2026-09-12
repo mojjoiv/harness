@@ -1,5 +1,6 @@
 import { Environment, Provider } from '@prisma/client';
 import { PayoutReconciliationService } from './payout-reconciliation.service';
+import { PayoutReconciliationResult } from './payout-reconciliation.interface';
 
 const payout = {
   id: 'payout-1',
@@ -22,7 +23,7 @@ const payout = {
 
 function makeService(
   candidates = [payout],
-  reconciliation = { status: 'UNSUPPORTED' as const },
+  reconciliation: PayoutReconciliationResult = { status: 'UNSUPPORTED' },
 ) {
   const prisma = {
     $queryRaw: jest.fn().mockResolvedValue(candidates),
