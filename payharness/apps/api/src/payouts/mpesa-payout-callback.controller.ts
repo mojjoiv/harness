@@ -8,6 +8,14 @@ import {
 export class MpesaPayoutCallbackController {
   constructor(private readonly callbacks: MpesaPayoutCallbackService) {}
 
+  @Post(':merchantId')
+  callback(
+    @Param('merchantId') merchantId: string,
+    @Body() body: MpesaPayoutCallbackResult,
+  ) {
+    return this.callbacks.handleResult(merchantId, body);
+  }
+
   @Post(':merchantId/result')
   result(
     @Param('merchantId') merchantId: string,
