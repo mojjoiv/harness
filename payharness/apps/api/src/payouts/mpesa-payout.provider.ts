@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Environment, Prisma, Provider } from '@prisma/client';
+import { Environment, Provider } from '@prisma/client';
 import * as https from 'https';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
@@ -68,25 +68,41 @@ export class MpesaPayoutProvider implements PayoutProvider {
     try {
       secrets = this.crypto.decrypt(credential.encryptedSecretConfig as any);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Stored M-Pesa credentials could not be decrypted';
-      throw new PayoutProviderExecutionError(message, 'M-Pesa credentials could not be loaded');
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Stored M-Pesa credentials could not be decrypted';
+      throw new PayoutProviderExecutionError(
+        message,
+        'M-Pesa credentials could not be loaded',
+      );
     }
 
     const publicConfig = (credential.publicConfig as Record<string, unknown>) || {};
     const consumerKey = this.requiredString(secrets.consumerKey, 'consumerKey');
     const consumerSecret = this.requiredString(secrets.consumerSecret, 'consumerSecret');
     const initiatorName = this.requiredString(secrets.initiatorName, 'initiatorName');
-    const securityCredential = this.requiredString(secrets.securityCredential, 'securityCredential');
+    const securityCredential = this.requiredString(
+      secrets.securityCredential,
+      'securityCredential',
+    );
     const shortcode = this.requiredString(publicConfig.shortcode, 'shortcode');
-    const commandId = String(secrets.commandId || publicConfig.commandId || 'BusinessPayment');
+    const commandId = String(
+      secrets.commandId || publicConfig.commandId || 'BusinessPayment',
+    );
     const resultUrl = this.callbackUrl(input.merchantId);
     const timeoutUrl = this.callbackUrl(input.merchantId);
-    const accessToken = await this.generateAccessToken(consumerKey, consumerSecret, input.environment);
+    const accessToken = await this.generateAccessToken(
+      consumerKey,
+      consumerSecret,
+      input.environment,
+    );
 
     const amount = Math.trunc(input.amountCents / 100);
     const recipient = this.normalizePhone(input.recipientPhone);
     const reference = input.payoutId;
-    const remarks = this.stringMetadata(input.metadata, 'remarks') || `PayHarness payout ${reference}`;
+    const remarks =
+      this.stringMetadata(input.metadata, 'remarks') || `PayHarness payout ${reference}`;
     const occasion = this.stringMetadata(input.metadata, 'occasion') || reference;
 
     const payload = {
@@ -130,7 +146,10 @@ export class MpesaPayoutProvider implements PayoutProvider {
     } catch (error) {
       if (error instanceof PayoutProviderExecutionError) throw error;
       const message = error instanceof Error ? error.message : 'M-Pesa B2C request failed';
-      throw new PayoutProviderExecutionError(message, 'M-Pesa payout could not be processed');
+      throw new PayoutProviderExecutionError(
+        message,
+        'M-Pesa payout could not be processed',
+      );
     }
   }
 
@@ -167,9 +186,7 @@ export class MpesaPayoutProvider implements PayoutProvider {
       if (!body.access_token) throw this.providerError('Safaricom did not return an access token');
       return String(body.access_token);
     } catch (error) {
-      if (error instanceof PayoutProviderExecutionError) {
-        throw error;
-      }
+      if (error instanceof PayoutProviderExecutionError) throw error;
       const message = error instanceof Error ? error.message : 'M-Pesa authentication failed';
       throw new PayoutProviderExecutionError(message, 'M-Pesa authentication failed');
     }
@@ -190,7 +207,12 @@ export class MpesaPayoutProvider implements PayoutProvider {
     const payload = body ? JSON.stringify(body) : undefined;
     const headers: Record<string, string> = {
       Accept: 'application/json',
-      ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': String(Buffer.byteLength(payload)) } : {}),
+      ...(payload
+        ? {
+            'Content-Type': 'application/json',
+            'Content-Length': String(Buffer.byteLength(payload)),
+          }
+        : {}),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(extraHeaders || {}),
     };
@@ -248,7 +270,9 @@ export class MpesaPayoutProvider implements PayoutProvider {
       body.RequestID,
       body.ResponseCode === '0' ? body.ResponseDescription : undefined,
     ];
-    const reference = candidates.find((value) => typeof value === 'string' && value.trim().length > 0);
+    const reference = candidates.find(
+      (value) => typeof value === 'string' && value.trim().length > 0,
+    );
     return reference ? String(reference) : null;
   }
 
@@ -285,6 +309,9 @@ export class MpesaPayoutProvider implements PayoutProvider {
   }
 
   private providerError(message: string): MpesaError {
-    return new PayoutProviderExecutionError(message, 'M-Pesa payout could not be processed') as MpesaError;
+    return new PayoutProviderExecutionError(
+      message,
+      'M-Pesa payout could not be processed',
+    ) as MpesaError;
   }
 }
