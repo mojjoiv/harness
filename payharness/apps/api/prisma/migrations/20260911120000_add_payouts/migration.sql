@@ -1,6 +1,6 @@
 CREATE TABLE "payouts" (
   "id" UUID NOT NULL,
-  "merchant_id" UUID NOT NULL,
+  "merchant_id" TEXT NOT NULL,
   "amount_cents" INTEGER NOT NULL,
   "currency" TEXT NOT NULL,
   "provider" "Provider" NOT NULL,

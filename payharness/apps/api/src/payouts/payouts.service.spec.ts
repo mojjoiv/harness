@@ -85,9 +85,7 @@ describe('PayoutsService', () => {
   });
 
   it('lists payouts with pagination and returns the total count', async () => {
-    prisma.$queryRaw.mockResolvedValueOnce([
-      { ...payout, total: 3n },
-    ]);
+    prisma.$queryRaw.mockResolvedValueOnce([{ ...payout, total: 3n }]);
 
     const result = await service.listPayouts('merchant-1', {
       page: 2,
@@ -146,5 +144,119 @@ describe('PayoutsService', () => {
         0,
       ]),
     );
+  });
+
+  it('returns payout aggregates and breakdowns', async () => {
+    prisma.$queryRaw.mockResolvedValueOnce([
+      {
+        totalCount: 5n,
+        totalVolumeCents: 25000n,
+        successfulCount: 3n,
+        successfulVolumeCents: 18000n,
+        failedCount: 1n,
+        failedVolumeCents: 4000n,
+        pendingCount: 1n,
+        pendingVolumeCents: 3000n,
+        successRate: 60,
+        byStatus: {
+          SUCCEEDED: { count: 3, volumeCents: 18000 },
+          FAILED: { count: 1, volumeCents: 4000 },
+          PENDING: { count: 1, volumeCents: 3000 },
+        },
+        byProvider: {
+          MPESA: { count: 4, volumeCents: 21000 },
+          STRIPE: { count: 1, volumeCents: 4000 },
+        },
+        byCurrency: {
+          KES: { count: 4, volumeCents: 21000 },
+          USD: { count: 1, volumeCents: 4000 },
+        },
+      },
+    ]);
+
+    await expect(
+      service.reportPayouts('merchant-1', {
+        startDate: '2026-09-01T00:00:00.000Z',
+        endDate: '2026-09-12T23:59:59.999Z',
+      }),
+    ).resolves.toEqual({
+      totalCount: 5,
+      totalVolumeCents: 25000,
+      successfulCount: 3,
+      successfulVolumeCents: 18000,
+      failedCount: 1,
+      failedVolumeCents: 4000,
+      pendingCount: 1,
+      pendingVolumeCents: 3000,
+      successRate: 60,
+      byStatus: {
+        SUCCEEDED: { count: 3, volumeCents: 18000 },
+        FAILED: { count: 1, volumeCents: 4000 },
+        PENDING: { count: 1, volumeCents: 3000 },
+      },
+      byProvider: {
+        MPESA: { count: 4, volumeCents: 21000 },
+        STRIPE: { count: 1, volumeCents: 4000 },
+      },
+      byCurrency: {
+        KES: { count: 4, volumeCents: 21000 },
+        USD: { count: 1, volumeCents: 4000 },
+      },
+    });
+
+    const query = prisma.$queryRaw.mock.calls[0][0];
+    expect(query.values).toEqual(
+      expect.arrayContaining([
+        'merchant-1',
+        new Date('2026-09-01T00:00:00.000Z'),
+        new Date('2026-09-12T23:59:59.999Z'),
+      ]),
+    );
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns zeroed analytics when the aggregate query has no row', async () => {
+    prisma.$queryRaw.mockResolvedValueOnce([]);
+
+    await expect(
+      service.reportPayouts('merchant-2', {}),
+    ).resolves.toEqual({
+      totalCount: 0,
+      totalVolumeCents: 0,
+      successfulCount: 0,
+      successfulVolumeCents: 0,
+      failedCount: 0,
+      failedVolumeCents: 0,
+      pendingCount: 0,
+      pendingVolumeCents: 0,
+      successRate: 0,
+      byStatus: {},
+      byProvider: {},
+      byCurrency: {},
+    });
+  });
+
+  it('keeps reporting scoped to the authenticated merchant', async () => {
+    prisma.$queryRaw.mockResolvedValueOnce([
+      {
+        totalCount: 0n,
+        totalVolumeCents: 0n,
+        successfulCount: 0n,
+        successfulVolumeCents: 0n,
+        failedCount: 0n,
+        failedVolumeCents: 0n,
+        pendingCount: 0n,
+        pendingVolumeCents: 0n,
+        successRate: 0,
+        byStatus: {},
+        byProvider: {},
+        byCurrency: {},
+      },
+    ]);
+
+    await service.reportPayouts('merchant-2', {});
+
+    const query = prisma.$queryRaw.mock.calls[0][0];
+    expect(query.values).toContain('merchant-2');
   });
 });
