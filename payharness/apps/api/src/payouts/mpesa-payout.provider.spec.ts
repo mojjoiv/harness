@@ -71,8 +71,8 @@ describe('MpesaPayoutProvider', () => {
         Amount: 50,
         PartyA: '600000',
         PartyB: '254712345678',
-        ResultURL: 'https://api.example.com/webhooks/provider/MPESA/merchant-1',
-        QueueTimeOutURL: 'https://api.example.com/webhooks/provider/MPESA/merchant-1',
+        ResultURL: 'https://api.example.com/webhooks/provider/MPESA/merchant-1/result',
+        QueueTimeOutURL: 'https://api.example.com/webhooks/provider/MPESA/merchant-1/timeout',
       }),
     );
   });
