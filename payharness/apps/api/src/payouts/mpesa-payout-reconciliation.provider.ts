@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Provider } from '@prisma/client';
-import {
-  PayoutExecutionInput,
-} from './payout-provider.interface';
+import { PayoutExecutionInput } from './payout-provider.interface';
 import {
   PayoutReconciliationProvider,
   PayoutReconciliationResult,
@@ -18,14 +16,8 @@ export class MpesaPayoutReconciliationProvider implements PayoutReconciliationPr
       details: {
         reason: 'Safaricom callback is the authoritative completion signal for this payout',
         payoutId: input.payoutId,
-        providerReference: this.providerReference(input.metadata),
+        providerReference: input.providerReference || null,
       },
     };
-  }
-
-  private providerReference(metadata: unknown): string | null {
-    if (!metadata || typeof metadata !== 'object') return null;
-    const value = (metadata as Record<string, unknown>).providerReference;
-    return typeof value === 'string' && value.trim() ? value : null;
   }
 }
