@@ -12,6 +12,7 @@ import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorat
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { PayoutExecutionService } from './payout-execution.service';
+import { PayoutReconciliationService } from './payout-reconciliation.service';
 import { PayoutsService } from './payouts.service';
 
 @UseGuards(MerchantAuthGuard)
@@ -20,6 +21,7 @@ export class PayoutsController {
   constructor(
     private readonly payoutsService: PayoutsService,
     private readonly payoutExecutionService: PayoutExecutionService,
+    private readonly payoutReconciliationService: PayoutReconciliationService,
   ) {}
 
   @Post()
@@ -36,6 +38,13 @@ export class PayoutsController {
       user.merchantId as string,
       dto,
       idempotencyKey,
+    );
+  }
+
+  @Post('reconciliation/run')
+  reconcile(@CurrentUser() user: AuthUser) {
+    return this.payoutReconciliationService.reconcileStalePayouts(
+      user.merchantId as string,
     );
   }
 

@@ -10,6 +10,7 @@ export interface PayoutExecutionInput {
   recipientType: string;
   recipientPhone: string | null;
   recipientName: string | null;
+  providerReference?: string | null;
   metadata: unknown;
 }
 
