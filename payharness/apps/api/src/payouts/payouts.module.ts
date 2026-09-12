@@ -7,12 +7,7 @@ import { PayoutsService } from './payouts.service';
 
 @Module({
   controllers: [PayoutsController],
-  providers: [
-    PayoutsService,
-    MpesaPayoutProvider,
-    PayoutProviderRegistry,
-    PayoutExecutionService,
-  ],
+  providers: [PayoutsService, MpesaPayoutProvider, PayoutProviderRegistry, PayoutExecutionService],
   exports: [PayoutsService, PayoutExecutionService, PayoutProviderRegistry],
 })
 export class PayoutsModule {}
