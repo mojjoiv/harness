@@ -233,7 +233,7 @@ export class PayoutsService {
         byProvider: Record<string, { count: number; volumeCents: number }> | null;
         byCurrency: Record<string, { count: number; volumeCents: number }> | null;
       }
-    >`(Prisma.sql`
+    >(Prisma.sql`
       WITH filtered AS (
         SELECT status, provider, currency, amount_cents
         FROM payouts
