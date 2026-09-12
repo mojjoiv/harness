@@ -57,6 +57,23 @@ describe('PayoutsController', () => {
     expect(service.createPayout).toHaveBeenCalledWith('merchant-1', dto, 'payout-1');
   });
 
+  it('lists payouts for the authenticated merchant', async () => {
+    const result = { data: [], total: 0, page: 1, pageSize: 25, totalPages: 0 };
+    const service = { listPayouts: jest.fn().mockResolvedValue(result) };
+    const controller = new PayoutsController(
+      service as never,
+      { executePayout: jest.fn() } as never,
+      reconciliationService as never,
+    );
+    const query = { status: 'SUCCEEDED', page: 1, pageSize: 25 };
+
+    await expect(
+      controller.list({ merchantId: 'merchant-1' } as never, query as never),
+    ).resolves.toEqual(result);
+
+    expect(service.listPayouts).toHaveBeenCalledWith('merchant-1', query);
+  });
+
   it('executes a payout for the authenticated merchant', async () => {
     const payout = { id: 'payout-1', status: 'SUCCEEDED' };
     const service = { createPayout: jest.fn() };
