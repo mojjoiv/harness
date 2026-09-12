@@ -92,11 +92,20 @@ export class MpesaPayoutProvider implements PayoutProvider {
     );
     const resultUrl = this.callbackUrl(input.merchantId);
     const timeoutUrl = this.callbackUrl(input.merchantId);
-    const accessToken = await this.generateAccessToken(
-      consumerKey,
-      consumerSecret,
-      input.environment,
-    );
+
+    let accessToken: string;
+    try {
+      accessToken = await this.generateAccessToken(
+        consumerKey,
+        consumerSecret,
+        input.environment,
+      );
+    } catch (error) {
+      if (error instanceof PayoutProviderExecutionError) throw error;
+      const message =
+        error instanceof Error ? error.message : 'M-Pesa authentication failed';
+      throw new PayoutProviderExecutionError(message, 'M-Pesa authentication failed');
+    }
 
     const amount = Math.trunc(input.amountCents / 100);
     const recipient = this.normalizePhone(input.recipientPhone);
@@ -264,12 +273,7 @@ export class MpesaPayoutProvider implements PayoutProvider {
   }
 
   private extractProviderReference(body: Record<string, unknown>): string | null {
-    const candidates = [
-      body.ConversationID,
-      body.OriginatorConversationID,
-      body.RequestID,
-      body.ResponseCode === '0' ? body.ResponseDescription : undefined,
-    ];
+    const candidates = [body.ConversationID, body.OriginatorConversationID, body.RequestID];
     const reference = candidates.find(
       (value) => typeof value === 'string' && value.trim().length > 0,
     );
