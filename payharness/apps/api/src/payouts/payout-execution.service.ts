@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import {
   PayoutExecutionInput,
   PayoutExecutionResult,
+  PayoutProviderExecutionError,
 } from './payout-provider.interface';
 import { PayoutProviderRegistry } from './payout-provider.registry';
 import { PayoutRecord } from './payouts.service';
@@ -64,6 +65,11 @@ export class PayoutExecutionService {
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'Payout provider execution failed';
       await this.markFailed(merchantId, payoutId, reason);
+
+      if (error instanceof PayoutProviderExecutionError) {
+        throw new BadGatewayException(error.publicMessage);
+      }
+
       throw error;
     }
   }
