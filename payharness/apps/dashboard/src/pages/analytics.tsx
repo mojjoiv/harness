@@ -90,11 +90,6 @@ function changeLabel(value: number | null, suffix = '%') {
   return `${sign}${value.toFixed(2)}${suffix}`;
 }
 
-function changeTone(value: number | null): 'green' | 'red' | 'neutral' {
-  if (value === null || value === 0) return 'neutral';
-  return value > 0 ? 'green' : 'red';
-}
-
 export default function AnalyticsPage() {
   const range = useMemo(initialRange, []);
   const [startDate, setStartDate] = useState(range.startDate);
@@ -125,8 +120,6 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     void loadReport();
-    // The initial request should run once with the initial date range.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function submit(event: FormEvent) {
@@ -311,9 +304,21 @@ export default function AnalyticsPage() {
                         <span className="text-sm font-medium">{centsValue(row.netVolumeCents)} net</span>
                       </div>
                       <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-muted">
-                        <div>Gross<br /><span className="font-medium text-ink">{centsValue(row.grossVolumeCents)}</span></div>
-                        <div>Refunds<br /><span className="font-medium text-ink">{centsValue(row.refundedVolumeCents)}</span></div>
-                        <div>Payouts<br /><span className="font-medium text-ink">{centsValue(row.payoutVolumeCents)}</span></div>
+                        <div>
+                          Gross
+                          <br />
+                          <span className="font-medium text-ink">{centsValue(row.grossVolumeCents)}</span>
+                        </div>
+                        <div>
+                          Refunds
+                          <br />
+                          <span className="font-medium text-ink">{centsValue(row.refundedVolumeCents)}</span>
+                        </div>
+                        <div>
+                          Payouts
+                          <br />
+                          <span className="font-medium text-ink">{centsValue(row.payoutVolumeCents)}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
