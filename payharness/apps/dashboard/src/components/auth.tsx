@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/compat/router';
 import { clearSession, getSession, getToken } from '@/lib/auth';
+import { Panel } from './ui';
+
+function AuthLoading({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-bg px-4 text-sm text-muted">
+      <Panel className="w-full max-w-sm p-6 text-center">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-line border-t-brand" />
+        <div className="mt-4 font-medium text-ink">{label}</div>
+        <div className="mt-1 text-xs text-muted">Checking your session…</div>
+      </Panel>
+    </div>
+  );
+}
 
 export function AuthGate({ children }: React.PropsWithChildren) {
   const router = useRouter();
@@ -18,11 +31,7 @@ export function AuthGate({ children }: React.PropsWithChildren) {
   }, [router]);
 
   if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-bg text-sm text-muted">
-        Loading...
-      </div>
-    );
+    return <AuthLoading label="Loading PayHarness" />;
   }
   return <>{children}</>;
 }
@@ -48,11 +57,7 @@ export function PlatformAuthGate({ children }: React.PropsWithChildren) {
   }, [router]);
 
   if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-bg text-sm text-muted">
-        Loading...
-      </div>
-    );
+    return <AuthLoading label="Loading platform console" />;
   }
   return <>{children}</>;
 }
