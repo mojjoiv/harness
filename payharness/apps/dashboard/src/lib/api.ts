@@ -13,7 +13,6 @@ export class ApiError extends Error {
     this.name = 'ApiError';
     Object.setPrototypeOf(this, ApiError.prototype);
     this.code = code;
-    this.status = status;
     this.errors = errors;
   }
 }
