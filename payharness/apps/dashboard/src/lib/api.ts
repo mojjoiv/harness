@@ -14,6 +14,7 @@ export class ApiError extends Error {
     Object.setPrototypeOf(this, ApiError.prototype);
     this.code = code;
     this.errors = errors;
+    this.status = status;
   }
 }
 
@@ -50,8 +51,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 async function readBody(response: Response): Promise<ParsedBody> {
   const contentType = response.headers?.get?.('content-type') || '';
 
-  // Some test/mocked fetch responses expose json() but not text(). Prefer
-  // the JSON reader when the response advertises JSON content.
   if (contentType.toLowerCase().includes('application/json') && typeof response.json === 'function') {
     try {
       const payload = await response.json();
