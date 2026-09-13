@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PaymentProvidersModule } from '../payment-providers/payment-providers.module';
 import { MpesaPayoutCallbackController } from './mpesa-payout-callback.controller';
 import { MpesaPayoutCallbackService } from './mpesa-payout-callback.service';
 import { MpesaPayoutProvider } from './mpesa-payout.provider';
@@ -12,6 +13,7 @@ import { PayoutsController } from './payouts.controller';
 import { PayoutsService } from './payouts.service';
 
 @Module({
+  imports: [PaymentProvidersModule],
   controllers: [PayoutsController, MpesaPayoutCallbackController],
   providers: [
     PayoutsService,
