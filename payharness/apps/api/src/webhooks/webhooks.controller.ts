@@ -52,6 +52,12 @@ export class WebhooksController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('deliveries/:id')
+  getDelivery(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.webhooksService.getDelivery(user.merchantId, id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Patch('endpoints/:id/disable')
   disableEndpoint(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.webhooksService.disableEndpoint(user.merchantId, id);
