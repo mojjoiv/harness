@@ -1,92 +1,265 @@
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { api } from '@/lib/api';
-import { Button, CopyButton, Input, Panel, SectionTitle } from '@/components/ui';
-import { FieldRow, SimpleTable } from '@/components/blocks';
+import { useEffect, useMemo, useState } from 'react';
+import { ApiError, api } from '@/lib/api';
+import { Badge, Button, CopyButton, Input, Panel, SectionTitle, Select } from '@/components/ui';
+import { FieldRow, FormGrid, Paginator, SimpleTable } from '@/components/blocks';
 import { PaginationMeta, WebhookEndpointRecord } from '@/lib/types';
 import { dateTime } from '@/lib/format';
 
-type FormValues = {
-  url: string;
-  events: string;
+type Delivery = {
+  id: string;
+  webhookEndpointId: string | null;
+  eventType: string;
+  status: string;
+  attempts: number;
+  responseCode: number | null;
+  responseBody: string | null;
+  createdAt: string;
+  deliveredAt: string | null;
 };
+
+type DeliveryDetail = Delivery & { payload: unknown };
+
+type FormValues = { url: string; events: string };
+
+function tone(status: string) {
+  if (status === 'SUCCEEDED' || status === 'ACTIVE') return 'green' as const;
+  if (status === 'FAILED' || status === 'INACTIVE') return 'red' as const;
+  if (status === 'PENDING' || status === 'PROCESSING') return 'blue' as const;
+  return 'neutral' as const;
+}
+
+function compact(value: string) {
+  return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-7)}` : value;
+}
 
 export default function WebhooksPage() {
   const [items, setItems] = useState<WebhookEndpointRecord[]>([]);
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [secret, setSecret] = useState('');
-  const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 20, totalPages: 1 });
+  const [endpointMeta, setEndpointMeta] = useState<PaginationMeta>({ page: 1, limit: 20, totalPages: 1 });
+  const [deliveryMeta, setDeliveryMeta] = useState<PaginationMeta>({ page: 1, limit: 25, totalPages: 1 });
   const [page, setPage] = useState(1);
-  const { register, handleSubmit, reset } = useForm<FormValues>();
+  const [deliveryPage, setDeliveryPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [deliveryLoading, setDeliveryLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [deliveryError, setDeliveryError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [message, setMessage] = useState('');
+  const [selected, setSelected] = useState<DeliveryDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [eventFilter, setEventFilter] = useState('');
+  const [form, setForm] = useState<FormValues>({ url: '', events: 'payment.succeeded, payment.failed, payment.refunded' });
 
-  const load = async (currentPage = page) => {
-    const { data, meta } = await api.get<WebhookEndpointRecord[]>(`/webhooks/endpoints?page=${currentPage}&limit=20`);
-    setItems(data);
-    setMeta(meta);
+  const loadEndpoints = async (currentPage = page) => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await api.get<WebhookEndpointRecord[]>(`/webhooks/endpoints?page=${currentPage}&limit=20`);
+      setItems(response.data);
+      setEndpointMeta(response.meta as PaginationMeta);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Unable to load webhook endpoints.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDeliveries = async (currentPage = deliveryPage) => {
+    setDeliveryLoading(true);
+    setDeliveryError('');
+    try {
+      const response = await api.get<Delivery[]>(`/webhooks/deliveries?page=${currentPage}&limit=25`);
+      setDeliveries(response.data);
+      setDeliveryMeta(response.meta as PaginationMeta);
+    } catch (err) {
+      setDeliveryError(err instanceof ApiError ? err.message : 'Unable to load webhook deliveries.');
+    } finally {
+      setDeliveryLoading(false);
+    }
   };
 
   useEffect(() => {
-    load();
+    void loadEndpoints();
   }, [page]);
 
-  const create = async (values: FormValues) => {
-    const { data } = await api.post<WebhookEndpointRecord>('/webhooks/endpoints', {
-      url: values.url,
-      events: values.events.split(',').map((event) => event.trim()).filter(Boolean),
-    });
-    setSecret(data.secret || '');
-    reset();
-    load(1);
+  useEffect(() => {
+    void loadDeliveries();
+  }, [deliveryPage]);
+
+  const filteredDeliveries = useMemo(
+    () => deliveries.filter((delivery) => {
+      const statusMatch = !statusFilter || delivery.status === statusFilter;
+      const eventMatch = !eventFilter || delivery.eventType.toLowerCase().includes(eventFilter.toLowerCase());
+      return statusMatch && eventMatch;
+    }),
+    [deliveries, eventFilter, statusFilter],
+  );
+
+  const create = async () => {
+    const events = form.events.split(',').map((event) => event.trim()).filter(Boolean);
+    if (!form.url.trim() || !events.length) {
+      setActionError('Enter a valid endpoint URL and at least one event.');
+      return;
+    }
+    setActionLoading(true);
+    setActionError('');
+    setMessage('');
+    try {
+      const response = await api.post<WebhookEndpointRecord>('/webhooks/endpoints', { url: form.url.trim(), events });
+      setSecret(response.data.secret || '');
+      setMessage('Endpoint created. Save the secret below; it will not be returned by listing APIs.');
+      setForm({ url: '', events: form.events });
+      await loadEndpoints(1);
+      setPage(1);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Unable to create webhook endpoint.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const rotateSecret = async (id: string) => {
+    setActionLoading(true);
+    setActionError('');
+    setMessage('');
+    try {
+      const response = await api.post<WebhookEndpointRecord>(`/webhooks/endpoints/${id}/rotate-secret`, {});
+      setSecret(response.data.secret || '');
+      setMessage('Webhook secret rotated. Save the new secret below.');
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Unable to rotate webhook secret.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const disable = async (id: string) => {
-    await api.patch(`/webhooks/endpoints/${id}/disable`);
-    load();
+    setActionLoading(true);
+    setActionError('');
+    setMessage('');
+    try {
+      await api.patch(`/webhooks/endpoints/${id}/disable`, {});
+      setMessage('Webhook endpoint disabled.');
+      await loadEndpoints();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Unable to disable webhook endpoint.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const test = async (id: string) => {
-    await api.post(`/webhooks/endpoints/${id}/test`);
+    setActionLoading(true);
+    setActionError('');
+    setMessage('');
+    try {
+      const response = await api.post<{ delivered: boolean; attempts: number }>(`/webhooks/endpoints/${id}/test`, {});
+      setMessage(`Test delivery ${response.data.delivered ? 'succeeded' : 'failed'} after ${response.data.attempts} attempt(s).`);
+      await loadDeliveries(1);
+      setDeliveryPage(1);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Unable to test webhook endpoint.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const rows = items.map((endpoint) => [
-    endpoint.url,
-    endpoint.events.join(', '),
-    endpoint.status,
-    dateTime(endpoint.createdAt),
-    <div key={`${endpoint.id}-actions`} className="flex flex-wrap gap-2">
-      <Button type="button" variant="secondary" onClick={() => test(endpoint.id)}>Test</Button>
-      <Button type="button" variant="danger" onClick={() => disable(endpoint.id)}>Disable</Button>
-    </div>,
-  ]);
+  const selectDelivery = async (id: string) => {
+    setDetailLoading(true);
+    setActionError('');
+    try {
+      const response = await api.get<DeliveryDetail>(`/webhooks/deliveries/${id}`);
+      setSelected(response.data);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Unable to load delivery details.');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const retryDelivery = async () => {
+    if (!selected) return;
+    setActionLoading(true);
+    setActionError('');
+    setMessage('');
+    try {
+      const response = await api.post<{ delivered: boolean; attempts: number }>(`/webhooks/deliveries/${selected.id}/retry`, {});
+      setMessage(`Delivery retry ${response.data.delivered ? 'succeeded' : 'failed'} after ${response.data.attempts} attempt(s).`);
+      await selectDelivery(selected.id);
+      await loadDeliveries();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Unable to retry webhook delivery.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <SectionTitle title="Webhooks" description="Create, test, and disable webhook endpoints." />
+      <SectionTitle
+        title="Webhooks"
+        description="Configure merchant endpoints and inspect webhook delivery reliability."
+        action={<Button variant="secondary" onClick={() => { void loadEndpoints(); void loadDeliveries(); }} disabled={loading || deliveryLoading}>{loading || deliveryLoading ? 'Refreshing…' : 'Refresh'}</Button>}
+      />
+
+      {message ? <Panel className="border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{message}</Panel> : null}
+      {actionError ? <Panel className="border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{actionError}</Panel> : null}
+
       {secret ? (
         <Panel className="p-4">
-          <div className="text-sm text-muted">Webhook secret is shown once.</div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <code className="rounded-xl bg-panelAlt px-3 py-2 text-sm">{secret}</code>
-            <CopyButton value={secret} />
-          </div>
+          <div className="text-sm text-muted">Webhook secret — save it now. It is only returned on create or rotation.</div>
+          <div className="mt-2 flex flex-wrap items-center gap-2"><code className="rounded-xl bg-panelAlt px-3 py-2 text-sm">{secret}</code><CopyButton value={secret} /></div>
         </Panel>
       ) : null}
+
       <Panel className="p-6">
-        <form className="space-y-4" onSubmit={handleSubmit(create)}>
-          <FieldRow label="URL"><Input {...register('url', { required: true })} /></FieldRow>
-          <FieldRow label="Events"><Input placeholder="payment.succeeded, checkout.completed" {...register('events', { required: true })} /></FieldRow>
-          <Button type="submit">Create endpoint</Button>
-        </form>
+        <div className="mb-5"><h2 className="text-lg font-semibold">Add endpoint</h2><p className="mt-1 text-sm text-muted">Use comma-separated event names such as payment.succeeded and payment.failed.</p></div>
+        <FormGrid>
+          <FieldRow label="Endpoint URL"><Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://example.com/webhooks" /></FieldRow>
+          <FieldRow label="Events"><Input value={form.events} onChange={(e) => setForm({ ...form, events: e.target.value })} /></FieldRow>
+        </FormGrid>
+        <div className="mt-4 flex justify-end"><Button onClick={() => void create()} disabled={actionLoading}>{actionLoading ? 'Processing…' : 'Add endpoint'}</Button></div>
       </Panel>
-      <SimpleTable headers={['URL', 'Events', 'Status', 'Created', 'Actions']} rows={rows} emptyText="No webhook endpoints yet." />
-      <div className="mt-4 flex items-center justify-between">
-        <div className="text-sm text-muted">
-          Page {meta.page || page} of {meta.totalPages || 1}
-        </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="secondary" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>Previous</Button>
-          <Button type="button" variant="secondary" onClick={() => setPage((p) => p + 1)} disabled={page >= (meta.totalPages || 1)}>Next</Button>
-        </div>
-      </div>
+
+      {error ? <Panel className="border-rose-200 p-6 text-sm text-rose-700">{error}</Panel> : null}
+      <Panel className="p-6">
+        <div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Endpoints</h2><p className="mt-1 text-sm text-muted">Merchant-scoped webhook destinations.</p></div><span className="text-sm text-muted">{endpointMeta.total || 0} total</span></div>
+        {loading ? <div className="text-sm text-muted">Loading endpoints…</div> : <SimpleTable headers={['URL', 'Events', 'Status', 'Created', 'Actions']} rows={items.map((endpoint) => [
+          <div key={endpoint.id}><div className="max-w-xs truncate font-medium">{endpoint.url}</div><div className="text-xs text-muted">{compact(endpoint.id)}</div></div>,
+          <div key={`${endpoint.id}-events`} className="max-w-sm text-xs text-muted">{endpoint.events.join(', ')}</div>,
+          <Badge key={`${endpoint.id}-status`} tone={tone(endpoint.status)}>{endpoint.status}</Badge>,
+          dateTime(endpoint.createdAt),
+          <div key={`${endpoint.id}-actions`} className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => void test(endpoint.id)} disabled={actionLoading}>Test</Button><Button variant="ghost" onClick={() => void rotateSecret(endpoint.id)} disabled={actionLoading}>Rotate secret</Button>{endpoint.status === 'ACTIVE' ? <Button variant="ghost" onClick={() => void disable(endpoint.id)} disabled={actionLoading}>Disable</Button> : null}</div>,
+        ])} emptyText="No webhook endpoints yet." />}
+        <Paginator page={endpointMeta.page || page} totalPages={endpointMeta.totalPages || 1} onPrev={() => setPage((p) => Math.max(1, p - 1))} onNext={() => setPage((p) => p + 1)} />
+      </Panel>
+
+      <Panel className="p-6">
+        <div className="mb-5"><h2 className="text-lg font-semibold">Delivery history</h2><p className="mt-1 text-sm text-muted">Inspect attempts, provider responses, and failed deliveries.</p></div>
+        <div className="mb-5 grid gap-4 md:grid-cols-2"><FieldRow label="Status"><Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="">All statuses</option><option value="PENDING">Pending</option><option value="SUCCEEDED">Succeeded</option><option value="FAILED">Failed</option></Select></FieldRow><FieldRow label="Event type"><Input value={eventFilter} onChange={(e) => setEventFilter(e.target.value)} placeholder="payment.succeeded" /></FieldRow></div>
+        {deliveryError ? <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{deliveryError}</div> : null}
+        {deliveryLoading ? <div className="text-sm text-muted">Loading deliveries…</div> : <SimpleTable headers={['Delivery', 'Event', 'Status', 'Attempts', 'Response', 'Created', 'Delivered']} rows={filteredDeliveries.map((delivery) => [
+          <button key={delivery.id} type="button" className="font-medium text-brand hover:underline" onClick={() => void selectDelivery(delivery.id)}>{compact(delivery.id)}</button>,
+          delivery.eventType,
+          <Badge key={`${delivery.id}-status`} tone={tone(delivery.status)}>{delivery.status}</Badge>,
+          delivery.attempts,
+          delivery.responseCode ? `${delivery.responseCode}${delivery.responseBody ? ` — ${delivery.responseBody.slice(0, 60)}` : ''}` : '—',
+          dateTime(delivery.createdAt),
+          delivery.deliveredAt ? dateTime(delivery.deliveredAt) : '—',
+        ])} emptyText="No webhook deliveries match the selected filters." />}
+        <Paginator page={deliveryMeta.page || deliveryPage} totalPages={deliveryMeta.totalPages || 1} onPrev={() => setDeliveryPage((p) => Math.max(1, p - 1))} onNext={() => setDeliveryPage((p) => p + 1)} />
+      </Panel>
+
+      {selected ? <Panel className="p-6">
+        <div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Delivery details</h2><p className="mt-1 text-sm text-muted">{compact(selected.id)}</p></div><Button variant="ghost" onClick={() => setSelected(null)}>Close</Button></div>
+        {detailLoading ? <div className="mt-5 text-sm text-muted">Loading…</div> : null}
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><div className="text-xs uppercase tracking-wide text-muted">Event</div><div className="mt-1 font-semibold">{selected.eventType}</div></div><div><div className="text-xs uppercase tracking-wide text-muted">Status</div><div className="mt-1"><Badge tone={tone(selected.status)}>{selected.status}</Badge></div></div><div><div className="text-xs uppercase tracking-wide text-muted">Attempts</div><div className="mt-1 font-semibold">{selected.attempts}</div></div><div><div className="text-xs uppercase tracking-wide text-muted">Response</div><div className="mt-1">{selected.responseCode || '—'}</div></div></div>
+        <div className="mt-6 grid gap-6 lg:grid-cols-2"><div><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Payload</div><pre className="max-h-96 overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(selected.payload, null, 2)}</pre></div><div><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Response body</div><pre className="max-h-96 overflow-auto rounded-xl bg-slate-50 p-4 text-xs text-ink">{selected.responseBody || 'No response body recorded.'}</pre></div></div>
+        <div className="mt-6 flex justify-end">{selected.status !== 'SUCCEEDED' ? <Button onClick={() => void retryDelivery()} disabled={actionLoading}>{actionLoading ? 'Retrying…' : 'Retry delivery'}</Button> : null}</div>
+      </Panel> : null}
     </div>
   );
 }
