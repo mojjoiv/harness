@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PaymentStatus, Prisma, Provider } from '@prisma/client';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -27,8 +27,12 @@ export class RefundsController {
       type: 'REFUND',
     };
 
-    if (status) where.status = status as Prisma.TransactionWhereInput['status'];
-    if (provider) where.payment = { provider: provider as Prisma.TransactionWhereInput['payment'] extends { provider?: infer P } ? P : never };
+    if (status && Object.values(PaymentStatus).includes(status as PaymentStatus)) {
+      where.status = status as PaymentStatus;
+    }
+    if (provider && Object.values(Provider).includes(provider as Provider)) {
+      where.payment = { provider: provider as Provider };
+    }
     if (from || to) {
       where.createdAt = {
         ...(from ? { gte: new Date(from) } : {}),
