@@ -1,4 +1,4 @@
-import { IsBoolean, IsDateString, IsOptional } from 'class-validator';
+import { IsBooleanString, IsDateString, IsOptional } from 'class-validator';
 
 export class AdvancedReportDto {
   @IsOptional()
@@ -10,6 +10,6 @@ export class AdvancedReportDto {
   endDate?: string;
 
   @IsOptional()
-  @IsBoolean()
-  compare?: boolean;
+  @IsBooleanString()
+  compare?: string;
 }
