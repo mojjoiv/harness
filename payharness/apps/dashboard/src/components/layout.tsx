@@ -43,15 +43,31 @@ const sections: NavSection[] = [
   },
 ];
 
+function initials(name: string, email: string) {
+  const source = name.trim() || email.trim();
+  return source
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || '?';
+}
+
+function pageTitle(path: string) {
+  const match = sections.flatMap((section) => section.items).find((item) =>
+    item.exact ? path === item.href : path.startsWith(item.href),
+  );
+  return match?.label || 'Dashboard';
+}
+
 export function DashboardLayout({ children }: React.PropsWithChildren) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState('');
+  const [session, setSession] = useState<ReturnType<typeof getSession>>(null);
   const currentPath = router?.asPath?.split('?')[0] || '';
   const nav = useMemo(() => sections, []);
 
   useEffect(() => {
-    setRole(getSession()?.role || '');
+    setSession(getSession());
   }, []);
 
   return (
@@ -59,23 +75,31 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
       <div className="flex min-h-screen">
         <aside
           className={cx(
-            'fixed inset-y-0 left-0 z-30 w-72 border-r border-line bg-panel px-4 py-5 shadow-soft transition-transform lg:static lg:translate-x-0 lg:shadow-none',
+            'fixed inset-y-0 left-0 z-30 flex w-72 flex-col border-r border-line bg-panel px-4 py-5 shadow-soft transition-transform lg:static lg:translate-x-0 lg:shadow-none',
             open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
           )}
         >
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <div className="text-lg font-semibold">PayHarness</div>
-              <div className="text-xs text-muted">Merchant dashboard</div>
-            </div>
+          <div className="mb-6 flex items-center justify-between px-2">
+            <Link href="/dashboard" className="group">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white shadow-sm">
+                  P
+                </div>
+                <div>
+                  <div className="text-base font-bold tracking-tight">PayHarness</div>
+                  <div className="text-[11px] text-muted">Merchant workspace</div>
+                </div>
+              </div>
+            </Link>
             <Button variant="ghost" className="lg:hidden" onClick={() => setOpen(false)}>
               Close
             </Button>
           </div>
-          <nav className="space-y-5">
+
+          <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
             {nav.map((section) => (
               <div key={section.title}>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
                   {section.title}
                 </div>
                 <div className="space-y-1">
@@ -89,10 +113,18 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
                         href={item.href}
                         onClick={() => setOpen(false)}
                         className={cx(
-                          'block rounded-xl px-3 py-2 text-sm transition',
-                          active ? 'bg-brand text-white' : 'text-ink hover:bg-slate-100',
+                          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
+                          active
+                            ? 'bg-brand text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-ink',
                         )}
                       >
+                        <span
+                          className={cx(
+                            'h-1.5 w-1.5 rounded-full',
+                            active ? 'bg-white' : 'bg-slate-300',
+                          )}
+                        />
                         {item.label}
                       </Link>
                     );
@@ -101,25 +133,45 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
               </div>
             ))}
           </nav>
+
+          <div className="mt-5 border-t border-line pt-4">
+            <div className="flex items-center gap-3 rounded-xl bg-panelAlt p-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brandSoft text-xs font-bold text-brand">
+                {initials(session?.user.name || '', session?.user.email || '')}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-ink">
+                  {session?.user.name || 'Merchant user'}
+                </div>
+                <div className="truncate text-xs text-muted">
+                  {session?.user.email || 'Authenticated workspace'}
+                </div>
+              </div>
+            </div>
+            <Button variant="secondary" className="mt-3 w-full" onClick={() => logout(router)}>
+              Sign out
+            </Button>
+          </div>
         </aside>
+
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-line bg-[rgba(246,247,251,0.9)] backdrop-blur">
-            <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-8">
-              <div className="flex items-center gap-3">
+            <div className="flex min-h-16 items-center justify-between gap-4 px-4 lg:px-8">
+              <div className="flex min-w-0 items-center gap-3">
                 <Button variant="secondary" className="lg:hidden" onClick={() => setOpen(true)}>
                   Menu
                 </Button>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <div className="text-sm font-medium text-ink">PayHarness</div>
-                    {role ? <Badge tone="blue">{role}</Badge> : null}
+                    <h1 className="truncate text-sm font-semibold text-ink">{pageTitle(currentPath)}</h1>
+                    {session?.role ? <Badge tone="blue">{session.role}</Badge> : null}
                   </div>
-                  <div className="text-xs text-muted">Operational console</div>
+                  <div className="text-xs text-muted">PayHarness operational console</div>
                 </div>
               </div>
-              <Button variant="secondary" onClick={() => logout(router)}>
-                Logout
-              </Button>
+              <div className="hidden items-center gap-2 sm:flex">
+                <Badge tone="green">Connected</Badge>
+              </div>
             </div>
           </header>
           <main className="flex-1 px-4 py-6 lg:px-8">{children}</main>
