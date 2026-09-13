@@ -7,8 +7,16 @@ export function cx(...parts: Array<string | false | null | undefined>) {
 export function Panel({
   children,
   className,
-}: React.PropsWithChildren<{ className?: string }>) {
-  return <div className={cx('rounded-2xl border border-line bg-panel shadow-soft', className)}>{children}</div>;
+  ...props
+}: React.PropsWithChildren<React.HTMLAttributes<HTMLDivElement>>) {
+  return (
+    <div
+      className={cx('rounded-2xl border border-line bg-panel shadow-soft', className)}
+      {...props}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function SectionTitle({
