@@ -22,6 +22,7 @@ const sections: NavSection[] = [
       { label: 'Dashboard', href: '/dashboard', exact: true },
       { label: 'Transactions', href: '/transactions' },
       { label: 'Checkout Sessions', href: '/checkout-sessions' },
+      { label: 'Receipts', href: '/receipts' },
     ],
   },
   {
