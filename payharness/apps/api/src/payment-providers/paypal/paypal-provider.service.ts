@@ -31,6 +31,16 @@ interface PaypalOrderResponse {
   }>;
 }
 
+interface PaypalPayoutResponse {
+  batch_header?: {
+    payout_batch_id?: string;
+    batch_status?: string;
+    sender_batch_header?: {
+      sender_batch_id?: string;
+    };
+  };
+}
+
 @Injectable()
 export class PaypalProviderService {
   private readonly sandboxBaseUrl = 'https://api-m.sandbox.paypal.com';
@@ -187,6 +197,88 @@ export class PaypalProviderService {
       throw new Error('PayPal did not return a refund id');
     }
     return response;
+  }
+
+  async createPayout(input: {
+    credentials: PaypalCredentials;
+    environment: 'SANDBOX' | 'LIVE';
+    payoutId: string;
+    amountCents: number;
+    currency: string;
+    recipientType: string;
+    recipient: string;
+    note?: string;
+  }) {
+    const accessToken = await this.getAccessToken(
+      input.credentials,
+      input.environment,
+    );
+    const recipientType = input.recipientType.toUpperCase();
+    if (!['EMAIL', 'PHONE', 'PAYPAL_ID'].includes(recipientType)) {
+      throw new BadRequestException(
+        'PayPal payout recipient type must be EMAIL, PHONE, or PAYPAL_ID',
+      );
+    }
+    const response = await this.request<PaypalPayoutResponse>(
+      input.environment,
+      '/v1/payments/payouts',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'PayPal-Request-Id': input.payoutId,
+          Prefer: 'return=representation',
+        },
+        body: JSON.stringify({
+          sender_batch_header: {
+            sender_batch_id: input.payoutId,
+            email_subject: 'You have a payment from PayHarness',
+          },
+          items: [
+            {
+              recipient_type: recipientType,
+              receiver: input.recipient,
+              amount: {
+                value: (input.amountCents / 100).toFixed(2),
+                currency: input.currency.toUpperCase(),
+              },
+              sender_item_id: input.payoutId,
+              note: input.note,
+            },
+          ],
+        }),
+      },
+    );
+    const providerReference = response.batch_header?.payout_batch_id;
+    if (!providerReference) {
+      throw new BadRequestException(
+        'PayPal did not return a payout batch ID',
+      );
+    }
+    return {
+      providerReference,
+      providerStatus: response.batch_header?.batch_status,
+    };
+  }
+
+  async getPayout(input: {
+    credentials: PaypalCredentials;
+    environment: 'SANDBOX' | 'LIVE';
+    payoutBatchId: string;
+  }) {
+    const accessToken = await this.getAccessToken(
+      input.credentials,
+      input.environment,
+    );
+    return this.request<PaypalPayoutResponse>(
+      input.environment,
+      `/v1/payments/payouts/${encodeURIComponent(input.payoutBatchId)}`,
+      {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
   }
 
   private async getAccessToken(
