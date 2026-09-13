@@ -3,6 +3,8 @@ import { MpesaPayoutCallbackController } from './mpesa-payout-callback.controlle
 import { MpesaPayoutCallbackService } from './mpesa-payout-callback.service';
 import { MpesaPayoutProvider } from './mpesa-payout.provider';
 import { MpesaPayoutReconciliationProvider } from './mpesa-payout-reconciliation.provider';
+import { PaypalPayoutProvider } from './paypal-payout.provider';
+import { PaypalPayoutReconciliationProvider } from './paypal-payout-reconciliation.provider';
 import { PayoutExecutionService } from './payout-execution.service';
 import { PayoutProviderRegistry } from './payout-provider.registry';
 import { PayoutReconciliationService } from './payout-reconciliation.service';
@@ -15,6 +17,8 @@ import { PayoutsService } from './payouts.service';
     PayoutsService,
     MpesaPayoutProvider,
     MpesaPayoutReconciliationProvider,
+    PaypalPayoutProvider,
+    PaypalPayoutReconciliationProvider,
     PayoutProviderRegistry,
     PayoutExecutionService,
     PayoutReconciliationService,
