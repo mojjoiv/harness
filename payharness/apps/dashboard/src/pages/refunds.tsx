@@ -73,7 +73,7 @@ export default function RefundsPage() {
   const submitRefund = async () => {
     if (!paymentId.trim()) { setSubmitError('Payment ID is required.'); return; }
     const amountCents = amount.trim() ? Math.round(Number(amount) * 100) : undefined;
-    if (amount.trim() && (!Number.isFinite(amountCents) || amountCents <= 0)) { setSubmitError('Refund amount must be a positive amount.'); return; }
+    if (amount.trim() && (amountCents === undefined || !Number.isFinite(amountCents) || amountCents <= 0)) { setSubmitError('Refund amount must be a positive amount.'); return; }
     setSubmitting(true); setSubmitError(''); setSubmitMessage('');
     try {
       const response = await api.post<RefundResponse>(`/payments/${encodeURIComponent(paymentId.trim())}/refund`, amountCents === undefined ? {} : { amountCents });
