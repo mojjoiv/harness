@@ -103,6 +103,30 @@ export interface TransactionRecord {
   createdAt: string;
 }
 
+export interface TransactionDetail {
+  paymentId: string;
+  provider: string;
+  environment: string;
+  status: string;
+  amountCents: number;
+  currency: string;
+  customerId: string | null;
+  checkoutSessionId: string | null;
+  providerReference: string | null;
+  metadata: Record<string, unknown> | null;
+  providerStatus?: string;
+  transactions: Array<{
+    id: string;
+    type: string;
+    amountCents: number;
+    currency: string;
+    status: string;
+    reference: string | null;
+    metadata: Record<string, unknown> | null;
+    createdAt: string;
+  }>;
+}
+
 export interface WebhookEndpointRecord {
   id: string;
   url: string;
@@ -284,4 +308,3 @@ export interface ProviderVerificationLogRecord {
   errors: string[];
   createdAt: string;
 }
-
