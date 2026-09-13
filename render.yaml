@@ -3,8 +3,9 @@ services:
     name: payharness
     runtime: node
     rootDir: payharness
+    autoDeploy: false 
     buildCommand: npm install && npm run build
-    startCommand: npm run prisma:migrate:deploy && npm run start:prod
+    startCommand: npm run start:prod
     envVars:
       - key: NODE_VERSION
         value: 20.11.1
