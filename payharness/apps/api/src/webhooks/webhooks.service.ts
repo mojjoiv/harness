@@ -114,6 +114,26 @@ export class WebhooksService {
     return paginated(deliveries, total, pagination);
   }
 
+  async getDelivery(merchantId: string, deliveryId: string) {
+    const delivery = await this.prisma.webhookDelivery.findFirst({
+      where: { id: deliveryId, endpoint: { merchantId } },
+      select: {
+        id: true,
+        webhookEndpointId: true,
+        eventType: true,
+        status: true,
+        attempts: true,
+        responseCode: true,
+        responseBody: true,
+        payload: true,
+        createdAt: true,
+        deliveredAt: true,
+      },
+    });
+    if (!delivery) throw new NotFoundException('Webhook delivery not found');
+    return delivery;
+  }
+
   async disableEndpoint(merchantId: string, id: string) {
     const endpoint = await this.prisma.webhookEndpoint.findFirst({
       where: { id, merchantId },
