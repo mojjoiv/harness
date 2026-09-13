@@ -45,11 +45,13 @@ const sections: NavSection[] = [
 
 function initials(name: string, email: string) {
   const source = name.trim() || email.trim();
-  return source
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || '')
-    .join('') || '?';
+  return (
+    source
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() || '')
+      .join('') || '?'
+  );
 }
 
 function pageTitle(path: string) {
@@ -168,9 +170,6 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
                   </div>
                   <div className="text-xs text-muted">PayHarness operational console</div>
                 </div>
-              </div>
-              <div className="hidden items-center gap-2 sm:flex">
-                <Badge tone="green">Connected</Badge>
               </div>
             </div>
           </header>
