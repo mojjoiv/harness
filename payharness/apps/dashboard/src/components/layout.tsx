@@ -29,6 +29,8 @@ const sections: NavSection[] = [
     items: [
       { label: 'Providers', href: '/providers' },
       { label: 'Analytics', href: '/analytics' },
+      { label: 'Payouts', href: '/payouts' },
+      { label: 'Reconciliation', href: '/payout-reconciliation' },
     ],
   },
   {
