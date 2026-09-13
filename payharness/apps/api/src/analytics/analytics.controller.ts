@@ -1,6 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { AdvancedReportDto } from './advanced-report.dto';
 import { AnalyticsQueryDto } from './analytics-query.dto';
 import { AnalyticsService } from './analytics.service';
 
@@ -8,6 +9,11 @@ import { AnalyticsService } from './analytics.service';
 @Controller('analytics')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
+
+  @Get('advanced')
+  advanced(@CurrentUser() user: AuthUser, @Query() query: AdvancedReportDto) {
+    return this.analyticsService.advancedReport(user.merchantId, query);
+  }
 
   @Get('revenue')
   revenue(@CurrentUser() user: AuthUser, @Query() query: AnalyticsQueryDto) {
