@@ -218,22 +218,7 @@ export class PayoutsService {
     }
 
     const where = Prisma.join(filters, ' AND ');
-    const rows = await this.prisma.$queryRaw<
-      Array<{
-        totalCount: bigint;
-        totalVolumeCents: bigint | null;
-        successfulCount: bigint;
-        successfulVolumeCents: bigint | null;
-        failedCount: bigint;
-        failedVolumeCents: bigint | null;
-        pendingCount: bigint;
-        pendingVolumeCents: bigint | null;
-        successRate: number;
-        byStatus: Record<string, { count: number; volumeCents: number }> | null;
-        byProvider: Record<string, { count: number; volumeCents: number }> | null;
-        byCurrency: Record<string, { count: number; volumeCents: number }> | null;
-      }
-    >(Prisma.sql`
+    const rows = (await this.prisma.$queryRaw(Prisma.sql`
       WITH filtered AS (
         SELECT status, provider, currency, amount_cents
         FROM payouts
@@ -300,7 +285,20 @@ export class PayoutsService {
       CROSS JOIN status_breakdown
       CROSS JOIN provider_breakdown
       CROSS JOIN currency_breakdown
-    `);
+    `)) as Array<{
+      totalCount: bigint;
+      totalVolumeCents: bigint | null;
+      successfulCount: bigint;
+      successfulVolumeCents: bigint | null;
+      failedCount: bigint;
+      failedVolumeCents: bigint | null;
+      pendingCount: bigint;
+      pendingVolumeCents: bigint | null;
+      successRate: number;
+      byStatus: Record<string, { count: number; volumeCents: number }> | null;
+      byProvider: Record<string, { count: number; volumeCents: number }> | null;
+      byCurrency: Record<string, { count: number; volumeCents: number }> | null;
+    }>;
 
     const row = rows[0];
     if (!row) {
