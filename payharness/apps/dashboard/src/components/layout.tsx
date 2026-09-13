@@ -1,12 +1,19 @@
 import Link from 'next/link';
 import { useRouter } from 'next/compat/router';
 import { useEffect, useMemo, useState } from 'react';
+import { api } from '@/lib/api';
 import { getSession } from '@/lib/auth';
 import { logout, platformLogout } from './auth';
 import { Badge, Button, cx } from './ui';
 
 type NavItem = { label: string; href: string; exact?: boolean; disabled?: boolean };
 type NavSection = { title: string; items: NavItem[] };
+type MerchantBranding = {
+  merchantName: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  secondaryColor: string;
+};
 
 const sections: NavSection[] = [
   {
@@ -65,12 +72,20 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [session, setSession] = useState<ReturnType<typeof getSession>>(null);
+  const [branding, setBranding] = useState<MerchantBranding | null>(null);
   const currentPath = router?.asPath?.split('?')[0] || '';
   const nav = useMemo(() => sections, []);
 
   useEffect(() => {
     setSession(getSession());
+    void api
+      .get<MerchantBranding>('/merchant/branding')
+      .then(({ data }) => setBranding(data))
+      .catch(() => setBranding(null));
   }, []);
+
+  const workspaceName = branding?.merchantName || 'PayHarness';
+  const primaryColor = branding?.primaryColor || '#1d4ed8';
 
   return (
     <div className="min-h-screen bg-bg text-ink">
@@ -84,11 +99,22 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
           <div className="mb-6 flex items-center justify-between px-2">
             <Link href="/dashboard" className="group">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-bold text-white shadow-sm">
-                  P
-                </div>
+                {branding?.logoUrl ? (
+                  <div
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-cover bg-center bg-no-repeat shadow-sm"
+                    style={{ backgroundImage: `url(${branding.logoUrl})` }}
+                    aria-label={`${workspaceName} logo`}
+                  />
+                ) : (
+                  <div
+                    className="flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    P
+                  </div>
+                )}
                 <div>
-                  <div className="text-base font-bold tracking-tight">PayHarness</div>
+                  <div className="max-w-40 truncate text-base font-bold tracking-tight">{workspaceName}</div>
                   <div className="text-[11px] text-muted">Merchant workspace</div>
                 </div>
               </div>
@@ -168,7 +194,7 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
                     <h1 className="truncate text-sm font-semibold text-ink">{pageTitle(currentPath)}</h1>
                     {session?.role ? <Badge tone="blue">{session.role}</Badge> : null}
                   </div>
-                  <div className="text-xs text-muted">PayHarness operational console</div>
+                  <div className="text-xs text-muted">{workspaceName} operational console</div>
                 </div>
               </div>
             </div>
