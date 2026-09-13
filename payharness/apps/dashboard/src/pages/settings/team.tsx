@@ -7,6 +7,10 @@ import { OwnerUserRecord } from '@/lib/types';
 
 const INVITABLE_ROLES = ['ADMIN', 'DEVELOPER', 'VIEWER'] as const;
 
+type InviteRole = (typeof INVITABLE_ROLES)[number];
+
+type TeamAction = 'deactivate' | 'reactivate' | 'remove';
+
 const STATUS_TONE: Record<string, 'neutral' | 'green' | 'red'> = {
   ACTIVE: 'green',
   DEACTIVATED: 'red',
@@ -15,15 +19,29 @@ const STATUS_TONE: Record<string, 'neutral' | 'green' | 'red'> = {
 interface InviteFormState {
   name: string;
   email: string;
-  role: (typeof INVITABLE_ROLES)[number];
+  role: InviteRole;
 }
 
 const EMPTY_INVITE: InviteFormState = { name: '', email: '', role: 'VIEWER' };
+
+function formatError(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  return fallback;
+}
+
+function validateInvite(invite: InviteFormState): string {
+  if (!invite.name.trim()) return 'Name is required.';
+  if (!invite.email.trim()) return 'Email is required.';
+  if (!/^\S+@\S+\.\S+$/.test(invite.email.trim())) return 'Enter a valid email address.';
+  return '';
+}
 
 export default function TeamSettingsPage() {
   const [items, setItems] = useState<OwnerUserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const [showInvite, setShowInvite] = useState(false);
@@ -31,7 +49,7 @@ export default function TeamSettingsPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
 
-  const [tempPassword, setTempPassword] = useState<{ id: string; password: string } | null>(null);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,43 +58,74 @@ export default function TeamSettingsPage() {
       const { data } = await api.get<OwnerUserRecord[]>('/owner/users');
       setItems(data);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load your team.');
+      setError(formatError(err, 'Failed to load your team.'));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
+  const openInvite = () => {
+    setInviteError('');
+    setStatus('');
+    setShowInvite(true);
+  };
+
+  const closeInvite = () => {
+    if (inviting) return;
+    setShowInvite(false);
+    setInviteError('');
+    setInvite(EMPTY_INVITE);
+  };
+
   const submitInvite = async () => {
+    const validationError = validateInvite(invite);
+    if (validationError) {
+      setInviteError(validationError);
+      return;
+    }
+
     setInviting(true);
     setInviteError('');
+    setError('');
+    setStatus('');
     try {
-      await api.post('/owner/users', invite);
+      await api.post('/owner/users', {
+        ...invite,
+        name: invite.name.trim(),
+        email: invite.email.trim().toLowerCase(),
+      });
       setShowInvite(false);
       setInvite(EMPTY_INVITE);
+      setStatus('Teammate added successfully.');
       await load();
     } catch (err) {
-      setInviteError(err instanceof ApiError ? err.message : 'Failed to add teammate.');
+      setInviteError(formatError(err, 'Failed to add teammate.'));
     } finally {
       setInviting(false);
     }
   };
 
-  const runAction = async (id: string, action: 'deactivate' | 'reactivate' | 'remove') => {
+  const runAction = async (id: string, action: TeamAction) => {
+    if (action === 'remove' && !window.confirm('Remove this teammate from the organization?')) return;
+
     setBusyId(id);
     setError('');
+    setStatus('');
     try {
       if (action === 'remove') {
         await api.delete(`/owner/users/${id}`);
+        setStatus('Teammate removed successfully.');
       } else {
         await api.patch(`/owner/users/${id}/${action}`);
+        setStatus(action === 'deactivate' ? 'Teammate deactivated.' : 'Teammate reactivated.');
       }
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : `Failed to ${action} teammate.`);
+      setError(formatError(err, `Failed to ${action} teammate.`));
     } finally {
       setBusyId(null);
     }
@@ -85,11 +134,14 @@ export default function TeamSettingsPage() {
   const resetPassword = async (id: string) => {
     setBusyId(id);
     setError('');
+    setStatus('');
+    setTempPassword(null);
     try {
       const { data } = await api.patch<{ temporaryPassword: string }>(`/owner/users/${id}/reset-password`);
-      setTempPassword({ id, password: data.temporaryPassword });
+      setTempPassword(data.temporaryPassword);
+      setStatus('Temporary password generated.');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to reset password.');
+      setError(formatError(err, 'Failed to reset password.'));
     } finally {
       setBusyId(null);
     }
@@ -114,15 +166,15 @@ export default function TeamSettingsPage() {
         <div key="actions" className="flex flex-wrap gap-2">
           {member.status === 'ACTIVE' ? (
             <Button variant="secondary" disabled={isBusy} onClick={() => runAction(member.id, 'deactivate')}>
-              Deactivate
+              {isBusy ? 'Working…' : 'Deactivate'}
             </Button>
           ) : (
             <Button variant="primary" disabled={isBusy} onClick={() => runAction(member.id, 'reactivate')}>
-              Reactivate
+              {isBusy ? 'Working…' : 'Reactivate'}
             </Button>
           )}
           <Button variant="secondary" disabled={isBusy} onClick={() => resetPassword(member.id)}>
-            Reset Password
+            {isBusy ? 'Working…' : 'Reset Password'}
           </Button>
           <Button variant="danger" disabled={isBusy} onClick={() => runAction(member.id, 'remove')}>
             Remove
@@ -137,21 +189,29 @@ export default function TeamSettingsPage() {
       <SectionTitle
         title="Team"
         description="People with access to this organization."
-        action={<Button onClick={() => setShowInvite(true)}>Add Teammate</Button>}
+        action={<Button onClick={openInvite}>Add Teammate</Button>}
       />
 
-      {error ? <Panel className="border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</Panel> : null}
+      {error ? (
+        <Panel className="border-rose-200 bg-rose-50 p-4 text-sm text-rose-700" role="alert">
+          {error}
+        </Panel>
+      ) : null}
+
+      {status ? (
+        <Panel className="border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700" role="status">
+          {status}
+        </Panel>
+      ) : null}
 
       {tempPassword ? (
-        <Panel className="border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <Panel className="border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
           <div className="font-medium">Temporary password generated</div>
           <div className="mt-1">
             This will only be shown once. Share it with the teammate securely, then have them change it after
             logging in.
           </div>
-          <code className="mt-2 inline-block rounded bg-white px-3 py-1 font-mono text-sm">
-            {tempPassword.password}
-          </code>
+          <code className="mt-2 inline-block rounded bg-white px-3 py-1 font-mono text-sm">{tempPassword}</code>
           <div className="mt-2">
             <Button variant="ghost" onClick={() => setTempPassword(null)}>
               Dismiss
@@ -166,19 +226,25 @@ export default function TeamSettingsPage() {
           {inviteError ? <div className="mb-4 text-sm text-rose-700">{inviteError}</div> : null}
           <FormGrid>
             <FieldRow label="Name">
-              <Input value={invite.name} onChange={(e) => setInvite({ ...invite, name: e.target.value })} />
+              <Input
+                value={invite.name}
+                disabled={inviting}
+                onChange={(e) => setInvite({ ...invite, name: e.target.value })}
+              />
             </FieldRow>
             <FieldRow label="Email">
               <Input
                 type="email"
                 value={invite.email}
+                disabled={inviting}
                 onChange={(e) => setInvite({ ...invite, email: e.target.value })}
               />
             </FieldRow>
             <FieldRow label="Role">
               <Select
                 value={invite.role}
-                onChange={(e) => setInvite({ ...invite, role: e.target.value as InviteFormState['role'] })}
+                disabled={inviting}
+                onChange={(e) => setInvite({ ...invite, role: e.target.value as InviteRole })}
               >
                 {INVITABLE_ROLES.map((role) => (
                   <option key={role} value={role}>
@@ -192,7 +258,7 @@ export default function TeamSettingsPage() {
             <Button disabled={inviting} onClick={submitInvite}>
               {inviting ? 'Adding…' : 'Add Teammate'}
             </Button>
-            <Button variant="ghost" disabled={inviting} onClick={() => setShowInvite(false)}>
+            <Button variant="ghost" disabled={inviting} onClick={closeInvite}>
               Cancel
             </Button>
           </div>
@@ -200,7 +266,9 @@ export default function TeamSettingsPage() {
       ) : null}
 
       {loading ? (
-        <Panel className="p-6 text-sm text-muted">Loading your team…</Panel>
+        <Panel className="p-6 text-sm text-muted" role="status">
+          Loading your team…
+        </Panel>
       ) : (
         <SimpleTable
           headers={['Name', 'Email', 'Role', 'Status', 'Added', 'Actions']}
