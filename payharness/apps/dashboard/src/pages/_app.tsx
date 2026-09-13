@@ -1,5 +1,6 @@
 import type { AppContext, AppProps } from 'next/app';
 import { Plus_Jakarta_Sans } from 'next/font/google';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { AuthGate } from '@/components/auth';
 import { DashboardLayout } from '@/components/layout';
 import '@/styles/globals.css';
@@ -19,18 +20,22 @@ export default function App({ Component, pageProps, pathname }: AppPageProps) {
   if (isPublic || isPlatformRoute) {
     return (
       <main className={font.className}>
-        <Component {...pageProps} />
+        <AppErrorBoundary>
+          <Component {...pageProps} />
+        </AppErrorBoundary>
       </main>
     );
   }
 
   return (
     <main className={font.className}>
-      <AuthGate>
-        <DashboardLayout>
-          <Component {...pageProps} />
-        </DashboardLayout>
-      </AuthGate>
+      <AppErrorBoundary>
+        <AuthGate>
+          <DashboardLayout>
+            <Component {...pageProps} />
+          </DashboardLayout>
+        </AuthGate>
+      </AppErrorBoundary>
     </main>
   );
 }
