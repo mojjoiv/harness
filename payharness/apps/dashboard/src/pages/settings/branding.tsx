@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { MerchantBranding } from '@/lib/types';
 import { Button, Input, Panel, SectionTitle } from '@/components/ui';
 import { FieldRow, FormGrid } from '@/components/blocks';
@@ -32,41 +32,93 @@ function normalizeBranding(branding: MerchantBranding): MerchantBranding {
   };
 }
 
+function formatError(error: unknown): string {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  return 'Something went wrong. Please try again.';
+}
+
 export default function BrandingSettingsPage() {
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [saveError, setSaveError] = useState('');
   const [status, setStatus] = useState('');
-  const { register, handleSubmit, reset, watch } = useForm<MerchantBranding>({ defaultValues: emptyBranding });
+  const { register, handleSubmit, reset, watch, formState } = useForm<MerchantBranding>({
+    defaultValues: emptyBranding,
+  });
   const preview = watch();
 
   useEffect(() => {
-    api.get<MerchantBranding>('/merchant/branding').then(({ data }) => reset(normalizeBranding(data)));
+    let active = true;
+
+    const loadBranding = async () => {
+      setLoading(true);
+      setLoadError('');
+      try {
+        const { data } = await api.get<MerchantBranding>('/merchant/branding');
+        if (active) reset(normalizeBranding(data));
+      } catch (error) {
+        if (active) setLoadError(formatError(error));
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void loadBranding();
+    return () => {
+      active = false;
+    };
   }, [reset]);
 
   const onSubmit = async (values: MerchantBranding) => {
+    setSaveError('');
     setStatus('Saving...');
-    await api.patch('/merchant/branding', values);
-    setStatus('Saved');
+    try {
+      await api.patch('/merchant/branding', values);
+      setStatus('Saved');
+    } catch (error) {
+      setStatus('');
+      setSaveError(formatError(error));
+    }
   };
+
+  const isSubmitting = formState.isSubmitting;
 
   return (
     <div className="space-y-6">
       <SectionTitle title="Branding" description="Control the look of hosted checkout and receipts." />
+      {loading && (
+        <Panel className="p-4 text-sm text-muted" role="status">
+          Loading branding settings...
+        </Panel>
+      )}
+      {loadError && (
+        <Panel className="border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
+          {loadError}
+        </Panel>
+      )}
+      {saveError && (
+        <Panel className="border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
+          {saveError}
+        </Panel>
+      )}
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <Panel className="p-6">
           <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
             <FormGrid>
-              <FieldRow label="Logo URL"><Input {...register('logoUrl')} /></FieldRow>
-              <FieldRow label="Favicon URL"><Input {...register('faviconUrl')} /></FieldRow>
-              <FieldRow label="Primary color"><Input type="color" {...register('primaryColor')} /></FieldRow>
-              <FieldRow label="Secondary color"><Input type="color" {...register('secondaryColor')} /></FieldRow>
-              <FieldRow label="Button color"><Input type="color" {...register('buttonColor')} /></FieldRow>
-              <FieldRow label="Merchant name"><Input {...register('merchantName')} /></FieldRow>
+              <FieldRow label="Logo URL"><Input {...register('logoUrl')} disabled={loading || isSubmitting} /></FieldRow>
+              <FieldRow label="Favicon URL"><Input {...register('faviconUrl')} disabled={loading || isSubmitting} /></FieldRow>
+              <FieldRow label="Primary color"><Input type="color" {...register('primaryColor')} disabled={loading || isSubmitting} /></FieldRow>
+              <FieldRow label="Secondary color"><Input type="color" {...register('secondaryColor')} disabled={loading || isSubmitting} /></FieldRow>
+              <FieldRow label="Button color"><Input type="color" {...register('buttonColor')} disabled={loading || isSubmitting} /></FieldRow>
+              <FieldRow label="Merchant name"><Input {...register('merchantName')} disabled={loading || isSubmitting} /></FieldRow>
             </FormGrid>
-            <FieldRow label="Success page message"><Input {...register('successPageMessage')} /></FieldRow>
-            <FieldRow label="Cancel page message"><Input {...register('cancelPageMessage')} /></FieldRow>
-            <FieldRow label="Receipt footer"><Input {...register('receiptFooter')} /></FieldRow>
+            <FieldRow label="Success page message"><Input {...register('successPageMessage')} disabled={loading || isSubmitting} /></FieldRow>
+            <FieldRow label="Cancel page message"><Input {...register('cancelPageMessage')} disabled={loading || isSubmitting} /></FieldRow>
+            <FieldRow label="Receipt footer"><Input {...register('receiptFooter')} disabled={loading || isSubmitting} /></FieldRow>
             <div className="flex items-center gap-3">
-              <Button type="submit">Save branding</Button>
-              <div className="text-sm text-muted">{status}</div>
+              <Button type="submit" disabled={loading || isSubmitting}>{isSubmitting ? 'Saving...' : 'Save branding'}</Button>
+              <div className="text-sm text-muted" role="status">{status}</div>
             </div>
           </form>
         </Panel>
