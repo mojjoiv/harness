@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PaymentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import { AdvancedReportDto } from './advanced-report.dto';
@@ -72,7 +72,7 @@ export class AnalyticsService {
       : new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     if (start > end) {
-      throw new Error('startDate must be before endDate');
+      throw new BadRequestException('startDate must be before endDate');
     }
 
     const durationMs = end.getTime() - start.getTime();
