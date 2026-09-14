@@ -4,7 +4,14 @@ declare(strict_types=1);
 
 use PayHarness\Webhook;
 
-require dirname(__DIR__) . '/vendor/autoload.php';
+spl_autoload_register(static function (string $class): void {
+    $prefix = 'PayHarness\\';
+    if (!str_starts_with($class, $prefix)) {
+        return;
+    }
+    $path = dirname(__DIR__) . '/src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+    require $path;
+});
 
 $secret = 'whsec_test';
 $body = '{"type":"payment.succeeded"}';
