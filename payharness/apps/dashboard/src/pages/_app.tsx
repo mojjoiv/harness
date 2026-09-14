@@ -7,7 +7,7 @@ import '@/styles/globals.css';
 
 const font = Plus_Jakarta_Sans({ subsets: ['latin'] });
 
-const publicRoutes = ['/login', '/register', '/debug'];
+const publicRoutes = ['/', '/login', '/register', '/debug'];
 
 type AppPageProps = AppProps & {
   pathname: string;
