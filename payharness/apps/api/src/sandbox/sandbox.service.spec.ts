@@ -100,7 +100,17 @@ describe('SandboxService', () => {
     prisma.transaction.create.mockResolvedValue({});
     idempotency.claim.mockResolvedValue({ claim: { id: 'claim-1' } });
 
-    const result = await service.refund('merchant-1', undefined, 'payment-1', 500, 'refund-key-1');
+    const result = (await service.refund(
+      'merchant-1',
+      undefined,
+      'payment-1',
+      500,
+      'refund-key-1',
+    )) as {
+      status: string;
+      environment: string;
+      remainingAmountCents: number;
+    };
 
     expect(result.status).toBe('PARTIALLY_REFUNDED');
     expect(result.environment).toBe('SANDBOX');
