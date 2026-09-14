@@ -26,6 +26,7 @@
     "db:setup": "npm --workspace apps/api run db:setup",
     "seed": "npm --workspace apps/api run seed",
     "verify:fresh-clone": "node scripts/verify-fresh-clone.mjs",
+    "verify:integrations": "node scripts/integration-certification.mjs",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "format:check": "prettier --check .",
     "format:check:changed": "node scripts/check-format-changed.js",

@@ -71,6 +71,9 @@ jobs:
           go test ./...
           go vet ./...
           go build ./...
+      - name: Integration certification
+        working-directory: payharness
+        run: npm run verify:integrations
       - name: API and dashboard tests with coverage
         working-directory: payharness
         run: npm run test:cov

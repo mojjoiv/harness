@@ -12,6 +12,14 @@ X-PayHarness-Event: payment.succeeded
 X-PayHarness-Signature: t=1720000000,v1=<64-char-hex-signature>
 ```
 
+The canonical signature header format is:
+
+```text
+t=<timestamp>,v1=<hex>
+```
+
+Where `t` is the Unix timestamp and `v1` is the HMAC-SHA256 hex digest.
+
 The signature is calculated over the exact raw JSON request body, prefixed by the Unix timestamp:
 
 ```text
