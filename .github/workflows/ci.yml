@@ -43,6 +43,15 @@ jobs:
         run: find integrations/woocommerce -type f -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Joomla PHP syntax
         run: find integrations/joomla -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Node.js SDK build
+        working-directory: payharness
+        run: npm --workspace packages/sdk-js run build
+      - name: Node.js SDK tests
+        working-directory: payharness
+        run: npm --workspace packages/sdk-js test
+      - name: Node.js SDK package check
+        working-directory: payharness
+        run: npm --workspace packages/sdk-js run pack:check
       - name: API and dashboard tests with coverage
         working-directory: payharness
         run: npm run test:cov
