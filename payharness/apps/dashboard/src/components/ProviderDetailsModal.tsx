@@ -22,17 +22,25 @@ const HEALTH_META: Record<string, { emoji: string; label: string; tone: 'neutral
   DISABLED: { emoji: '⚫', label: 'Disabled', tone: 'neutral' },
 };
 
+function asStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
+  if (typeof value === 'string' && value.trim()) return [value];
+  return [];
+}
+
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-6 border-b border-border py-3 last:border-b-0">
-      <span className="text-sm text-muted">{label}</span>
-      <span className="max-w-[65%] text-right text-sm font-medium text-ink">{value}</span>
+    <div className="flex min-w-0 items-start justify-between gap-6 border-b border-border py-3 last:border-b-0">
+      <span className="shrink-0 text-sm text-muted">{label}</span>
+      <span className="min-w-0 max-w-[68%] break-words text-right text-sm font-medium text-ink">{value}</span>
     </div>
   );
 }
 
 export function ProviderDetailsModal({ credential, history, historyLoading, onClose, onVerify, onSetDefault, onDisconnect, busy }: ProviderDetailsModalProps) {
   const health = HEALTH_META[credential.healthStatus] || HEALTH_META.PENDING;
+  const warnings = asStringArray(credential.verificationWarnings);
+  const errors = asStringArray(credential.verificationErrors);
   const isRevoked = credential.status === 'REVOKED';
 
   useEffect(() => {
@@ -97,15 +105,19 @@ export function ProviderDetailsModal({ credential, history, historyLoading, onCl
             <h3 className="mb-2 text-base font-semibold text-ink">Configuration</h3>
             {credential.publicConfig && Object.keys(credential.publicConfig).length > 0 ? (
               Object.entries(credential.publicConfig).map(([key, value]) => (
-                <DetailRow key={key} label={key.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase())} value={typeof value === 'string' ? value : JSON.stringify(value)} />
+                <DetailRow
+                  key={key}
+                  label={key.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase())}
+                  value={<span className="break-all">{typeof value === 'string' ? value : JSON.stringify(value)}</span>}
+                />
               ))
             ) : (
               <div className="py-3 text-sm text-muted">No public configuration values returned.</div>
             )}
-            <div className="flex items-center justify-between gap-4 border-b border-border py-3">
-              <span className="text-sm text-muted">Webhook URL</span>
-              <div className="flex max-w-[65%] items-center gap-2">
-                <code className="truncate text-right text-xs text-ink">{credential.webhookUrl}</code>
+            <div className="flex min-w-0 items-start justify-between gap-6 border-b border-border py-3">
+              <span className="shrink-0 text-sm text-muted">Webhook URL</span>
+              <div className="flex min-w-0 max-w-[68%] items-start gap-2">
+                <code className="min-w-0 break-all text-right text-xs text-ink">{credential.webhookUrl}</code>
                 <CopyButton value={credential.webhookUrl} />
               </div>
             </div>
@@ -119,19 +131,19 @@ export function ProviderDetailsModal({ credential, history, historyLoading, onCl
             <DetailRow label="Webhook" value={credential.webhookVerified ? 'Verified' : 'Not verified'} />
             <DetailRow label="Latency" value={credential.verificationLatencyMs != null ? `${credential.verificationLatencyMs}ms` : '—'} />
             <DetailRow label="Last verified" value={credential.lastVerifiedAt ? dateTime(credential.lastVerifiedAt) : 'Never'} />
-            {credential.verificationWarnings.length > 0 ? (
+            {warnings.length > 0 ? (
               <div className="mt-3 rounded-2xl bg-panelAlt p-3 text-sm text-muted">
                 <div className="font-medium text-ink">Warnings</div>
-                <ul className="mt-2 list-disc space-y-1 pl-5">{credential.verificationWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+                <ul className="mt-2 list-disc space-y-1 pl-5">{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
               </div>
             ) : null}
-            {credential.verificationErrors.length > 0 ? (
+            {errors.length > 0 ? (
               <div className="mt-3 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700">
                 <div className="font-medium">Errors</div>
-                <ul className="mt-2 list-disc space-y-1 pl-5">{credential.verificationErrors.map((error) => <li key={error}>{error}</li>)}</ul>
+                <ul className="mt-2 list-disc space-y-1 pl-5">{errors.map((error) => <li key={error}>{error}</li>)}</ul>
               </div>
             ) : null}
-            {credential.lastVerificationError ? <div className="mt-3 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700">Last verification error: {credential.lastVerificationError}</div> : null}
+            {credential.lastVerificationError ? <div className="mt-3 break-words rounded-2xl bg-rose-50 p-3 text-sm text-rose-700">Last verification error: {credential.lastVerificationError}</div> : null}
             {credential.failedVerificationCount > 0 ? <div className="mt-3 text-xs text-muted">Failed verification attempts: {credential.failedVerificationCount}</div> : null}
           </Panel>
 
@@ -159,7 +171,7 @@ export function ProviderDetailsModal({ credential, history, historyLoading, onCl
                       <span>OAuth: {log.oauthSucceeded ? 'Yes' : 'No'}</span>
                       <span>Latency: {log.responseTimeMs != null ? `${log.responseTimeMs}ms` : '—'}</span>
                     </div>
-                    {log.failureReason ? <div className="mt-2 text-xs text-rose-700">{log.failureReason}</div> : null}
+                    {log.failureReason ? <div className="mt-2 break-words text-xs text-rose-700">{log.failureReason}</div> : null}
                   </div>
                 ))}
               </div>
