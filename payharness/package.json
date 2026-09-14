@@ -2,13 +2,8 @@
   "name": "payharness",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "engines": {
-    "node": ">=20.11.1"
-  },
+  "workspaces": ["apps/*", "packages/*"],
+  "engines": { "node": ">=20.11.1" },
   "overrides": {
     "multer": "2.3.0",
     "postcss": "8.5.26",
@@ -17,14 +12,12 @@
   },
   "scripts": {
     "build": "npm run build:api && npm run build:dashboard",
-    "build:api": "npm run build:api && npm run build:dashboard",
     "build:api": "npm --workspace apps/api run build",
     "build:dashboard": "npm --workspace apps/dashboard run build",
     "start:prod": "npm --workspace apps/api run start:prod",
     "start:dashboard": "npm --workspace apps/dashboard run start",
     "prisma:generate": "npm --workspace apps/api run prisma:generate",
     "prisma:migrate:deploy": "npm --workspace apps/api run prisma:migrate:deploy",
-    "db:setup": "npm run db:setup",
     "db:setup": "npm --workspace apps/api run db:setup",
     "seed": "npm --workspace apps/api run seed",
     "verify:fresh-clone": "node scripts/verify-fresh-clone.mjs",
@@ -42,7 +35,7 @@
     "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^8.67.0",
     "eslint": "^8.57.1",
-    "eslint-config-prettier": "^9.1.1",
+    "eslint-config-prettier": "^9.1.0",
     "jest": "^29.7.0",
     "prettier": "^3.3.3",
     "typescript": "^5.1.6"
