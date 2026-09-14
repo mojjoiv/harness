@@ -10,19 +10,21 @@ const links = [
 export function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex min-h-20 max-w-[1400px] items-center px-6 py-4 lg:px-10">
-        <div className="shrink-0">
-          <Link href="/" className="flex items-center" aria-label="PayHarness home">
-            <img
-              src="https://raw.githubusercontent.com/mojjoiv/harness/main/logo_transparent.png"
-              alt="PayHarness"
-              className="h-11 w-auto object-contain"
-            />
-          </Link>
-        </div>
+      <div className="mx-auto flex min-h-20 w-full max-w-[1400px] items-center px-6 py-4 lg:px-10">
+        <Link
+          href="/"
+          className="flex shrink-0 items-center"
+          aria-label="PayHarness home"
+        >
+          <img
+            src="https://raw.githubusercontent.com/mojjoiv/harness/feat/payharness-landing-page/logo_transparent.png"
+            alt="PayHarness"
+            className="block h-11 w-auto object-contain"
+          />
+        </Link>
 
         <nav
-          className="ml-12 hidden flex-1 items-center gap-10 md:flex lg:ml-16"
+          className="ml-10 hidden flex-1 items-center gap-8 md:flex lg:ml-14 lg:gap-10"
           aria-label="Main navigation"
         >
           {links.map((link) => (
@@ -36,7 +38,7 @@ export function Navbar() {
           ))}
         </nav>
 
-        <div className="ml-auto flex shrink-0 items-center gap-4">
+        <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-4">
           <Link
             href="/login"
             className="hidden px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:text-slate-950 sm:block"
