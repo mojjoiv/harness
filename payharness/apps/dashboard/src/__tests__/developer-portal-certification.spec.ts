@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('Developer Portal UI certification', () => {
-  const dashboardRoot = path.resolve(__dirname, '..');
-  const pagesRoot = path.join(dashboardRoot, 'pages');
+  const srcRoot = path.resolve(__dirname, '..');
+  const pagesRoot = path.join(srcRoot, 'pages');
 
   const readPage = (relativePath: string) =>
     fs.readFileSync(path.join(pagesRoot, relativePath), 'utf8');
@@ -11,7 +11,7 @@ describe('Developer Portal UI certification', () => {
   it('keeps the Developer Portal workspace and navigation contracts', () => {
     const portal = readPage('developers/index.tsx');
     const layout = fs.readFileSync(
-      path.join(dashboardRoot, 'components', 'layout.tsx'),
+      path.join(srcRoot, 'components', 'layout.tsx'),
       'utf8',
     );
 
