@@ -73,8 +73,9 @@ export default function BrandingSettingsPage() {
   const onSubmit = async (values: MerchantBranding) => {
     setSaveError('');
     setStatus('Saving...');
+    const { merchantName: _merchantName, ...brandingPayload } = values;
     try {
-      await api.patch('/merchant/branding', values);
+      await api.patch('/merchant/branding', brandingPayload);
       setStatus('Saved');
     } catch (error) {
       setStatus('');
