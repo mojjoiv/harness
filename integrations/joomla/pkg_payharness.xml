@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="package" method="upgrade">
+  <name>pkg_payharness</name>
+  <packagename>payharness</packagename>
+  <version>0.1.0</version>
+  <description>PayHarness integration package for Joomla VirtueMart.</description>
+  <files>
+    <file type="plugin" id="payharness" group="vmpayment">payharness</file>
+    <file type="plugin" id="payharnesswebhook" group="system">payharnesswebhook</file>
+  </files>
+</extension>
