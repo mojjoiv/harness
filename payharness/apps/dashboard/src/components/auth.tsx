@@ -38,7 +38,7 @@ export function AuthGate({ children }: React.PropsWithChildren) {
 
 export function logout(router: ReturnType<typeof useRouter>) {
   clearSession();
-  router?.push('/login');
+  router?.push('/');
 }
 
 export function PlatformAuthGate({ children }: React.PropsWithChildren) {
