@@ -130,6 +130,7 @@ export default function AnalyticsPage() {
   const summary = report?.summary;
   const comparison = report?.comparison;
   const maxDaily = Math.max(...(report?.daily.map((row) => row.grossVolumeCents) || [0]), 1);
+  const dailyRows = [...(report?.daily || [])].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <div className="space-y-6">
@@ -334,9 +335,9 @@ export default function AnalyticsPage() {
               <div className="text-sm font-semibold text-ink">Daily volume</div>
               <div className="mt-1 text-xs text-muted">Gross daily payment volume for the selected period.</div>
             </div>
-            {report.daily.length ? (
+            {dailyRows.length ? (
               <div className="space-y-3">
-                {report.daily.map((row) => (
+                {dailyRows.map((row) => (
                   <div key={row.date} className="grid grid-cols-[90px_1fr_100px] items-center gap-3 text-sm">
                     <span className="text-muted">{row.date}</span>
                     <div className="h-2 overflow-hidden rounded-full bg-panelAlt">
