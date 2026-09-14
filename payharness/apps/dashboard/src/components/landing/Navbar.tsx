@@ -9,14 +9,14 @@ const links = [
 
 export function Navbar() {
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex min-h-20 max-w-[1400px] items-center px-6 py-4 lg:px-10">
-        <div className="shrink-0">
+    <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white">
+      <div className="mx-auto flex min-h-[80px] w-full max-w-[1400px] items-center px-6 py-5 lg:px-10">
+        <div className="flex shrink-0 items-center">
           <Link href="/" className="flex items-center" aria-label="PayHarness home">
             <img
-              src="https://raw.githubusercontent.com/mojjoiv/harness/main/logo_transparent.png"
+              src="https://raw.githubusercontent.com/mojjoiv/harness/fix/payharness-navbar-spacing/logo_transparent.png"
               alt="PayHarness"
-              className="h-11 w-auto object-contain"
+              className="block h-11 w-auto object-contain"
             />
           </Link>
         </div>
