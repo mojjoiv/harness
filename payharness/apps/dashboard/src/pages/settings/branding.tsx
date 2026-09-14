@@ -73,8 +73,18 @@ export default function BrandingSettingsPage() {
   const onSubmit = async (values: MerchantBranding) => {
     setSaveError('');
     setStatus('Saving...');
+    const brandingPayload = {
+      logoUrl: values.logoUrl,
+      faviconUrl: values.faviconUrl,
+      primaryColor: values.primaryColor,
+      secondaryColor: values.secondaryColor,
+      buttonColor: values.buttonColor,
+      successPageMessage: values.successPageMessage,
+      cancelPageMessage: values.cancelPageMessage,
+      receiptFooter: values.receiptFooter,
+    };
     try {
-      await api.patch('/merchant/branding', values);
+      await api.patch('/merchant/branding', brandingPayload);
       setStatus('Saved');
     } catch (error) {
       setStatus('');
