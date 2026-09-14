@@ -39,6 +39,8 @@ jobs:
       - name: Format check
         working-directory: payharness
         run: npm run format:check:changed
+      - name: WooCommerce PHP syntax
+        run: find integrations/woocommerce -type f -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: API and dashboard tests with coverage
         working-directory: payharness
         run: npm run test:cov
