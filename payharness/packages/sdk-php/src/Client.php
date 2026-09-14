@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PayHarness;
 
+use Closure;
 use RuntimeException;
 
 final class Client
@@ -14,7 +15,7 @@ final class Client
     public function __construct(
         private readonly string $apiKey,
         private readonly string $baseUrl = self::DEFAULT_BASE_URL,
-        private readonly ?callable $transport = null,
+        private readonly ?Closure $transport = null,
     ) {
         if ($apiKey === '') {
             throw new RuntimeException('PayHarness API key is required.');
@@ -116,7 +117,6 @@ final class Client
 
         $rawBody = curl_exec($handle);
         $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
-        $requestId = curl_getinfo($handle, 'request_id') ?: null;
         $error = curl_error($handle);
         curl_close($handle);
 
@@ -124,7 +124,7 @@ final class Client
             throw new RuntimeException($error !== '' ? $error : 'PayHarness request failed.');
         }
 
-        return $this->decodeResponse(['status' => $status, 'body' => $rawBody, 'requestId' => $requestId]);
+        return $this->decodeResponse(['status' => $status, 'body' => $rawBody]);
     }
 
     /** @param array{status:int,body:string,requestId?:string|null} $response */
