@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="vmpayment" method="upgrade">
+  <name>plg_vmpayment_payharness</name>
+  <author>PayHarness</author>
+  <creationDate>2026-09-14</creationDate>
+  <version>0.1.0</version>
+  <description>PayHarness payment integration for Joomla VirtueMart.</description>
+  <files>
+    <filename plugin="payharness">payharness.php</filename>
+    <filename>payharness.xml</filename>
+  </files>
+  <config>
+    <fields name="params">
+      <fieldset name="basic">
+        <field name="api_url" type="url" label="PayHarness API URL" default="https://harness-1.onrender.com" />
+        <field name="api_key" type="password" label="PayHarness API Key" filter="raw" />
+        <field name="environment" type="list" label="Environment" default="SANDBOX">
+          <option value="SANDBOX">Sandbox</option>
+          <option value="LIVE">Live</option>
+        </field>
+        <field name="provider" type="list" label="Provider" default="MPESA">
+          <option value="MPESA">M-Pesa</option>
+          <option value="PAYPAL">PayPal</option>
+        </field>
+        <field name="webhook_secret" type="password" label="Webhook Secret" filter="raw" />
+      </fieldset>
+    </fields>
+  </config>
+</extension>
