@@ -58,8 +58,22 @@ export default function GeneralSettingsPage() {
   const onSubmit = async (values: MerchantSettings) => {
     setStatus('');
     setSaveError('');
+    const settingsPayload = {
+      defaultCurrency: values.defaultCurrency,
+      defaultEnvironment: values.defaultEnvironment,
+      receiptEmailsEnabled: values.receiptEmailsEnabled,
+      webhookRetriesEnabled: values.webhookRetriesEnabled,
+      retryCount: values.retryCount,
+      paymentTimeoutMinutes: values.paymentTimeoutMinutes,
+      requireCustomerEmail: values.requireCustomerEmail,
+      requireCustomerPhone: values.requireCustomerPhone,
+      successUrl: values.successUrl,
+      cancelUrl: values.cancelUrl,
+      webhookForwardingUrl: values.webhookForwardingUrl,
+    };
+
     try {
-      await api.patch('/merchant/settings', values);
+      await api.patch('/merchant/settings', settingsPayload);
       setStatus('Settings saved successfully.');
     } catch (error) {
       setSaveError(formatError(error));
