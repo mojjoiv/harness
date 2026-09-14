@@ -82,8 +82,24 @@ export default function ProfileSettingsPage() {
     setStatus('');
     setSaveError('');
 
+    const profilePayload = {
+      businessName: values.businessName,
+      legalName: values.legalName,
+      registrationNumber: values.registrationNumber,
+      taxPin: values.taxPin,
+      country: values.country,
+      currency: values.currency,
+      timezone: values.timezone,
+      supportEmail: values.supportEmail,
+      supportPhone: values.supportPhone,
+      website: values.website,
+      logoUrl: values.logoUrl,
+      primaryBrandColor: values.primaryBrandColor,
+      secondaryBrandColor: values.secondaryBrandColor,
+    };
+
     try {
-      await api.patch('/merchant/profile', values);
+      await api.patch('/merchant/profile', profilePayload);
       reset(values);
       setStatus('Profile saved successfully.');
     } catch (error) {
