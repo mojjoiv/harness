@@ -1,9 +1,12 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, AuthUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
 import { ApiKeysService } from './api-keys.service';
 
+@ApiTags('api-keys')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('api-keys')
 export class ApiKeysController {
