@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, WebhookDelivery } from '@prisma/client';
-import { createHash, createHmac } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import * as http from 'http';
 import * as https from 'https';
+import { createHash } from 'crypto';
 import { PrismaService } from '../common/prisma.service';
+import { buildWebhookSignature } from './webhook-signature';
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_RETRY_DELAYS_MS = [0, 1000, 3000];
@@ -181,10 +182,8 @@ export class WebhookDeliveryService {
     }
 
     const body = JSON.stringify(payload);
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-    const signature = secretHash
-      ? createHmac('sha256', secretHash).update(`${timestamp}.${body}`).digest('hex')
-      : undefined;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = secretHash ? buildWebhookSignature(secretHash, timestamp, body) : undefined;
     const client = parsed.protocol === 'http:' ? http : https;
 
     return new Promise((resolve, reject) => {
@@ -198,7 +197,7 @@ export class WebhookDeliveryService {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(body),
             ...(eventType ? { 'X-PayHarness-Event': eventType } : {}),
-            ...(signature ? { 'X-PayHarness-Signature': `t=${timestamp},v1=${signature}` } : {}),
+            ...(signature ? { 'X-PayHarness-Signature': signature } : {}),
           },
           timeout: REQUEST_TIMEOUT_MS,
         },
