@@ -65,6 +65,12 @@ jobs:
       - name: Node.js SDK package check
         working-directory: payharness
         run: npm --workspace packages/sdk-js run pack:check
+      - name: Go SDK validation
+        working-directory: payharness/packages/sdk-go
+        run: |
+          go test ./...
+          go vet ./...
+          go build ./...
       - name: API and dashboard tests with coverage
         working-directory: payharness
         run: npm run test:cov
