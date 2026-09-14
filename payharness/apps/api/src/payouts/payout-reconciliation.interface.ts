@@ -1,4 +1,4 @@
-import { Environment, Provider } from '@prisma/client';
+import { Provider } from '@prisma/client';
 
 import { PayoutExecutionInput } from './payout-provider.interface';
 

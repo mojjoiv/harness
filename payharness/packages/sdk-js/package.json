@@ -1,13 +1,19 @@
 {
   "name": "@payharness/sdk-js",
   "version": "0.1.0",
+  "description": "Official Node.js SDK for the PayHarness payment API.",
+  "license": "MIT",
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": ["dist", "README.md"],
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/sdk.test.mjs",
+    "pack:check": "npm pack --dry-run"
   },
   "devDependencies": {
+    "@types/node": "^20.19.1",
     "typescript": "^5.1.6"
   }
 }
