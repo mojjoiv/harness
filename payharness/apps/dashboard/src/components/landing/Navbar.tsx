@@ -13,7 +13,7 @@ export function Navbar() {
       <div className="mx-auto flex min-h-20 w-full max-w-[1400px] items-center px-6 py-4 lg:px-10">
         <Link
           href="/"
-          className="flex shrink-0 items-center"
+          className="flex shrink-0 items-center gap-3"
           aria-label="PayHarness home"
         >
           <img
@@ -21,6 +21,9 @@ export function Navbar() {
             alt="PayHarness"
             className="block h-11 w-auto object-contain"
           />
+          <span className="text-xl font-bold tracking-tight text-[#0B1F3A]">
+            PayHarness
+          </span>
         </Link>
 
         <nav
