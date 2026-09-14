@@ -53,6 +53,7 @@ jobs:
       - name: Python SDK validation
         working-directory: payharness/packages/sdk-python
         run: |
+          python3 -m pip install -q pytest
           python3 -m compileall payharness tests
           python3 -m pytest -q
       - name: Node.js SDK build
