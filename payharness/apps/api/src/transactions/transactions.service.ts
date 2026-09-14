@@ -42,7 +42,13 @@ export class TransactionsService {
       this.prisma.transaction.count({ where }),
     ]);
 
-    return paginated(items, total, pagination);
+    const data = items.map(({ payment, ...transaction }) => ({
+      ...transaction,
+      provider: payment.provider,
+      payment,
+    }));
+
+    return paginated(data, total, pagination);
   }
 
   async get(merchantId: string, id: string) {
@@ -53,6 +59,12 @@ export class TransactionsService {
     if (!transaction) {
       throw new NotFoundException('Transaction not found');
     }
-    return transaction;
+
+    const { payment, ...transactionData } = transaction;
+    return {
+      ...transactionData,
+      provider: payment.provider,
+      payment,
+    };
   }
 }
