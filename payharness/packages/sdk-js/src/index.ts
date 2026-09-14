@@ -26,7 +26,7 @@ export function createWebhookSignature(secret: string, timestamp: number | strin
 }
 
 export function verifyWebhookSignature(secret: string, signatureHeader: string, rawBody: string, nowSeconds = Math.floor(Date.now() / 1000), toleranceSeconds = WEBHOOK_SIGNATURE_TOLERANCE_SECONDS): boolean {
-  const match = /^(\d+),v1=([a-f0-9]{64})$/.exec(signatureHeader.trim());
+  const match = /^t=(\d+),v1=([a-f0-9]{64})$/.exec(signatureHeader.trim());
   if (!match) return false;
   const timestamp = Number(match[1]);
   if (Math.abs(nowSeconds - timestamp) > toleranceSeconds) return false;
