@@ -79,6 +79,12 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
   const [branding, setBranding] = useState<MerchantBranding | null>(null);
   const currentPath = router?.asPath?.split('?')[0] || '';
   const nav = useMemo(() => sections, []);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    Main: true,
+    Operations: false,
+    Developers: false,
+    Settings: false,
+  });
 
   useEffect(() => {
     setSession(getSession());
@@ -88,8 +94,24 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
       .catch(() => setBranding(null));
   }, []);
 
+  useEffect(() => {
+    const activeSection = nav.find((section) =>
+      section.items.some((item) =>
+        item.exact ? currentPath === item.href : currentPath.startsWith(item.href),
+      ),
+    );
+    if (activeSection) {
+      setExpandedSections((current) => ({ ...current, [activeSection.title]: true }));
+    }
+  }, [currentPath, nav]);
+
   const workspaceName = branding?.merchantName || 'PayHarness';
   const primaryColor = branding?.primaryColor || '#1d4ed8';
+
+  function toggleSection(title: string) {
+    if (title === 'Main') return;
+    setExpandedSections((current) => ({ ...current, [title]: !current[title] }));
+  }
 
   return (
     <div className="min-h-screen bg-bg text-ink">
@@ -128,42 +150,54 @@ export function DashboardLayout({ children }: React.PropsWithChildren) {
             </Button>
           </div>
 
-          <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
-            {nav.map((section) => (
-              <div key={section.title}>
-                <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
-                  {section.title}
+          <nav className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+            {nav.map((section) => {
+              const expanded = expandedSections[section.title] ?? false;
+              const isMain = section.title === 'Main';
+
+              return (
+                <div key={section.title}>
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section.title)}
+                    aria-expanded={expanded}
+                    className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-left text-[10px] font-bold uppercase tracking-[0.14em] text-muted transition hover:text-ink"
+                  >
+                    <span>{section.title}</span>
+                    {!isMain ? (
+                      <span className="text-sm leading-none" aria-hidden="true">
+                        {expanded ? '⌃' : '⌄'}
+                      </span>
+                    ) : null}
+                  </button>
+
+                  {expanded ? (
+                    <div className="mt-1 space-y-1">
+                      {section.items.map((item) => {
+                        const active = item.exact
+                          ? currentPath === item.href
+                          : currentPath.startsWith(item.href);
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setOpen(false)}
+                            className={cx(
+                              'flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition',
+                              active
+                                ? 'bg-brand text-white shadow-sm'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-ink',
+                            )}
+                          >
+                            {item.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
-                <div className="space-y-1">
-                  {section.items.map((item) => {
-                    const active = item.exact
-                      ? currentPath === item.href
-                      : currentPath.startsWith(item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setOpen(false)}
-                        className={cx(
-                          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
-                          active
-                            ? 'bg-brand text-white shadow-sm'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-ink',
-                        )}
-                      >
-                        <span
-                          className={cx(
-                            'h-1.5 w-1.5 rounded-full',
-                            active ? 'bg-white' : 'bg-slate-300',
-                          )}
-                        />
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </nav>
 
           <div className="mt-5 shrink-0 border-t border-line pt-4">
