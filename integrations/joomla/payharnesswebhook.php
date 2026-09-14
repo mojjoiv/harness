@@ -23,9 +23,9 @@ class PlgSystemPayHarnessWebhook extends JPlugin
 
         $db = JFactory::getDbo();
         $orders = $this->findOrders($db, $payment_id);
-        foreach ($orders as $order) {
-            $status = $this->mapStatus($event_type);
-            if ($status !== '') {
+        $status = $this->mapStatus($event_type);
+        if ($status !== '') {
+            foreach ($orders as $order) {
                 $query = $db->getQuery(true)->update($db->quoteName('#__virtuemart_orders'))
                     ->set($db->quoteName('order_status') . ' = ' . $db->quote($status))
                     ->where($db->quoteName('virtuemart_order_id') . ' = ' . (int) $order->virtuemart_order_id);
@@ -69,7 +69,7 @@ class PlgSystemPayHarnessWebhook extends JPlugin
     private function getWebhookSecret()
     {
         $db = JFactory::getDbo();
-        $query = $db->getQuery(true)->select($db->quoteName('params'))
+        $query = $db->getQuery(true)->select($db->quoteName('payment_params'))
             ->from($db->quoteName('#__virtuemart_paymentmethods'))
             ->where($db->quoteName('payment_params') . ' LIKE ' . $db->quote('%webhook_secret%'));
         $db->setQuery($query, 0, 20);
