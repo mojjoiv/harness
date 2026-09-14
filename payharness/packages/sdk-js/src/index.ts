@@ -12,7 +12,7 @@ export interface PayHarnessResponse<T> { success: boolean; data: T; meta?: { api
 export interface CreatePaymentInput { amountCents: number; currency: string; environment: Environment; provider: Provider; customerId?: string; checkoutSessionId?: string; metadata?: Record<string, unknown>; phoneNumber?: string; simulateOutcome?: 'SUCCEEDED' | 'FAILED' }
 export interface RefundInput { amountCents?: number }
 export interface CreatePayoutInput { amountCents: number; currency: string; provider: Provider; recipientReference: string; recipientName?: string; phoneNumber?: string; metadata?: Record<string, unknown> }
-export interface PayoutListQuery { page?: number; limit?: number; status?: string; provider?: Provider }
+export interface PayoutListQuery { [key: string]: unknown; page?: number; limit?: number; status?: string; provider?: Provider }
 
 export class PayHarnessError extends Error {
   readonly status: number; readonly requestId?: string; readonly code?: string; readonly details?: unknown;
@@ -26,7 +26,7 @@ export function createWebhookSignature(secret: string, timestamp: number | strin
 }
 
 export function verifyWebhookSignature(secret: string, signatureHeader: string, rawBody: string, nowSeconds = Math.floor(Date.now() / 1000), toleranceSeconds = WEBHOOK_SIGNATURE_TOLERANCE_SECONDS): boolean {
-  const match = /^t=(\d+),v1=([a-f0-9]{64})$/.exec(signatureHeader.trim());
+  const match = /^(\d+),v1=([a-f0-9]{64})$/.exec(signatureHeader.trim());
   if (!match) return false;
   const timestamp = Number(match[1]);
   if (Math.abs(nowSeconds - timestamp) > toleranceSeconds) return false;
