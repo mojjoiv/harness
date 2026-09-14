@@ -8,6 +8,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -17,6 +18,8 @@ import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor
 import { PaymentsService } from './payments.service';
 import { RefundService } from './refund.service';
 
+@ApiTags('payments')
+@ApiBearerAuth()
 @UseGuards(MerchantAuthGuard)
 @Controller('payments')
 export class PaymentsController {
