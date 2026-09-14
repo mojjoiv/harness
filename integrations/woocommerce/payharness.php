@@ -15,7 +15,7 @@ defined('ABSPATH') || exit;
 define('PAYHARNESS_WC_VERSION', '0.1.0');
 define('PAYHARNESS_WC_PATH', plugin_dir_path(__FILE__));
 
-action_exists('plugins_loaded') && add_action('plugins_loaded', 'payharness_wc_init', 20);
+add_action('plugins_loaded', 'payharness_wc_init', 20);
 
 function payharness_wc_init() {
     if (!class_exists('WooCommerce')) {
