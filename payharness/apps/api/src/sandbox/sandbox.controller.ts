@@ -1,20 +1,20 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePaymentDto } from '../payments/dto/create-payment.dto';
-import { PaymentsService } from '../payments/payments.service';
+import { SandboxService } from './sandbox.service';
 
 @ApiTags('sandbox')
 @ApiBearerAuth()
 @UseGuards(MerchantAuthGuard)
 @Controller('sandbox')
 export class SandboxController {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(private readonly sandbox: SandboxService) {}
 
   @Get('status')
   status(@CurrentUser() user: AuthUser) {
-    this.assertSandbox(user);
+    this.sandbox.assertSandboxApiKey(user);
     return {
       environment: 'SANDBOX' as const,
       enabled: true,
@@ -25,17 +25,24 @@ export class SandboxController {
 
   @Post('payments')
   createPayment(@CurrentUser() user: AuthUser, @Body() dto: CreatePaymentDto) {
-    this.assertSandbox(user);
-    return this.payments.createPayment(
-      user.merchantId as string,
-      user.userId || undefined,
-      { ...dto, environment: 'SANDBOX' },
-    );
+    this.sandbox.assertSandboxApiKey(user);
+    return this.sandbox.createPayment(user.merchantId as string, user.userId || undefined, dto);
   }
 
-  private assertSandbox(user: AuthUser) {
-    if (user.type === 'api_key' && user.environment !== 'SANDBOX') {
-      throw new Error('Sandbox endpoints require a SANDBOX API key');
-    }
+  @Post('payments/:id/refund')
+  refund(
+    @CurrentUser() user: AuthUser,
+    @Param('id') paymentId: string,
+    @Body() body: { amountCents?: number },
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    this.sandbox.assertSandboxApiKey(user);
+    return this.sandbox.refund(
+      user.merchantId as string,
+      user.userId || undefined,
+      paymentId,
+      body.amountCents,
+      idempotencyKey,
+    );
   }
 }

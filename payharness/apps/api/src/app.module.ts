@@ -28,6 +28,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { ProviderStatusModule } from './provider-status/provider-status.module';
 import { UsageModule } from './usage/usage.module';
 import { PlatformModule } from './platform/platform.module';
+import { SandboxModule } from './sandbox/sandbox.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { PlatformModule } from './platform/platform.module';
     PaymentProvidersModule,
     CheckoutSessionsModule,
     PaymentsModule,
+    SandboxModule,
     PayoutsModule,
     TransactionsModule,
     WebhooksModule,
