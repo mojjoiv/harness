@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { api, ApiError } from '@/lib/api';
-import { ProviderStatus, ProviderCredentialRecord, ProviderVerificationLogRecord } from '@/lib/types';
+import { ProviderCredentialRecord, ProviderVerificationLogRecord } from '@/lib/types';
 import { Badge, Button, CopyButton, Input, Panel, SectionTitle, Select } from '@/components/ui';
 import { FieldRow, FormGrid, SimpleTable } from '@/components/blocks';
 import { dateTime } from '@/lib/format';
+import { ProviderDetailsModal } from '@/components/ProviderDetailsModal';
 
 type MpesaForm = {
   environment: 'SANDBOX' | 'LIVE';
@@ -30,10 +31,6 @@ type PaypalForm = {
   webhookId?: string;
 };
 
-function StatusBadge({ connected }: { connected: boolean }) {
-  return <Badge tone={connected ? 'green' : 'neutral'}>{connected ? 'Connected' : 'Disconnected'}</Badge>;
-}
-
 const HEALTH_META: Record<string, { emoji: string; label: string; tone: 'neutral' | 'green' | 'red' | 'blue' }> = {
   VERIFIED: { emoji: '🟢', label: 'Healthy', tone: 'green' },
   PARTIALLY_VERIFIED: { emoji: '🟡', label: 'Partially Verified', tone: 'neutral' },
@@ -42,21 +39,26 @@ const HEALTH_META: Record<string, { emoji: string; label: string; tone: 'neutral
   DISABLED: { emoji: '⚫', label: 'Disabled', tone: 'neutral' },
 };
 
-function Check({ ok, label }: { ok: boolean; label: string }) {
+function EyeIcon() {
   return (
-    <span className={ok ? 'text-emerald-700' : 'text-muted'}>
-      {label} {ok ? '✓' : '—'}
-    </span>
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+      <circle cx="12" cy="12" r="2.5" />
+    </svg>
   );
 }
 
+function StatusBadge({ healthStatus }: { healthStatus: string }) {
+  const health = HEALTH_META[healthStatus] || HEALTH_META.PENDING;
+  return <Badge tone={health.tone}>{health.emoji} {health.label}</Badge>;
+}
+
 export default function ProvidersPage() {
-  const [statuses, setStatuses] = useState<ProviderStatus[]>([]);
   const [credentials, setCredentials] = useState<ProviderCredentialRecord[]>([]);
   const [message, setMessage] = useState('');
   const [credentialError, setCredentialError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [historyFor, setHistoryFor] = useState<string | null>(null);
+  const [selectedCredential, setSelectedCredential] = useState<ProviderCredentialRecord | null>(null);
   const [history, setHistory] = useState<ProviderVerificationLogRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [lastSaved, setLastSaved] = useState<{ provider: string; payload: unknown } | null>(null);
@@ -65,10 +67,12 @@ export default function ProvidersPage() {
   const paypal = useForm<PaypalForm>({ defaultValues: { environment: 'SANDBOX', clientId: '', clientSecret: '', webhookId: '' } });
 
   const refresh = () => {
-    api.get<ProviderStatus[]>('/providers/status').then(({ data }) => setStatuses(data));
     api
       .get<ProviderCredentialRecord[]>('/provider-credentials')
-      .then(({ data }) => setCredentials(data))
+      .then(({ data }) => {
+        setCredentials(data);
+        setSelectedCredential((current) => current ? data.find((item) => item.id === current.id) || current : null);
+      })
       .catch((err) => setCredentialError(err instanceof ApiError ? err.message : 'Failed to load connections.'));
   };
 
@@ -96,6 +100,7 @@ export default function ProvidersPage() {
     try {
       await api.patch(`/provider-credentials/${id}/disconnect`);
       setMessage('Provider disconnected.');
+      setSelectedCredential(null);
       refresh();
     } catch (err) {
       setCredentialError(err instanceof ApiError ? err.message : 'Failed to disconnect.');
@@ -118,17 +123,14 @@ export default function ProvidersPage() {
     }
   };
 
-  const toggleHistory = async (id: string) => {
-    if (historyFor === id) {
-      setHistoryFor(null);
-      return;
-    }
-    setHistoryFor(id);
+  const openProviderDetails = async (credential: ProviderCredentialRecord) => {
+    setSelectedCredential(credential);
+    setHistory([]);
     setHistoryLoading(true);
     setCredentialError('');
     try {
       const { data } = await api.get<ProviderVerificationLogRecord[]>(
-        `/provider-credentials/${id}/verification-history`,
+        `/provider-credentials/${credential.id}/verification-history`,
       );
       setHistory(data);
     } catch (err) {
@@ -136,6 +138,11 @@ export default function ProvidersPage() {
     } finally {
       setHistoryLoading(false);
     }
+  };
+
+  const closeProviderDetails = () => {
+    setSelectedCredential(null);
+    setHistory([]);
   };
 
   const saveMpesa = async (values: MpesaForm) => {
@@ -171,120 +178,36 @@ export default function ProvidersPage() {
     refresh();
   };
 
-  const statusRows = statuses.map((row) => [
-    row.provider,
-    <StatusBadge key={`${row.provider}-connected`} connected={row.connected} />,
-    <Badge key={`${row.provider}-sandbox`} tone={row.sandboxConnected ? 'green' : 'neutral'}>{row.sandboxConnected ? 'Yes' : 'No'}</Badge>,
-    <Badge key={`${row.provider}-live`} tone={row.liveConnected ? 'green' : 'neutral'}>{row.liveConnected ? 'Yes' : 'No'}</Badge>,
-    <Badge key={`${row.provider}-verified`} tone={row.verified ? 'blue' : 'neutral'}>{row.verified ? 'Verified' : 'Unverified'}</Badge>,
-    row.lastUpdatedAt ? dateTime(row.lastUpdatedAt) : 'Never',
+  const credentialRows = credentials.map((credential) => [
+    credential.provider === 'MPESA' ? 'M-Pesa' : credential.provider,
+    credential.environment,
+    <StatusBadge key={`${credential.id}-health`} healthStatus={credential.healthStatus} />,
+    credential.isDefault ? <Badge key={`${credential.id}-default`} tone="blue">Default</Badge> : '—',
+    credential.updatedAt ? dateTime(credential.updatedAt) : 'Never',
+    <button
+      key={`${credential.id}-view`}
+      type="button"
+      aria-label={`View ${credential.provider === 'MPESA' ? 'M-Pesa' : credential.provider} details`}
+      title="View provider details"
+      onClick={() => openProviderDetails(credential)}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted transition hover:bg-panelAlt hover:text-ink"
+    >
+      <EyeIcon />
+    </button>,
   ]);
 
   return (
     <div className="space-y-6">
-      <SectionTitle title="Providers" description="Connection status and credential forms for each provider." />
-      <SimpleTable headers={['Provider', 'Connected', 'Sandbox', 'Live', 'Verified', 'Last updated']} rows={statusRows} emptyText="No provider connections yet." />
-
-      <h2 className="mb-2 mt-8 text-sm font-semibold uppercase tracking-wide text-muted">Connected Credentials</h2>
+      <SectionTitle title="Providers" description="View connection status and manage your payment provider configurations." />
       {credentialError ? (
-        <Panel className="mb-4 border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{credentialError}</Panel>
+        <Panel className="border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{credentialError}</Panel>
       ) : null}
-      <SimpleTable
-        headers={['Provider', 'Environment', 'Config', 'Health', 'Default', 'Webhook URL', 'Actions']}
-        rows={credentials.map((credential) => {
-          const isBusy = busyId === credential.id;
-          const isRevoked = credential.status === 'REVOKED';
-          const health = HEALTH_META[credential.healthStatus] || HEALTH_META.PENDING;
-          const shortcode = credential.publicConfig?.shortcode as string | undefined;
-          const businessType = credential.publicConfig?.businessType as string | undefined;
-          return [
-            credential.provider,
-            credential.environment,
-            <div key="config" className="text-xs text-muted">
-              <div>{credential.label}</div>
-              {shortcode ? <div>Shortcode: {shortcode}</div> : null}
-              {businessType ? <div>{businessType}</div> : null}
-            </div>,
-            <div key="health" className="min-w-[200px]">
-              <Badge tone={health.tone}>
-                {health.emoji} {health.label}
-              </Badge>
-              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-                <Check ok={credential.oauthVerified} label="OAuth" />
-                <Check ok={credential.accountVerified} label="Shortcode" />
-                <Check ok={credential.environmentVerified} label="Environment" />
-                <Check ok={credential.webhookVerified} label="Webhook" />
-              </div>
-              <div className="mt-1 text-xs text-muted">
-                {credential.verificationLatencyMs != null ? `Latency: ${credential.verificationLatencyMs}ms` : null}
-              </div>
-              <div className="mt-1 text-xs text-muted">
-                {credential.lastVerifiedAt
-                  ? `Verified: ${dateTime(credential.lastVerifiedAt)}`
-                  : 'Never verified'}
-              </div>
-              {credential.lastVerificationError ? (
-                <div className="mt-1 max-w-[220px] text-xs text-rose-700" title={credential.lastVerificationError}>
-                  {credential.lastVerificationError}
-                </div>
-              ) : null}
-              {credential.failedVerificationCount > 0 ? (
-                <div className="text-xs text-muted">Failed attempts: {credential.failedVerificationCount}</div>
-              ) : null}
-            </div>,
-            credential.isDefault ? <Badge key="default" tone="blue">Default</Badge> : '—',
-            <div key="webhook" className="flex items-center gap-2">
-              <code className="max-w-[220px] truncate text-xs">{credential.webhookUrl}</code>
-              <CopyButton value={credential.webhookUrl} />
-            </div>,
-            <div key="actions" className="flex flex-wrap gap-2">
-              {!isRevoked && (
-                <>
-                  <Button variant="secondary" disabled={isBusy} onClick={() => verify(credential.id)}>
-                    Verify
-                  </Button>
-                  {!credential.isDefault && (
-                    <Button variant="secondary" disabled={isBusy} onClick={() => setDefault(credential.id)}>
-                      Set Default
-                    </Button>
-                  )}
-                  <Button variant="danger" disabled={isBusy} onClick={() => disconnect(credential.id)}>
-                    Disconnect
-                  </Button>
-                </>
-              )}
-              <Button variant="ghost" onClick={() => toggleHistory(credential.id)}>
-                {historyFor === credential.id ? 'Hide History' : 'History'}
-              </Button>
-            </div>,
-          ];
-        })}
-        emptyText="No credentials connected yet -- use the forms below."
-      />
 
-      {historyFor ? (
-        <Panel className="mt-4 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-ink">Verification History</h2>
-          {historyLoading ? (
-            <div className="text-sm text-muted">Loading…</div>
-          ) : (
-            <SimpleTable
-              headers={['When', 'Environment', 'Result', 'OAuth', 'Latency', 'Reason']}
-              rows={history.map((log) => [
-                dateTime(log.createdAt),
-                log.environment,
-                <Badge key="result" tone={log.success ? 'green' : 'red'}>
-                  {log.success ? 'Success' : 'Failed'}
-                </Badge>,
-                log.oauthSucceeded ? '✓' : '—',
-                log.responseTimeMs != null ? `${log.responseTimeMs}ms` : '—',
-                log.failureReason || '—',
-              ])}
-              emptyText="No verification attempts recorded yet."
-            />
-          )}
-        </Panel>
-      ) : null}
+      <SimpleTable
+        headers={['Provider', 'Environment', 'Health', 'Default', 'Last updated', 'View']}
+        rows={credentialRows}
+        emptyText="No provider connections yet."
+      />
 
       {message ? <Panel className="p-4 text-sm text-muted">{message}</Panel> : null}
       {lastSaved ? (
@@ -337,6 +260,19 @@ export default function ProvidersPage() {
           </form>
         </Panel>
       </div>
+
+      {selectedCredential ? (
+        <ProviderDetailsModal
+          credential={selectedCredential}
+          history={history}
+          historyLoading={historyLoading}
+          onClose={closeProviderDetails}
+          onVerify={() => verify(selectedCredential.id)}
+          onSetDefault={() => setDefault(selectedCredential.id)}
+          onDisconnect={() => disconnect(selectedCredential.id)}
+          busy={busyId === selectedCredential.id}
+        />
+      ) : null}
     </div>
   );
 }
