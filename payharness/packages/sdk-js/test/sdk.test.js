@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { PayHarnessClient, PayHarnessError, createWebhookSignature, verifyWebhookSignature } = require('../dist');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { PayHarnessClient, PayHarnessError, createWebhookSignature, verifyWebhookSignature } from '../dist/index.js';
 
 function response(status, body) {
   return { ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(body) };
