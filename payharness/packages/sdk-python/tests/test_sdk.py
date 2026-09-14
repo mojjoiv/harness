@@ -39,7 +39,7 @@ def test_client_request(monkeypatch):
         captured["idempotency"] = request.get_header("Idempotency-key")
         return Response()
 
-    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("payharness.client.urlopen", fake_urlopen)
     result = client.create_payment({"amountCents": 1000}, "payment-test-1")
     assert result["success"] is True
     assert captured["method"] == "POST"
