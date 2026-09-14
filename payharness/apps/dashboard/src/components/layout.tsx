@@ -241,7 +241,7 @@ export function PlatformLayout({ children }: React.PropsWithChildren) {
       <div className="flex min-h-screen">
         <aside
           className={cx(
-            'fixed inset-y-0 left-0 z-30 flex h-screen w-72 flex-col border-r border-line bg-panel px-4 py-5 shadow-soft transition-transform lg:sticky lg:top-0 lg:self-start lg:shadow-none',
+            'fixed inset-y-0 left-0 z-30 w-72 border-r border-line bg-panel px-4 py-5 shadow-soft transition-transform lg:static lg:translate-x-0 lg:shadow-none',
             open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
           )}
         >
@@ -254,7 +254,7 @@ export function PlatformLayout({ children }: React.PropsWithChildren) {
               Close
             </Button>
           </div>
-          <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+          <nav className="space-y-1">
             {platformItems.map((item) => {
               const active = item.exact
                 ? currentPath === item.href
