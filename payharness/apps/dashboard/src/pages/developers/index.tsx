@@ -3,7 +3,7 @@ import { Badge, Button, Panel, SectionTitle } from '@/components/ui';
 
 const sdks = [
   { name: 'Node.js', command: 'npm install @payharness/sdk-js', href: '/developers/docs' },
-  { name: 'PHP', command: 'composer require payharness/payharness', href: '/developers/docs' },
+  { name: 'PHP', command: 'composer require payharness/sdk-php', href: '/developers/docs' },
   { name: 'Python', command: 'pip install payharness', href: '/developers/docs' },
   { name: 'Go', command: 'go get github.com/mojjoiv/harness/payharness/packages/sdk-go', href: '/developers/docs' },
 ];
