@@ -51,9 +51,20 @@ async function bootstrap() {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('PayHarness API')
-    .setDescription('PayHarness merchant and payments API')
+    .setDescription(
+      'PayHarness merchant and payments API. Merchant payment endpoints accept a dashboard JWT or a server-side PayHarness API key (ph_sandbox_... / ph_live_...). API keys are environment-bound and must never be exposed in browser code.',
+    )
     .setVersion('0.1.0')
-    .addBearerAuth()
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'PayHarness API key or JWT',
+        description:
+          'Use a dashboard JWT for dashboard access or a PayHarness API key for server-to-server merchant integrations.',
+      },
+      'bearer',
+    )
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swaggerConfig));
 
