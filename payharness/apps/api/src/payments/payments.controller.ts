@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
+import { EnvironmentIsolationGuard } from '../common/guards/environment-isolation.guard';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
@@ -20,7 +21,7 @@ import { RefundService } from './refund.service';
 
 @ApiTags('payments')
 @ApiBearerAuth()
-@UseGuards(MerchantAuthGuard)
+@UseGuards(MerchantAuthGuard, EnvironmentIsolationGuard)
 @Controller('payments')
 export class PaymentsController {
   constructor(
@@ -40,10 +41,7 @@ export class PaymentsController {
 
   @Post('mpesa/stk')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  mpesaStk(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: CreateProviderPaymentDto,
-  ) {
+  mpesaStk(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     return this.paymentsService.createMpesaStk(
       user.merchantId as string,
       user.userId || undefined,
@@ -53,10 +51,7 @@ export class PaymentsController {
 
   @Post('stripe/intent')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  stripeIntent(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: CreateProviderPaymentDto,
-  ) {
+  stripeIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     return this.paymentsService.createStripeIntent(
       user.merchantId as string,
       user.userId || undefined,
@@ -66,10 +61,7 @@ export class PaymentsController {
 
   @Post('paypal/order')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  paypalOrder(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: CreateProviderPaymentDto,
-  ) {
+  paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     return this.paymentsService.createPaypalOrder(
       user.merchantId as string,
       user.userId || undefined,
@@ -123,17 +115,10 @@ export class PaymentsController {
 
   @Get(':id')
   get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paymentsService.getPayment(
-      user.merchantId as string,
-      user.userId || undefined,
-      id,
-    );
+    return this.paymentsService.getPayment(user.merchantId as string, user.userId || undefined, id);
   }
 
-  private lockEnvironment<T extends CreateProviderPaymentDto>(
-    user: AuthUser,
-    dto: T,
-  ): T {
+  private lockEnvironment<T extends CreateProviderPaymentDto>(user: AuthUser, dto: T): T {
     if (user.type === 'api_key' && user.environment) {
       return { ...dto, environment: user.environment };
     }

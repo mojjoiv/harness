@@ -1,6 +1,6 @@
 import { CallHandler, ExecutionContext } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { of, throwError } from 'rxjs';
+import { delay, of, throwError } from 'rxjs';
 import { ObservabilityInterceptor } from './observability.interceptor';
 
 describe('ObservabilityInterceptor', () => {
@@ -50,19 +50,21 @@ describe('ObservabilityInterceptor', () => {
   });
 
   it('emits a slow-request alert when the configured threshold is exceeded', (done) => {
-    const config = new ConfigService({ OBSERVABILITY_SLOW_REQUEST_MS: '0.001' });
+    const config = new ConfigService({ OBSERVABILITY_SLOW_REQUEST_MS: '10' });
     const interceptor = new ObservabilityInterceptor(config);
     const logger = (interceptor as any).logger;
     const warnSpy = jest.spyOn(logger, 'warn');
     const { context } = makeContext();
-    const next: CallHandler = { handle: () => of({ ok: true }) };
+    const next: CallHandler = {
+      handle: () => of({ ok: true }).pipe(delay(25)),
+    };
 
     interceptor.intercept(context, next).subscribe(() => {
       expect(warnSpy).toHaveBeenCalledTimes(1);
       const warned = warnSpy.mock.calls[0][0] as string;
       const payload = JSON.parse(warned);
       expect(payload.event).toBe('http.slow_request');
-      expect(payload.thresholdMs).toBe(0.001);
+      expect(payload.thresholdMs).toBe(10);
       done();
     });
   });
