@@ -6,6 +6,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ApiUsageInterceptor } from './common/interceptors/api-usage.interceptor';
+import { ObservabilityInterceptor } from './common/interceptors/observability.interceptor';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 
@@ -47,7 +48,11 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.useGlobalInterceptors(app.get(ApiUsageInterceptor), new ResponseInterceptor());
+  app.useGlobalInterceptors(
+    app.get(ApiUsageInterceptor),
+    app.get(ObservabilityInterceptor),
+    new ResponseInterceptor(),
+  );
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('PayHarness API')
