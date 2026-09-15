@@ -27,16 +27,14 @@ export class ApiKeysService {
       throw new ConflictException(`You already have an active API key named "${dto.name}"`);
     }
 
-    const secret = `ph_${dto.environment.toLowerCase()}_${randomBytes(24).toString('hex')}`;
-    const prefix = secret.slice(0, 16);
-    const keyHash = await bcrypt.hash(secret, 12);
+    const secret = this.generateSecret(dto.environment);
     const apiKey = await this.prisma.apiKey.create({
       data: {
         merchantId,
         name: dto.name,
         environment: dto.environment,
-        prefix,
-        keyHash,
+        prefix: secret.slice(0, 16),
+        keyHash: await bcrypt.hash(secret, 12),
       },
     });
 
@@ -49,15 +47,7 @@ export class ApiKeysService {
       metadata: { environment: apiKey.environment },
     });
 
-    return {
-      id: apiKey.id,
-      name: apiKey.name,
-      environment: apiKey.environment,
-      prefix: apiKey.prefix,
-      status: apiKey.status,
-      apiKey: secret,
-      createdAt: apiKey.createdAt,
-    };
+    return this.presentCreatedKey(apiKey, secret);
   }
 
   async list(merchantId: string) {
@@ -94,5 +84,73 @@ export class ApiKeysService {
       entityId: id,
     });
     return { ...apiKey, maskedKey: `${apiKey.prefix}...` };
+  }
+
+  async rotate(merchantId: string, userId: string, id: string) {
+    const existing = await this.prisma.apiKey.findFirst({
+      where: { id, merchantId },
+    });
+    if (!existing) {
+      throw new NotFoundException('API key not found');
+    }
+    if (existing.status !== 'ACTIVE') {
+      throw new ConflictException('Only an active API key can be rotated');
+    }
+
+    const secret = this.generateSecret(existing.environment);
+    const keyHash = await bcrypt.hash(secret, 12);
+    const now = new Date();
+    const rotated = await this.prisma.$transaction(async (tx) => {
+      await tx.apiKey.update({
+        where: { id },
+        data: { status: 'REVOKED', revokedAt: now },
+      });
+      return tx.apiKey.create({
+        data: {
+          merchantId,
+          name: existing.name,
+          environment: existing.environment,
+          prefix: secret.slice(0, 16),
+          keyHash,
+        },
+      });
+    });
+
+    await this.auditLogs.create({
+      merchantId,
+      userId,
+      action: 'api_key.rotated',
+      entity: 'api_key',
+      entityId: rotated.id,
+      metadata: {
+        environment: rotated.environment,
+        replacedKeyId: id,
+      },
+    });
+
+    return this.presentCreatedKey(rotated, secret);
+  }
+
+  private generateSecret(environment: CreateApiKeyDto['environment']) {
+    return `ph_${environment.toLowerCase()}_${randomBytes(24).toString('hex')}`;
+  }
+
+  private presentCreatedKey(apiKey: {
+    id: string;
+    name: string;
+    environment: CreateApiKeyDto['environment'];
+    prefix: string;
+    status: string;
+    createdAt: Date;
+  }, secret: string) {
+    return {
+      id: apiKey.id,
+      name: apiKey.name,
+      environment: apiKey.environment,
+      prefix: apiKey.prefix,
+      status: apiKey.status,
+      apiKey: secret,
+      createdAt: apiKey.createdAt,
+    };
   }
 }

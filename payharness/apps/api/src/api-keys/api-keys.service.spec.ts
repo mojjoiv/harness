@@ -15,6 +15,7 @@ describe('ApiKeysService', () => {
       findMany: jest.fn(),
       update: jest.fn(),
     },
+    $transaction: jest.fn(),
   };
   const auditLogs = {
     create: jest.fn(),
@@ -168,6 +169,91 @@ describe('ApiKeysService', () => {
         action: 'api_key.revoked',
         entity: 'api_key',
         entityId: 'key-1',
+      });
+    });
+  });
+
+  describe('rotate', () => {
+    it('rejects rotation of a missing key', async () => {
+      prisma.apiKey.findFirst.mockResolvedValue(null);
+
+      await expect(service.rotate('merchant-1', 'user-1', 'missing')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects rotation of an already revoked key', async () => {
+      prisma.apiKey.findFirst.mockResolvedValue({
+        id: 'key-1',
+        merchantId: 'merchant-1',
+        status: Status.REVOKED,
+        environment: Environment.LIVE,
+        name: 'Production',
+      });
+
+      await expect(service.rotate('merchant-1', 'user-1', 'key-1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('atomically revokes the old key and creates a replacement in the same environment', async () => {
+      const createdAt = new Date('2026-08-23T00:00:00.000Z');
+      prisma.apiKey.findFirst.mockResolvedValue({
+        id: 'key-1',
+        merchantId: 'merchant-1',
+        status: Status.ACTIVE,
+        environment: Environment.LIVE,
+        name: 'Production',
+      });
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+      const tx = {
+        apiKey: {
+          update: jest.fn().mockResolvedValue({}),
+          create: jest.fn().mockImplementation((args) =>
+            Promise.resolve({
+              id: 'key-2',
+              name: args.data.name,
+              environment: args.data.environment,
+              prefix: args.data.prefix,
+              status: Status.ACTIVE,
+              createdAt,
+            }),
+          ),
+        },
+      };
+      prisma.$transaction.mockImplementation((callback) => callback(tx));
+
+      const result = await service.rotate('merchant-1', 'user-1', 'key-1');
+
+      expect(result.apiKey).toMatch(/^ph_live_[0-9a-f]{48}$/);
+      expect(result.id).toBe('key-2');
+      expect(result.environment).toBe(Environment.LIVE);
+      expect(tx.apiKey.update).toHaveBeenCalledWith({
+        where: { id: 'key-1' },
+        data: { status: 'REVOKED', revokedAt: expect.any(Date) },
+      });
+      expect(tx.apiKey.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          merchantId: 'merchant-1',
+          name: 'Production',
+          environment: Environment.LIVE,
+          keyHash: 'new-hash',
+        }),
+      });
+      expect(auditLogs.create).toHaveBeenCalledWith({
+        merchantId: 'merchant-1',
+        userId: 'user-1',
+        action: 'api_key.rotated',
+        entity: 'api_key',
+        entityId: 'key-2',
+        metadata: {
+          environment: Environment.LIVE,
+          replacedKeyId: 'key-1',
+        },
       });
     });
   });
