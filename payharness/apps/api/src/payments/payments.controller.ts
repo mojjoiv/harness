@@ -84,6 +84,7 @@ export class PaymentsController {
       user.merchantId as string,
       user.userId || undefined,
       id,
+      this.apiKeyEnvironment(user),
     );
   }
 
@@ -100,6 +101,7 @@ export class PaymentsController {
       id,
       idempotencyKey,
       dto.amountCents,
+      this.apiKeyEnvironment(user),
     );
   }
 
@@ -109,6 +111,7 @@ export class PaymentsController {
       user.merchantId as string,
       user.userId || undefined,
       id,
+      this.apiKeyEnvironment(user),
     );
   }
 
@@ -118,6 +121,7 @@ export class PaymentsController {
       user.merchantId as string,
       user.userId || undefined,
       id,
+      this.apiKeyEnvironment(user),
     );
   }
 
@@ -127,6 +131,7 @@ export class PaymentsController {
       user.merchantId as string,
       user.userId || undefined,
       id,
+      this.apiKeyEnvironment(user),
     );
   }
 
@@ -138,5 +143,9 @@ export class PaymentsController {
       return { ...dto, environment: user.environment };
     }
     return dto;
+  }
+
+  private apiKeyEnvironment(user: AuthUser) {
+    return user.type === 'api_key' ? user.environment : undefined;
   }
 }
