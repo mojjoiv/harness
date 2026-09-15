@@ -8,6 +8,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { MerchantAuthGuard } from './guards/merchant-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { ApiUsageInterceptor } from './interceptors/api-usage.interceptor';
+import { ObservabilityInterceptor } from './interceptors/observability.interceptor';
 import { PlatformJwtAuthGuard } from '../platform/common/platform-jwt-auth.guard';
 
 @Global()
@@ -33,6 +34,7 @@ import { PlatformJwtAuthGuard } from '../platform/common/platform-jwt-auth.guard
     PlatformJwtAuthGuard,
     RolesGuard,
     ApiUsageInterceptor,
+    ObservabilityInterceptor,
   ],
   exports: [
     PrismaService,
@@ -43,6 +45,7 @@ import { PlatformJwtAuthGuard } from '../platform/common/platform-jwt-auth.guard
     PlatformJwtAuthGuard,
     RolesGuard,
     ApiUsageInterceptor,
+    ObservabilityInterceptor,
     JwtModule,
   ],
 })
