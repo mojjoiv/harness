@@ -145,6 +145,49 @@ describe('WebhookDeliveryService', () => {
     });
   });
 
+  it('retries a transient failure and succeeds before the final attempt', async () => {
+    const prisma = prismaMock();
+    prisma.webhookDelivery.findUnique.mockResolvedValue({
+      id: 'delivery-recovery',
+      status: 'PENDING',
+      attempts: 0,
+      responseCode: null,
+      endpoint: {
+        id: 'endpoint-1',
+        url: 'https://merchant.example/webhook',
+        status: 'ACTIVE',
+        secretHash: 'secret-hash',
+      },
+      eventType: 'payment.succeeded',
+      payload: { type: 'payment.succeeded' },
+    });
+    prisma.webhookDelivery.update.mockResolvedValue({});
+
+    const service = new WebhookDeliveryService(prisma as any, configMock() as any);
+    const postJson = jest
+      .spyOn(service as any, 'postJson')
+      .mockRejectedValueOnce(new Error('temporary connection failure'))
+      .mockRejectedValueOnce(new Error('temporary upstream failure'))
+      .mockResolvedValueOnce({ statusCode: 200, body: 'ok' });
+    jest.spyOn(service as any, 'isRetryableError').mockReturnValue(true);
+    jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+
+    const result = await service.deliver('delivery-recovery');
+
+    expect(result).toEqual({
+      delivered: true,
+      deliveryId: 'delivery-recovery',
+      attempts: 3,
+      responseCode: 200,
+      signatureAlgorithm: 'HMAC-SHA256',
+    });
+    expect(postJson).toHaveBeenCalledTimes(3);
+    expect(prisma.webhookDelivery.update).toHaveBeenLastCalledWith({
+      where: { id: 'delivery-recovery' },
+      data: expect.objectContaining({ status: 'SUCCEEDED', responseCode: 200 }),
+    });
+  });
+
   it('does not retry a permanent 4xx response', async () => {
     const prisma = prismaMock();
     prisma.webhookDelivery.findUnique.mockResolvedValue({
