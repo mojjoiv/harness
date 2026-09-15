@@ -38,7 +38,8 @@ describe('ObservabilityInterceptor', () => {
     interceptor.intercept(context, next).subscribe(() => {
       expect(logSpy).toHaveBeenCalledTimes(1);
       expect(warnSpy).not.toHaveBeenCalled();
-      const payload = JSON.parse(logSpy.mock.calls[0][0]);
+      const logged = logSpy.mock.calls[0][0] as string;
+      const payload = JSON.parse(logged);
       expect(payload.event).toBe('http.request');
       expect(payload.requestId).toBe('req-123');
       expect(payload.merchantId).toBe('merchant-123');
@@ -58,7 +59,8 @@ describe('ObservabilityInterceptor', () => {
 
     interceptor.intercept(context, next).subscribe(() => {
       expect(warnSpy).toHaveBeenCalledTimes(1);
-      const payload = JSON.parse(warnSpy.mock.calls[0][0]);
+      const warned = warnSpy.mock.calls[0][0] as string;
+      const payload = JSON.parse(warned);
       expect(payload.event).toBe('http.slow_request');
       expect(payload.thresholdMs).toBe(0.001);
       done();
@@ -78,7 +80,8 @@ describe('ObservabilityInterceptor', () => {
       error: (error) => {
         expect(error).toBe(failure);
         expect(errorSpy).toHaveBeenCalledTimes(1);
-        const payload = JSON.parse(errorSpy.mock.calls[0][0]);
+        const errored = errorSpy.mock.calls[0][0] as string;
+        const payload = JSON.parse(errored);
         expect(payload.event).toBe('http.error');
         expect(payload.error).toBe('Error');
         done();
