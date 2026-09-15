@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -29,6 +29,7 @@ import { ProviderStatusModule } from './provider-status/provider-status.module';
 import { UsageModule } from './usage/usage.module';
 import { PlatformModule } from './platform/platform.module';
 import { SandboxModule } from './sandbox/sandbox.module';
+import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
 
 @Module({
   imports: [
@@ -64,4 +65,8 @@ import { SandboxModule } from './sandbox/sandbox.module';
     PlatformModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RateLimitMiddleware).forRoutes('*');
+  }
+}
