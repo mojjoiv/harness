@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma.service';
  * Keys are stored as a bcrypt hash (never plaintext), so lookup works by
  * first matching the stored, non-secret `prefix`, then bcrypt-comparing the
  * full presented key against that row's hash. This mirrors exactly how
- * ApiKeysService generates and stores keys.
+ * ApiKeysService generates and stores them.
  */
 @Injectable()
 export class ApiKeyAuthGuard implements CanActivate {
@@ -34,23 +34,36 @@ export class ApiKeyAuthGuard implements CanActivate {
 
     for (const candidate of candidates) {
       const matches = await bcrypt.compare(presentedKey, candidate.keyHash);
-      if (matches) {
-        await this.prisma.apiKey.update({
-          where: { id: candidate.id },
-          data: { lastUsedAt: new Date() },
-        });
-
-        request.user = {
-          userId: '',
-          email: '',
-          merchantId: candidate.merchantId,
-          role: 'API_KEY',
-          type: 'api_key',
-          apiKeyId: candidate.id,
-          environment: candidate.environment,
-        };
-        return true;
+      if (!matches) {
+        continue;
       }
+
+      const merchant = await this.prisma.merchant.findUnique({
+        where: { id: candidate.merchantId },
+        select: { status: true },
+      });
+      if (merchant?.status !== 'ACTIVE') {
+        this.logger.warn(
+          `Rejected API key ${candidate.id} because merchant ${candidate.merchantId} is not active`,
+        );
+        throw new UnauthorizedException('Merchant account is not active');
+      }
+
+      await this.prisma.apiKey.update({
+        where: { id: candidate.id },
+        data: { lastUsedAt: new Date() },
+      });
+
+      request.user = {
+        userId: '',
+        email: '',
+        merchantId: candidate.merchantId,
+        role: 'API_KEY',
+        type: 'api_key',
+        apiKeyId: candidate.id,
+        environment: candidate.environment,
+      };
+      return true;
     }
 
     this.logger.warn(`Rejected API key with prefix ${prefix}`);
