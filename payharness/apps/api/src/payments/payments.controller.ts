@@ -41,10 +41,7 @@ export class PaymentsController {
 
   @Post('mpesa/stk')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  mpesaStk(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: CreateProviderPaymentDto,
-  ) {
+  mpesaStk(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     return this.paymentsService.createMpesaStk(
       user.merchantId as string,
       user.userId || undefined,
@@ -54,10 +51,7 @@ export class PaymentsController {
 
   @Post('stripe/intent')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  stripeIntent(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: CreateProviderPaymentDto,
-  ) {
+  stripeIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     return this.paymentsService.createStripeIntent(
       user.merchantId as string,
       user.userId || undefined,
@@ -67,10 +61,7 @@ export class PaymentsController {
 
   @Post('paypal/order')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  paypalOrder(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: CreateProviderPaymentDto,
-  ) {
+  paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     return this.paymentsService.createPaypalOrder(
       user.merchantId as string,
       user.userId || undefined,
@@ -124,17 +115,10 @@ export class PaymentsController {
 
   @Get(':id')
   get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paymentsService.getPayment(
-      user.merchantId as string,
-      user.userId || undefined,
-      id,
-    );
+    return this.paymentsService.getPayment(user.merchantId as string, user.userId || undefined, id);
   }
 
-  private lockEnvironment<T extends CreateProviderPaymentDto>(
-    user: AuthUser,
-    dto: T,
-  ): T {
+  private lockEnvironment<T extends CreateProviderPaymentDto>(user: AuthUser, dto: T): T {
     if (user.type === 'api_key' && user.environment) {
       return { ...dto, environment: user.environment };
     }
