@@ -69,11 +69,7 @@ export class PaymentsService {
     }
   }
 
-  async createMpesaStk(
-    merchantId: string,
-    userId: string | undefined,
-    dto: CreateProviderPaymentDto,
-  ) {
+  async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] Entering createMpesaStk`, {
       merchantId,
@@ -109,11 +105,7 @@ export class PaymentsService {
     }
   }
 
-  async createStripeIntent(
-    merchantId: string,
-    userId: string | undefined,
-    dto: CreateProviderPaymentDto,
-  ) {
+  async createStripeIntent(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] Entering createStripeIntent`, {
       merchantId,
@@ -156,7 +148,6 @@ export class PaymentsService {
           },
         },
       });
-
       await this.auditLogs.create({
         merchantId,
         userId,
@@ -170,7 +161,6 @@ export class PaymentsService {
           stripePaymentIntentId: intent.id,
         },
       });
-
       let redirectUrl: string | undefined;
       if (session && status !== 'PENDING') {
         await this.prisma.checkoutSession.update({ where: { id: session.id }, data: { status } });
@@ -186,7 +176,6 @@ export class PaymentsService {
           status,
         });
       }
-
       return {
         paymentId: payment.id,
         provider: 'STRIPE' as const,
@@ -205,11 +194,7 @@ export class PaymentsService {
     }
   }
 
-  async createPaypalOrder(
-    merchantId: string,
-    userId: string | undefined,
-    dto: CreateProviderPaymentDto,
-  ) {
+  async createPaypalOrder(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] createPaypalOrder`, { merchantId });
     if (dto.simulateOutcome) {
@@ -234,15 +219,8 @@ export class PaymentsService {
     try {
       const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, merchantId } });
       if (!payment) throw new NotFoundException('Payment not found');
-
-      if (payment.provider === 'PAYPAL') {
-        return this.queryPaypalOrder(merchantId, userId, paymentId);
-      }
-
-      if (payment.provider === 'STRIPE') {
-        return this.queryStripePayment(merchantId, userId, payment, correlationId);
-      }
-
+      if (payment.provider === 'PAYPAL') return this.queryPaypalOrder(merchantId, userId, paymentId);
+      if (payment.provider === 'STRIPE') return this.queryStripePayment(merchantId, userId, payment, correlationId);
       if (payment.provider !== 'MPESA')
         throw new BadRequestException(`Unsupported payment provider: ${payment.provider}`);
       if (payment.status !== 'PENDING') return { paymentId: payment.id, status: payment.status };
@@ -288,14 +266,12 @@ export class PaymentsService {
       include: { transactions: true },
     });
     if (!payment) throw new NotFoundException('Payment not found');
-
     const status = await this.queryPayment(merchantId, userId, paymentId);
     const refreshedPayment = await this.prisma.payment.findFirst({
       where: { id: paymentId, merchantId },
       include: { transactions: true },
     });
     if (!refreshedPayment) throw new NotFoundException('Payment not found');
-
     return {
       paymentId: refreshedPayment.id,
       provider: refreshedPayment.provider,
@@ -322,15 +298,10 @@ export class PaymentsService {
       throw new BadRequestException('This payment has no Stripe PaymentIntent id');
     if (payment.status === 'SUCCEEDED' || payment.status === 'FAILED')
       return { paymentId: payment.id, status: payment.status };
-
     const credential = await this.getActiveCredential(merchantId, 'STRIPE', payment.environment);
     const secrets = this.decryptSecrets<{ secretKey: string }>(credential);
-    const intent = await this.stripe.retrievePaymentIntent(
-      secrets.secretKey,
-      payment.providerReference,
-    );
+    const intent = await this.stripe.retrievePaymentIntent(secrets.secretKey, payment.providerReference);
     const status = this.mapStripeStatus(intent.status);
-
     if (status === 'PENDING') {
       return {
         paymentId: payment.id,
@@ -339,7 +310,6 @@ export class PaymentsService {
         clientSecret: intent.clientSecret,
       };
     }
-
     await this.settlePendingPayment(
       merchantId,
       userId,
@@ -469,10 +439,15 @@ export class PaymentsService {
   ) {
     const cid = correlationId || randomUUID();
     try {
-      await this.prisma.payment.update({
-        where: { id: payment.id },
+      if (payment.status !== 'PENDING') return;
+
+      const result = await this.prisma.payment.updateMany({
+        where: { id: payment.id, status: 'PENDING' },
         data: { status: finalStatus },
       });
+
+      if (result.count === 0) return;
+
       await this.prisma.transaction.updateMany({
         where: { paymentId: payment.id },
         data: { status: finalStatus },

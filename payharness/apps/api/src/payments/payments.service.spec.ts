@@ -6,6 +6,7 @@ describe('PaymentsService', () => {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     transaction: { updateMany: jest.fn() },
     checkoutSession: { update: jest.fn() },
@@ -36,6 +37,7 @@ describe('PaymentsService', () => {
     prisma.merchantSettings.findUnique.mockResolvedValue({
       webhookForwardingUrl: 'https://merchant.example/webhook',
     });
+    prisma.payment.updateMany.mockResolvedValue({ count: 1 });
     webhooks.forwardToUrl.mockResolvedValue({ delivered: true });
     service = new PaymentsService(
       prisma,
@@ -268,6 +270,7 @@ describe('PaymentsService', () => {
       checkoutSessionId: 'session-1',
     } as any;
     prisma.checkoutSession.update.mockResolvedValue({ id: 'session-1' });
+    prisma.payment.updateMany.mockResolvedValue({ count: 1 });
 
     await (service as any).settlePendingPayment(
       'merchant-1',
@@ -278,8 +281,8 @@ describe('PaymentsService', () => {
       'corr-success',
     );
 
-    expect(prisma.payment.update).toHaveBeenCalledWith({
-      where: { id: 'payment-1' },
+    expect(prisma.payment.updateMany).toHaveBeenCalledWith({
+      where: { id: 'payment-1', status: 'PENDING' },
       data: { status: 'SUCCEEDED' },
     });
     expect(webhooks.forwardToUrl).toHaveBeenCalledWith(
