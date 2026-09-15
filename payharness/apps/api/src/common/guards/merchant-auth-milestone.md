@@ -1,1 +1,0 @@
-Merchant/API authentication hardening milestone: API keys must authenticate only against active merchants.
