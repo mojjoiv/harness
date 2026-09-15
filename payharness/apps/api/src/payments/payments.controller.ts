@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
+import { EnvironmentIsolationGuard } from '../common/guards/environment-isolation.guard';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
@@ -20,7 +21,7 @@ import { RefundService } from './refund.service';
 
 @ApiTags('payments')
 @ApiBearerAuth()
-@UseGuards(MerchantAuthGuard)
+@UseGuards(MerchantAuthGuard, EnvironmentIsolationGuard)
 @Controller('payments')
 export class PaymentsController {
   constructor(
@@ -84,7 +85,6 @@ export class PaymentsController {
       user.merchantId as string,
       user.userId || undefined,
       id,
-      this.apiKeyEnvironment(user),
     );
   }
 
@@ -101,7 +101,6 @@ export class PaymentsController {
       id,
       idempotencyKey,
       dto.amountCents,
-      this.apiKeyEnvironment(user),
     );
   }
 
@@ -111,7 +110,6 @@ export class PaymentsController {
       user.merchantId as string,
       user.userId || undefined,
       id,
-      this.apiKeyEnvironment(user),
     );
   }
 
@@ -121,7 +119,6 @@ export class PaymentsController {
       user.merchantId as string,
       user.userId || undefined,
       id,
-      this.apiKeyEnvironment(user),
     );
   }
 
@@ -131,7 +128,6 @@ export class PaymentsController {
       user.merchantId as string,
       user.userId || undefined,
       id,
-      this.apiKeyEnvironment(user),
     );
   }
 
@@ -143,9 +139,5 @@ export class PaymentsController {
       return { ...dto, environment: user.environment };
     }
     return dto;
-  }
-
-  private apiKeyEnvironment(user: AuthUser) {
-    return user.type === 'api_key' ? user.environment : undefined;
   }
 }
