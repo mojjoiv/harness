@@ -6,7 +6,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
  */
 @Injectable()
 export class MpesaProviderService {
-  async createStkPush(_input: Record<string, unknown>) {
+  async createStkPush(_input: Record<string, unknown>): Promise<{ providerReference: string }> {
     throw new BadRequestException(
       'M-Pesa STK Push requires a phone number and an active Daraja credential. Use the real M-Pesa integration.',
     );
