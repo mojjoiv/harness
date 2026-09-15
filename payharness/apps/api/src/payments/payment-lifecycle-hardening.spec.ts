@@ -8,6 +8,7 @@ describe('PaymentsService payment lifecycle hardening', () => {
     },
     transaction: { updateMany: jest.fn() },
     checkoutSession: { update: jest.fn() },
+    merchantSettings: { findUnique: jest.fn() },
   } as any;
   const config = { get: jest.fn() } as any;
   const crypto = { decrypt: jest.fn() } as any;
@@ -36,6 +37,7 @@ describe('PaymentsService payment lifecycle hardening', () => {
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
     prisma.transaction.updateMany.mockResolvedValue({ count: 1 });
     prisma.checkoutSession.update.mockResolvedValue({ id: 'session-1' });
+    prisma.merchantSettings.findUnique.mockResolvedValue(null);
     auditLogs.create.mockResolvedValue(undefined);
     webhooks.forwardToUrl.mockResolvedValue({ delivered: true });
   });
