@@ -1,47 +1,85 @@
+'use client';
+
 import Link from 'next/link';
+import { useState } from 'react';
 import { Badge, Button, Panel, SectionTitle } from '@/components/ui';
+import { buildApiUrl } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 
 const integrations = [
   {
+    slug: 'woocommerce',
     name: 'WooCommerce',
     category: 'WordPress / WooCommerce',
     description:
-      'Native WooCommerce payment gateway with server-side PayHarness payments, M-Pesa and PayPal support, refunds, and signed webhook synchronization.',
+      'Certified WooCommerce payment gateway package with server-side PayHarness payments, M-Pesa and PayPal support, refunds, and signed webhook synchronization.',
     status: 'Certified',
     statusTone: 'green' as const,
     steps: [
-      'Copy the integrations/woocommerce package into wp-content/plugins/payharness.',
-      'Activate PayHarness for WooCommerce in WordPress.',
-      'Configure the PayHarness API URL, API key, environment, and provider.',
-      'Create the PayHarness webhook endpoint and add the webhook secret.',
+      'Download the ZIP package from this dashboard.',
+      'Upload it in WordPress → Plugins → Add New → Upload Plugin.',
+      'Activate PayHarness for WooCommerce and configure the gateway.',
+      'Add the PayHarness webhook URL and webhook secret.',
     ],
     highlights: ['M-Pesa', 'PayPal', 'Refunds', 'Signed webhooks', 'Sandbox / Live'],
-    docs: 'https://github.com/mojjoiv/harness/tree/main/integrations/woocommerce',
   },
   {
+    slug: 'joomla',
     name: 'Joomla / VirtueMart',
     category: 'Joomla / VirtueMart',
     description:
-      'Server-side VirtueMart payment integration with environment isolation, M-Pesa and PayPal support, idempotent checkout, and signed webhook state synchronization.',
+      'Certified VirtueMart payment integration package with environment isolation, M-Pesa and PayPal support, idempotent checkout, and signed webhook state synchronization.',
     status: 'Certified',
     statusTone: 'green' as const,
     steps: [
-      'Install the PayHarness Joomla package on your Joomla site.',
+      'Download the Joomla ZIP package from this dashboard.',
+      'Install the package in Joomla → System → Install → Extensions.',
       'Enable the PayHarness VirtueMart payment and webhook plugins.',
-      'Create and publish a PayHarness payment method in VirtueMart.',
-      'Configure the API URL, API key, environment, provider, and webhook secret.',
+      'Create the PayHarness payment method and configure credentials.',
     ],
     highlights: ['VirtueMart', 'M-Pesa', 'PayPal', 'Signed webhooks', 'Sandbox / Live'],
-    docs: 'https://github.com/mojjoiv/harness/tree/main/integrations/joomla',
   },
 ];
 
 export default function IntegrationsPage() {
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState('');
+
+  async function downloadIntegration(slug: string) {
+    setDownloading(slug);
+    setDownloadError('');
+
+    try {
+      const token = getToken();
+      const response = await fetch(buildApiUrl(`/dashboard/integrations/${slug}/download`), {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Download failed (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `payharness-${slug}.zip`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'Unable to download the integration package.');
+    } finally {
+      setDownloading(null);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <SectionTitle
         title="Integrations"
-        description="Connect PayHarness to supported ecommerce platforms using certified server-side integrations."
+        description="Download certified PayHarness ecommerce packages directly from your merchant dashboard."
       />
 
       <Panel className="border-blue-100 bg-blue-50 p-6">
@@ -52,7 +90,7 @@ export default function IntegrationsPage() {
               <span className="text-sm font-medium text-blue-900">Production-ready integration packages</span>
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-blue-900">
-              Use the certified plugins to connect storefront orders to PayHarness payments while keeping API credentials and webhook secrets on the server.
+              Download a ZIP package, upload it to your ecommerce platform, activate it, and configure your PayHarness credentials. No GitHub access is required.
             </p>
           </div>
           <Link href="/developers">
@@ -60,6 +98,12 @@ export default function IntegrationsPage() {
           </Link>
         </div>
       </Panel>
+
+      {downloadError ? (
+        <Panel className="border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          {downloadError}
+        </Panel>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-2">
         {integrations.map((integration) => (
@@ -81,7 +125,7 @@ export default function IntegrationsPage() {
             </div>
 
             <div className="mt-6 border-t border-line pt-5">
-              <h3 className="text-sm font-semibold">Setup</h3>
+              <h3 className="text-sm font-semibold">Installation</h3>
               <ol className="mt-3 space-y-3">
                 {integration.steps.map((step, index) => (
                   <li key={step} className="flex gap-3 text-sm leading-6 text-muted">
@@ -95,14 +139,9 @@ export default function IntegrationsPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href={integration.docs}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center rounded-xl bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-              >
-                View integration package
-              </a>
+              <Button onClick={() => void downloadIntegration(integration.slug)} disabled={downloading !== null}>
+                {downloading === integration.slug ? 'Preparing ZIP…' : 'Download ZIP package'}
+              </Button>
               <Link href="/developers/api-keys">
                 <Button variant="secondary">Manage API keys</Button>
               </Link>
