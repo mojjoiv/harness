@@ -34,7 +34,7 @@ describe('integration package discovery', () => {
   it('discovers WooCommerce from the Render Node service repository root fallback', () => {
     delete process.env.PAYHARNESS_INTEGRATIONS_PATH;
     const root = integrationRoot('woocommerce');
-    const expected = resolve(process.cwd(), '..', 'integrations', 'woocommerce');
+    const expected = resolve(process.cwd(), '..', '..', 'integrations', 'woocommerce');
 
     expect(root).toBe(expected);
     expect(existsSync(root ?? '')).toBe(true);
@@ -43,7 +43,7 @@ describe('integration package discovery', () => {
   it('discovers Joomla from the Render Node service repository root fallback', () => {
     delete process.env.PAYHARNESS_INTEGRATIONS_PATH;
     const root = integrationRoot('joomla');
-    const expected = resolve(process.cwd(), '..', 'integrations', 'joomla');
+    const expected = resolve(process.cwd(), '..', '..', 'integrations', 'joomla');
 
     expect(root).toBe(expected);
     expect(existsSync(root ?? '')).toBe(true);
