@@ -1,5 +1,5 @@
 import { Controller, Get, NotFoundException, Param, StreamableFile, UseGuards } from '@nestjs/common';
-import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { basename, join, relative, resolve } from 'path';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
