@@ -6,6 +6,7 @@ COPY apps/api/package*.json ./apps/api/
 RUN npm ci
 
 COPY apps/api ./apps/api
+COPY integrations ./integrations
 RUN npm --workspace apps/api run build
 
 FROM node:20.11.1-bookworm-slim AS runtime
@@ -17,6 +18,7 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/apps/api/package*.json ./apps/api/
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/prisma ./apps/api/prisma
+COPY --from=build /app/integrations ./integrations
 
 WORKDIR /app/apps/api
 EXPOSE 3000
