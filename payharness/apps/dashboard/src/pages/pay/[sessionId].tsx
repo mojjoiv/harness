@@ -1,13 +1,14 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { navigateTopLevel } from '../../../lib/navigation';
+import { navigateTopLevel } from '../../lib/navigation';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 type Provider = 'MPESA' | 'STRIPE' | 'PAYPAL';
 type CheckoutData = { id: string; merchantId: string; amountCents: number; currency: string; status: string; expiresAt: string; customer: { name?: string | null; email?: string | null; phone?: string | null } | null; environment: 'SANDBOX' | 'LIVE'; availableProviders: Array<{ provider: Provider; publicConfig: { publishableKey?: string | null; clientId?: string | null } }>; branding: { merchantName: string; logoUrl: string | null; primaryColor: string; secondaryColor: string; buttonColor: string } };
 type StripeInstance = { elements: () => { create: (type: 'card') => StripeCardElement }; confirmCardPayment: (clientSecret: string, data: { payment_method: { card: StripeCardElement } }) => Promise<{ error?: { message?: string } }> };
 type StripeCardElement = { mount: (selector: string) => void; unmount: () => void };
 declare global { interface Window { Stripe?: (publishableKey: string) => StripeInstance | null } }
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 function unwrap<T>(payload: { success?: boolean; data?: T; message?: string }): T { if (!payload.success || payload.data === undefined) throw new Error(payload.message || 'PayHarness request failed'); return payload.data; }
 async function apiRequest<T>(path: string, init?: RequestInit) { const response = await fetch(`${API_URL}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } }); const payload = (await response.json()) as { success?: boolean; data?: T; message?: string }; if (!response.ok) throw new Error(payload.message || `Request failed (${response.status})`); return unwrap(payload); }
