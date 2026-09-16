@@ -14,30 +14,46 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   const config = app.get(ConfigService);
   const requestIdMiddleware = new RequestIdMiddleware();
+  const isProduction = config.get<string>('NODE_ENV') === 'production';
 
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
   app.use(requestIdMiddleware.use.bind(requestIdMiddleware));
+
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader(
+      'Permissions-Policy',
+      'camera=(), microphone=(), geolocation=(), payment=()',
+    );
+
+    if (isProduction) {
+      res.setHeader(
+        'Strict-Transport-Security',
+        'max-age=31536000; includeSubDomains',
+      );
+    }
+
+    next();
+  });
 
   const allowedOrigins = [
     'http://localhost:3001',
     config.get<string>('FRONTEND_URL'),
     config.get<string>('APP_URL'),
     config.get<string>('CHECKOUT_URL'),
-  ].filter(Boolean);
+  ].filter((origin): origin is string => Boolean(origin));
 
   app.enableCors({
     credentials: true,
     origin: (origin, callback) => {
-      if (!origin) {
+      if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
         return;
       }
 
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(null, config.get<string>('NODE_ENV') !== 'production');
+      callback(new Error('CORS origin is not allowed'), false);
     },
   });
   app.useGlobalPipes(
@@ -71,7 +87,10 @@ async function bootstrap() {
       'bearer',
     )
     .build();
-  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+
+  if (!isProduction || config.get<string>('SWAGGER_ENABLED') === 'true') {
+    SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+  }
 
   const port = config.get<number>('PORT') || 3000;
   await app.listen(port);

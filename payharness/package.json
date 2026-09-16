@@ -23,12 +23,13 @@
     "start:dashboard": "npm --workspace apps/dashboard run start",
     "prisma:generate": "npm --workspace apps/api run prisma:generate",
     "prisma:migrate:deploy": "npm --workspace apps/api run prisma:migrate:deploy",
-    "db:setup": "npm --workspace apps/api run db:setup",
+    "db:setup": "npm run db:setup",
     "seed": "npm run seed",
     "verify:fresh-clone": "node scripts/verify-fresh-clone.mjs",
     "verify:integrations": "node scripts/integration-certification.mjs",
     "verify:woocommerce": "node scripts/woocommerce-certification.mjs",
     "verify:joomla": "node scripts/joomla-certification.mjs",
+    "verify:security": "node scripts/security-certification.mjs",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "format:check": "prettier --check .",
     "format:check:changed": "node scripts/check-format-changed.js",
@@ -44,7 +45,7 @@
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.0",
     "jest": "^29.7.0",
-    "prettier": "^3.3.3",
+    "prettier": "^3.6.2",
     "typescript": "^5.1.6"
   }
 }
