@@ -9,9 +9,17 @@ describe('PaypalCheckoutController', () => {
     captureOrder: jest.fn(),
   } as any;
   let controller: PaypalCheckoutController;
+  let response: {
+    json: jest.Mock;
+    redirect: jest.Mock;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    response = {
+      json: jest.fn((value) => value),
+      redirect: jest.fn(),
+    };
     controller = new PaypalCheckoutController(prisma, paypalPaymentService);
   });
 
@@ -21,6 +29,7 @@ describe('PaypalCheckoutController', () => {
       merchantId: 'merchant-1',
       provider: 'PAYPAL',
       providerReference: 'ORDER-1',
+      checkoutSession: undefined,
     });
     paypalPaymentService.captureOrder.mockResolvedValue({
       paymentId: 'payment-1',
@@ -28,7 +37,11 @@ describe('PaypalCheckoutController', () => {
       providerStatus: 'COMPLETED',
     });
 
-    const result = await controller.success('payment-1', 'ORDER-1');
+    const result = await controller.success(
+      'payment-1',
+      'ORDER-1',
+      response as any,
+    );
 
     expect(result).toEqual({
       paymentId: 'payment-1',
@@ -40,13 +53,18 @@ describe('PaypalCheckoutController', () => {
       undefined,
       'payment-1',
     );
+    expect(response.json).toHaveBeenCalledWith(result);
   });
 
   it('rejects a missing paymentId or token', async () => {
-    await expect(controller.success(undefined, 'ORDER-1')).rejects.toThrow(
+    await expect(
+      controller.success(undefined, 'ORDER-1', response as any),
+    ).rejects.toThrow(
       new BadRequestException('PayPal paymentId and token are required'),
     );
-    await expect(controller.success('payment-1', undefined)).rejects.toThrow(
+    await expect(
+      controller.success('payment-1', undefined, response as any),
+    ).rejects.toThrow(
       new BadRequestException('PayPal paymentId and token are required'),
     );
   });
@@ -54,9 +72,9 @@ describe('PaypalCheckoutController', () => {
   it('rejects an unknown PayPal payment', async () => {
     prisma.payment.findFirst.mockResolvedValue(null);
 
-    await expect(controller.success('payment-1', 'ORDER-1')).rejects.toThrow(
-      new NotFoundException('PayPal payment not found'),
-    );
+    await expect(
+      controller.success('payment-1', 'ORDER-1', response as any),
+    ).rejects.toThrow(new NotFoundException('PayPal payment not found'));
   });
 
   it('rejects a token that does not match the PayPal order', async () => {
@@ -67,7 +85,9 @@ describe('PaypalCheckoutController', () => {
       providerReference: 'ORDER-1',
     });
 
-    await expect(controller.success('payment-1', 'ORDER-2')).rejects.toThrow(
+    await expect(
+      controller.success('payment-1', 'ORDER-2', response as any),
+    ).rejects.toThrow(
       new BadRequestException('Invalid PayPal approval token'),
     );
     expect(paypalPaymentService.captureOrder).not.toHaveBeenCalled();
