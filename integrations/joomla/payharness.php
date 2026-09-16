@@ -24,14 +24,40 @@ class plgVmPaymentPayHarness extends vmPSPlugin
 
         $provider = strtoupper((string) $method->provider);
         $environment = strtoupper((string) $method->environment);
+        $api_url = rtrim(trim((string) $method->api_url), '/');
+        $api_key = trim((string) $method->api_key);
+
         if (!in_array($provider, array('MPESA', 'PAYPAL'), true)) {
             vmError('PayHarness provider is not supported.');
             return false;
         }
+        if (!in_array($environment, array('SANDBOX', 'LIVE'), true)) {
+            vmError('PayHarness environment is not supported.');
+            return false;
+        }
+        if ($api_url === '' || strtolower((string) parse_url($api_url, PHP_URL_SCHEME)) !== 'https') {
+            vmError('PayHarness API URL must use HTTPS.');
+            return false;
+        }
+        $expected_prefix = $environment === 'LIVE' ? 'ph_live_' : 'ph_sandbox_';
+        if (strpos($api_key, $expected_prefix) !== 0) {
+            vmError('PayHarness API key does not match the selected environment.');
+            return false;
+        }
+        if ($environment === 'LIVE' && $provider === 'PAYPAL') {
+            vmError('Live PayPal processing is not enabled yet.');
+            return false;
+        }
 
         $order_number = (string) $order['details']['BT']->order_number;
+        $amount_cents = (int) round(((float) $order['details']['BT']->order_total) * 100);
+        if ($amount_cents <= 0) {
+            vmError('PayHarness payment amount must be greater than zero.');
+            return false;
+        }
+
         $payload = array(
-            'amountCents' => (int) round(((float) $order['details']['BT']->order_total) * 100),
+            'amountCents' => $amount_cents,
             'currency' => $this->getCurrencyCode($order['details']['BT']->order_currency),
             'environment' => $environment,
             'provider' => $provider,
@@ -41,6 +67,10 @@ class plgVmPaymentPayHarness extends vmPSPlugin
                 'orderId' => (string) $order['details']['BT']->virtuemart_order_id,
             ),
         );
+
+        if ($provider === 'MPESA') {
+            $payload['accountReference'] = 'VM-' . $order_number;
+        }
 
         $result = $this->request($method, '/payments', $payload, 'joomla-order-' . $order_number);
         if ($result instanceof Exception) {
@@ -58,7 +88,11 @@ class plgVmPaymentPayHarness extends vmPSPlugin
         $this->storePaymentReference((int) $order['details']['BT']->virtuemart_order_id, $payment_id, $provider, $environment);
 
         $redirect = isset($payment['approvalUrl']) ? $payment['approvalUrl'] : (isset($payment['redirectUrl']) ? $payment['redirectUrl'] : '');
-        if ($redirect && filter_var($redirect, FILTER_VALIDATE_URL)) {
+        if ($redirect !== '') {
+            if (strtolower((string) parse_url($redirect, PHP_URL_SCHEME)) !== 'https') {
+                vmError('PayHarness approval URL must use HTTPS.');
+                return false;
+            }
             if (method_exists($cart, 'emptyCart')) $cart->emptyCart();
             Joomla\CMS\Factory::getApplication()->redirect($redirect);
             return true;
@@ -94,14 +128,18 @@ class plgVmPaymentPayHarness extends vmPSPlugin
 
     private function request($method, $path, $body, $idempotency_key)
     {
-        if (empty($method->api_url) || empty($method->api_key)) return new Exception('PayHarness API URL and API key are required.');
-        $ch = curl_init(rtrim($method->api_url, '/') . $path);
+        $api_url = rtrim(trim((string) $method->api_url), '/');
+        $api_key = trim((string) $method->api_key);
+        if ($api_url === '' || $api_key === '') return new Exception('PayHarness API URL and API key are required.');
+        if (strtolower((string) parse_url($api_url, PHP_URL_SCHEME)) !== 'https') return new Exception('PayHarness API URL must use HTTPS.');
+
+        $ch = curl_init($api_url . $path);
         curl_setopt_array($ch, array(
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_HTTPHEADER => array(
-                'Authorization: Bearer ' . trim($method->api_key),
+                'Authorization: Bearer ' . $api_key,
                 'Accept: application/json',
                 'Content-Type: application/json',
                 'Idempotency-Key: ' . $idempotency_key,

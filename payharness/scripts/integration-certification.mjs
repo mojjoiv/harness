@@ -17,6 +17,7 @@ const requiredFiles = [
   '../integrations/joomla/payharness.xml',
   '../integrations/joomla/payharness.php',
   '../integrations/joomla/payharnesswebhook.php',
+  '../integrations/joomla/payharnesswebhookhelper.php',
 ];
 
 const failures = [];
@@ -57,13 +58,22 @@ if (!go.includes('module github.com/mojjoiv/harness/payharness/packages/sdk-go')
 
 const woocommerce = read('../integrations/woocommerce/payharness.php');
 const woocommerceWebhook = read('../integrations/woocommerce/includes/class-payharness-webhook.php');
+const joomla = read('../integrations/joomla/payharness.php');
 const joomlaWebhook = read('../integrations/joomla/payharnesswebhook.php');
+const joomlaHelper = read('../integrations/joomla/payharnesswebhookhelper.php');
+
 for (const required of ['payharness', 'webhook']) {
   if (!woocommerce.toLowerCase().includes(required)) failures.push(`WooCommerce integration missing ${required} capability`);
   if (!joomlaWebhook.toLowerCase().includes(required)) failures.push(`Joomla webhook integration missing ${required} capability`);
 }
 for (const required of ['verify_signature', 'hash_hmac', 'hash_equals', '300']) {
   if (!woocommerceWebhook.includes(required)) failures.push(`WooCommerce webhook verifier missing ${required}`);
+}
+for (const required of ['HTTPS', 'ph_live_', 'ph_sandbox_', 'joomla-order-', 'approvalUrl']) {
+  if (!joomla.includes(required)) failures.push(`Joomla payment integration missing ${required}`);
+}
+for (const required of ['verifySignature', 'hash_hmac', 'hash_equals', '300', 'fingerprint']) {
+  if (!joomlaHelper.includes(required)) failures.push(`Joomla webhook helper missing ${required}`);
 }
 
 if (failures.length) {
