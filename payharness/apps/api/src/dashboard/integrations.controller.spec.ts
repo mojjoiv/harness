@@ -3,7 +3,7 @@ import { resolve } from 'path';
 import { integrationRoot } from './integrations.controller';
 
 describe('integration package discovery', () => {
-  const integrationsPath = resolve(__dirname, '../../../../integrations');
+  const integrationsPath = resolve(__dirname, '../../../../../integrations');
   const originalPath = process.env.PAYHARNESS_INTEGRATIONS_PATH;
 
   beforeAll(() => {
