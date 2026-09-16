@@ -23,6 +23,7 @@ const sections: NavSection[] = [
       { label: 'Transactions', href: '/transactions' },
       { label: 'Checkout Sessions', href: '/checkout-sessions' },
       { label: 'Receipts', href: '/receipts' },
+      { label: 'Integrations', href: '/integrations', exact: true },
     ],
   },
   {
