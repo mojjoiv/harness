@@ -13,14 +13,19 @@ type LoginState = {
 
 function formatError(error: unknown) {
   if (error instanceof ApiError) {
-    return `${error.message} (status: ${error.status}, code: ${error.code})`;
+    return error.message;
   }
 
-  return error instanceof Error ? error.message : 'Login failed. Please check your details and try again.';
+  return error instanceof Error ? error.message : 'We could not sign you in. Please try again.';
 }
 
 function isAuthSession(data: unknown): data is AuthSession {
-  return Boolean(data) && typeof data === 'object' && typeof (data as AuthSession).accessToken === 'string';
+  return (
+    Boolean(data) &&
+    typeof data === 'object' &&
+    typeof (data as AuthSession).accessToken === 'string' &&
+    ((data as AuthSession).type === 'merchant' || (data as AuthSession).type === 'platform')
+  );
 }
 
 export default function LoginPage() {
@@ -34,8 +39,11 @@ export default function LoginPage() {
   const showDebug = process.env.NODE_ENV !== 'production' || router.query.debug === '1';
 
   useEffect(() => {
-    if (getToken() && getSession()?.type === 'merchant') {
+    const session = getSession();
+    if (getToken() && session?.type === 'merchant') {
       router.replace('/dashboard');
+    } else if (getToken() && session?.type === 'platform') {
+      router.replace('/platform');
     }
   }, [router]);
 
@@ -66,10 +74,10 @@ export default function LoginPage() {
     try {
       const { data } = await api.post<unknown>('/auth/login', values);
       if (!isAuthSession(data)) {
-        throw new ApiError('Login response did not include accessToken', 'INVALID_AUTH_RESPONSE', 500);
+        throw new ApiError('We received an unexpected login response. Please try again.', 'INVALID_AUTH_RESPONSE', 500);
       }
       setSession(data);
-      await router.replace('/dashboard');
+      await router.replace(data.type === 'platform' ? '/platform' : '/dashboard');
     } catch (err) {
       const message = formatError(err);
       if (process.env.NODE_ENV === 'development') {
@@ -85,7 +93,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#f6f7fb,white)] px-4 py-10">
       <Panel className="w-full max-w-md p-6">
-        <SectionTitle title="Sign in" description="Access your merchant dashboard." />
+        <SectionTitle title="Sign in" description="Access your PayHarness account." />
         <form className="space-y-4" onSubmit={onSubmit}>
           <FieldRow label="Email">
             <Input
