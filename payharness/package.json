@@ -17,7 +17,7 @@
   },
   "scripts": {
     "build": "npm run build:api && npm run build:dashboard",
-    "build:api": "npm --workspace apps/api run build",
+    "build:api": "npm run build:api && npm run build:dashboard",
     "build:dashboard": "npm --workspace apps/dashboard run build",
     "start:prod": "npm --workspace apps/api run start:prod",
     "start:dashboard": "npm --workspace apps/dashboard run start",
@@ -29,6 +29,7 @@
     "verify:integrations": "node scripts/integration-certification.mjs",
     "verify:woocommerce": "node scripts/woocommerce-certification.mjs",
     "verify:joomla": "node scripts/joomla-certification.mjs",
+    "verify:security": "node scripts/security-certification.mjs",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "format:check": "prettier --check .",
     "format:check:changed": "node scripts/check-format-changed.js",
