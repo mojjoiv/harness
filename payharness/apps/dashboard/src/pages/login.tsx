@@ -40,10 +40,15 @@ export default function LoginPage() {
 
   useEffect(() => {
     const session = getSession();
-    if (getToken() && session?.type === 'merchant') {
-      router.replace('/dashboard');
-    } else if (getToken() && session?.type === 'platform') {
-      router.replace('/platform');
+    if (!getToken()) return;
+
+    if (session?.type === 'platform') {
+      void router.replace('/platform');
+      return;
+    }
+
+    if (session?.type === 'merchant') {
+      void router.replace('/dashboard');
     }
   }, [router]);
 
@@ -77,7 +82,11 @@ export default function LoginPage() {
         throw new ApiError('We received an unexpected login response. Please try again.', 'INVALID_AUTH_RESPONSE', 500);
       }
       setSession(data);
-      await router.replace(data.type === 'platform' ? '/platform' : '/dashboard');
+
+      // The platform dashboard is the Superadmin console. Use a full navigation
+      // after persisting the session so the destination always initializes with
+      // the newly issued platform token, even when Next.js router state is stale.
+      window.location.assign(data.type === 'platform' ? '/platform' : '/dashboard');
     } catch (err) {
       const message = formatError(err);
       if (process.env.NODE_ENV === 'development') {
