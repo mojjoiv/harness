@@ -9,6 +9,7 @@
     "test": "jest --runInBand"
   },
   "dependencies": {
+    "@stripe/stripe-js": "^7.9.0",
     "next": "15.5.25",
     "react": "18.2.0",
     "react-dom": "18.2.0",
