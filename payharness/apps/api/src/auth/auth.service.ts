@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { MerchantStatus, UserRole } from '@prisma/client';
+import { MerchantStatus, UserRole, PlatformUserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../common/prisma.service';
@@ -101,17 +101,29 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
+    const email = dto.email.trim().toLowerCase();
+
+    const platformUser = await this.prisma.platformUser.findUnique({ where: { email } });
+    if (platformUser) {
+      return this.loginPlatformUser(platformUser, dto.password);
+    }
+
     const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+      where: { email },
       include: { merchantUsers: { include: { merchant: true } } },
     });
-    if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
-      throw new UnauthorizedException('Invalid email or password');
+    if (!user) {
+      throw new UnauthorizedException('No account exists with that email address.');
+    }
+
+    const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!passwordMatches) {
+      throw new UnauthorizedException('The password you entered is incorrect.');
     }
 
     const merchantUser = [...user.merchantUsers].sort((left, right) => compareRoles(right.role, left.role))[0];
     if (!merchantUser) {
-      throw new UnauthorizedException('User is not attached to a merchant');
+      throw new UnauthorizedException('Your account is not connected to a merchant organization. Please contact support.');
     }
 
     if (merchantUser.status === 'DEACTIVATED') {
@@ -129,6 +141,54 @@ export class AuthService {
     });
 
     return this.authResponse(user, merchantUser.merchantId, merchantUser.role);
+  }
+
+  private async loginPlatformUser(
+    platformUser: {
+      id: string;
+      email: string;
+      name: string;
+      password: string;
+      role: string;
+      status: PlatformUserStatus;
+    },
+    password: string,
+  ) {
+    if (platformUser.status !== PlatformUserStatus.ACTIVE) {
+      if (platformUser.status === PlatformUserStatus.SUSPENDED) {
+        throw new ForbiddenException('Your platform account is suspended. Please contact a Platform Administrator.');
+      }
+      throw new ForbiddenException('Your platform account is disabled. Please contact a Platform Administrator.');
+    }
+
+    const passwordMatches = await bcrypt.compare(password, platformUser.password);
+    if (!passwordMatches) {
+      throw new UnauthorizedException('The password you entered is incorrect.');
+    }
+
+    await this.prisma.platformUser.update({
+      where: { id: platformUser.id },
+      data: { lastLogin: new Date() },
+    });
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: platformUser.id,
+      userId: platformUser.id,
+      email: platformUser.email,
+      role: platformUser.role,
+      type: 'platform',
+    });
+
+    return {
+      accessToken,
+      user: {
+        id: platformUser.id,
+        email: platformUser.email,
+        name: platformUser.name,
+      },
+      role: platformUser.role,
+      type: 'platform',
+    };
   }
 
   private assertMerchantActive(status: MerchantStatus) {
