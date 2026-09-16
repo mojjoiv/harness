@@ -12,6 +12,7 @@ const requiredFiles = [
   'packages/sdk-go/go.mod',
   '../integrations/woocommerce/payharness.php',
   '../integrations/woocommerce/includes/class-payharness-api.php',
+  '../integrations/woocommerce/includes/class-payharness-webhook.php',
   '../integrations/woocommerce/includes/class-wc-gateway-payharness.php',
   '../integrations/joomla/payharness.xml',
   '../integrations/joomla/payharness.php',
@@ -55,10 +56,14 @@ const go = read('packages/sdk-go/go.mod');
 if (!go.includes('module github.com/mojjoiv/harness/payharness/packages/sdk-go')) failures.push('Go SDK module path is incorrect');
 
 const woocommerce = read('../integrations/woocommerce/payharness.php');
+const woocommerceWebhook = read('../integrations/woocommerce/includes/class-payharness-webhook.php');
 const joomlaWebhook = read('../integrations/joomla/payharnesswebhook.php');
 for (const required of ['payharness', 'webhook']) {
   if (!woocommerce.toLowerCase().includes(required)) failures.push(`WooCommerce integration missing ${required} capability`);
   if (!joomlaWebhook.toLowerCase().includes(required)) failures.push(`Joomla webhook integration missing ${required} capability`);
+}
+for (const required of ['verify_signature', 'hash_hmac', 'hash_equals', '300']) {
+  if (!woocommerceWebhook.includes(required)) failures.push(`WooCommerce webhook verifier missing ${required}`);
 }
 
 if (failures.length) {

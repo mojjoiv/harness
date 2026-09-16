@@ -19,10 +19,13 @@ class PayHarness_API {
         return $this->request('GET', '/payments/' . rawurlencode($payment_id) . '/query');
     }
 
-    public function refund_payment($payment_id, $amount_cents, $idempotency_key) {
+    public function refund_payment($payment_id, $amount_cents, $idempotency_key, $reason = '') {
         $payload = [];
         if ($amount_cents !== null) {
             $payload['amountCents'] = (int) $amount_cents;
+        }
+        if ($reason !== '') {
+            $payload['reason'] = sanitize_text_field($reason);
         }
 
         return $this->request(
@@ -36,6 +39,11 @@ class PayHarness_API {
     private function request($method, $path, $body = null, $headers = []) {
         if (!$this->base_url || !$this->api_key) {
             return new WP_Error('payharness_not_configured', 'PayHarness API URL and API key are required.');
+        }
+
+        $parsed_url = wp_parse_url($this->base_url);
+        if (!$parsed_url || empty($parsed_url['scheme']) || strtolower($parsed_url['scheme']) !== 'https') {
+            return new WP_Error('payharness_insecure_api_url', 'PayHarness API URL must use HTTPS.');
         }
 
         $request_headers = array_merge([

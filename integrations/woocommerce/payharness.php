@@ -23,6 +23,7 @@ function payharness_wc_init() {
     }
 
     require_once PAYHARNESS_WC_PATH . 'includes/class-payharness-api.php';
+    require_once PAYHARNESS_WC_PATH . 'includes/class-payharness-webhook.php';
     require_once PAYHARNESS_WC_PATH . 'includes/class-wc-gateway-payharness.php';
 
     add_filter('woocommerce_payment_gateways', function ($gateways) {
@@ -50,7 +51,8 @@ function payharness_wc_handle_webhook(WP_REST_Request $request) {
 
     $raw_body = $request->get_body();
     $signature = $request->get_header('x-payharness-signature');
-    if (!payharness_wc_verify_signature($secret, $signature, $raw_body)) {
+    $event_header = sanitize_text_field($request->get_header('x-payharness-event'));
+    if (!PayHarness_Webhook::verify_signature($secret, $signature, $raw_body)) {
         return new WP_Error('payharness_invalid_signature', 'Invalid PayHarness webhook signature.', ['status' => 401]);
     }
 
@@ -65,6 +67,10 @@ function payharness_wc_handle_webhook(WP_REST_Request $request) {
         return new WP_Error('payharness_missing_fields', 'Webhook paymentId and type are required.', ['status' => 400]);
     }
 
+    if ($event_header !== '' && !hash_equals($event_type, $event_header)) {
+        return new WP_Error('payharness_event_mismatch', 'Webhook event header does not match the payload.', ['status' => 400]);
+    }
+
     $orders = wc_get_orders([
         'limit' => 1,
         'meta_key' => '_payharness_payment_id',
@@ -75,40 +81,44 @@ function payharness_wc_handle_webhook(WP_REST_Request $request) {
     }
 
     $order = $orders[0];
+    $event_fingerprint = PayHarness_Webhook::event_fingerprint($event_type, $raw_body);
+    $processed_events = $order->get_meta('_payharness_processed_webhook_events', true);
+    if (!is_array($processed_events)) {
+        $processed_events = [];
+    }
+
+    if (isset($processed_events[$event_fingerprint])) {
+        return new WP_REST_Response(['received' => true, 'matched' => true, 'duplicate' => true], 200);
+    }
+
     if ($event_type === 'payment.succeeded') {
-        if (!$order->is_paid()) {
+        if (!$order->is_paid() && !$order->has_status(['cancelled', 'refunded'])) {
             $order->payment_complete($payment_id);
             $order->add_order_note('PayHarness payment succeeded. Payment ID: ' . $payment_id);
         }
     } elseif ($event_type === 'payment.failed') {
-        if (!$order->has_status(['completed', 'processing', 'refunded'])) {
+        if (!$order->has_status(['completed', 'processing', 'refunded', 'cancelled'])) {
             $order->update_status('failed', 'PayHarness payment failed. Payment ID: ' . $payment_id);
         }
     } elseif ($event_type === 'payment.refunded') {
         if (!$order->has_status('refunded')) {
             $order->update_status('refunded', 'PayHarness payment refunded. Payment ID: ' . $payment_id);
         }
+    } else {
+        return new WP_REST_Response(['received' => true, 'matched' => true, 'ignored' => true], 200);
     }
+
+    $processed_events[$event_fingerprint] = time();
+    if (count($processed_events) > 50) {
+        uasort($processed_events, function ($left, $right) {
+            return $left <=> $right;
+        });
+        $processed_events = array_slice($processed_events, -50, 50, true);
+    }
+    $order->update_meta_data('_payharness_processed_webhook_events', $processed_events);
+    $order->save();
 
     return new WP_REST_Response(['received' => true, 'matched' => true], 200);
-}
-
-function payharness_wc_verify_signature($secret, $header, $body) {
-    if (!is_string($header) || !preg_match('/(?:^|,)t=([0-9]+)(?:,|$)/', $header, $timestamp_match)) {
-        return false;
-    }
-    if (!preg_match('/(?:^|,)v1=([a-f0-9]{64})(?:,|$)/', $header, $signature_match)) {
-        return false;
-    }
-
-    $timestamp = (int) $timestamp_match[1];
-    if (abs(time() - $timestamp) > 300) {
-        return false;
-    }
-
-    $derived_key = hash('sha256', $secret);
-    $expected = hash_hmac('sha256', $timestamp . '.' . $body, $derived_key);
-    return hash_equals($expected, $signature_match[1]);
 }
 
 register_deactivation_hook(__FILE__, function () {

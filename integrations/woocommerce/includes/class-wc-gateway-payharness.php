@@ -104,8 +104,33 @@ class WC_Gateway_PayHarness extends WC_Payment_Gateway {
         }
 
         $environment = strtoupper($this->get_option('environment', 'SANDBOX'));
+        if (!in_array($environment, ['SANDBOX', 'LIVE'], true)) {
+            wc_add_notice('The selected PayHarness environment is invalid.', 'error');
+            return ['result' => 'failure'];
+        }
+
+        $api_key = trim((string) $this->get_option('api_key'));
+        $expected_prefix = $environment === 'LIVE' ? 'ph_live_' : 'ph_sandbox_';
+        if (!$api_key || strpos($api_key, $expected_prefix) !== 0) {
+            wc_add_notice('The PayHarness API key does not match the selected environment.', 'error');
+            return ['result' => 'failure'];
+        }
+
+        $api_url = trim((string) $this->get_option('api_url'));
+        $parsed_api_url = wp_parse_url($api_url);
+        if (!$parsed_api_url || strtolower((string) ($parsed_api_url['scheme'] ?? '')) !== 'https') {
+            wc_add_notice('The PayHarness API URL must use HTTPS.', 'error');
+            return ['result' => 'failure'];
+        }
+
+        $amount_cents = (int) round(((float) $order->get_total()) * 100);
+        if ($amount_cents <= 0) {
+            wc_add_notice('PayHarness requires an order total greater than zero.', 'error');
+            return ['result' => 'failure'];
+        }
+
         $payload = [
-            'amountCents' => (int) round(((float) $order->get_total()) * 100),
+            'amountCents' => $amount_cents,
             'currency' => strtoupper($order->get_currency()),
             'environment' => $environment,
             'customerId' => (string) $order->get_customer_id(),
@@ -121,7 +146,7 @@ class WC_Gateway_PayHarness extends WC_Payment_Gateway {
             $payload['metadata']['accountReference'] = 'WC-' . $order->get_order_number();
         }
 
-        $api = new PayHarness_API($this->get_option('api_url'), $this->get_option('api_key'));
+        $api = new PayHarness_API($api_url, $api_key);
         $result = $api->create_payment($payload + ['provider' => $provider], 'wc-order-' . $order->get_id());
         if (is_wp_error($result)) {
             wc_add_notice(esc_html($result->get_error_message()), 'error');
@@ -149,7 +174,7 @@ class WC_Gateway_PayHarness extends WC_Payment_Gateway {
         }
 
         $redirect = $payment['approvalUrl'] ?? $payment['redirectUrl'] ?? '';
-        if ($redirect && filter_var($redirect, FILTER_VALIDATE_URL)) {
+        if ($redirect && filter_var($redirect, FILTER_VALIDATE_URL) && strtolower((string) wp_parse_url($redirect, PHP_URL_SCHEME)) === 'https') {
             WC()->cart->empty_cart();
             return [
                 'result' => 'success',
@@ -176,18 +201,23 @@ class WC_Gateway_PayHarness extends WC_Payment_Gateway {
         }
 
         $amount_cents = $amount === null ? null : (int) round(((float) $amount) * 100);
-        $refund_id = 'unknown';
-        $idempotency_key = 'wc-refund-' . $order->get_id() . '-' . wp_generate_uuid4();
+        if ($amount_cents !== null && $amount_cents <= 0) {
+            return new WP_Error('payharness_invalid_refund_amount', 'Refund amount must be greater than zero.');
+        }
+
+        $refund_count = count($order->get_refunds());
+        $amount_key = $amount_cents === null ? 'full' : (string) $amount_cents;
+        $idempotency_key = 'wc-refund-' . $order->get_id() . '-' . $refund_count . '-' . $amount_key;
 
         $api = new PayHarness_API($this->get_option('api_url'), $this->get_option('api_key'));
-        $result = $api->refund_payment($payment_id, $amount_cents, $idempotency_key);
+        $result = $api->refund_payment($payment_id, $amount_cents, $idempotency_key, $reason);
         if (is_wp_error($result)) {
             return $result;
         }
 
         $refund = $result['data'] ?? $result;
-        $refund_id = isset($refund['refundId']) ? sanitize_text_field($refund['refundId']) : $refund_id;
-        $order->add_order_note('PayHarness refund submitted' . ($refund_id !== 'unknown' ? ': ' . $refund_id : '.') . ($reason ? ' Reason: ' . $reason : ''));
+        $refund_id = isset($refund['refundId']) ? sanitize_text_field($refund['refundId']) : 'unknown';
+        $order->add_order_note('PayHarness refund submitted' . ($refund_id !== 'unknown' ? ': ' . $refund_id : '.') . ($reason ? ' Reason: ' . sanitize_text_field($reason) : ''));
         return true;
     }
 
