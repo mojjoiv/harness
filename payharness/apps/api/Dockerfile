@@ -19,8 +19,11 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/apps/api/package*.json ./apps/api/
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/prisma ./apps/api/prisma
+COPY --from=build /app/apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
 COPY --from=build /app/integrations ./integrations
+
+RUN chmod +x /app/apps/api/docker-entrypoint.sh
 
 WORKDIR /app/apps/api
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+CMD ["./docker-entrypoint.sh"]
