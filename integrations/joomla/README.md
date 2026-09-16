@@ -19,7 +19,7 @@ The PayHarness Joomla integration provides a server-side payment plugin for stor
 - Bounded per-order duplicate webhook protection.
 - Event-header validation against the signed JSON payload.
 
-VirtueMart documents `P` as Pending, `U` as Confirmed by Shopper, `C` as Confirmed, `R` as Refunded, and `X` as Cancelled. citeturn0search0turn0search3
+VirtueMart's standard statuses include `P` Pending, `U` Confirmed by Shopper, `C` Confirmed, `R` Refunded, and `X` Cancelled.
 
 ## Installation
 
@@ -52,7 +52,7 @@ Signatures older than five minutes are rejected and `hash_equals()` is used for 
 
 ## Order flow
 
-VirtueMart creates the order before the payment plugin is invoked, so the order number is stable for payment idempotency. citeturn0search8
+VirtueMart creates the order before the payment plugin is invoked, so the order number is stable for payment idempotency.
 
 The plugin creates a PayHarness payment using the fixed order total and currency, stores the PayHarness payment ID in the order note, and redirects only to an HTTPS approval URL when one is supplied.
 
@@ -60,7 +60,7 @@ The webhook then transitions the order when PayHarness sends a final payment eve
 
 ## Refunds
 
-Provider-side refunds are initiated through PayHarness. The Joomla integration synchronizes a successful `payment.refunded` event back to VirtueMart as status `R`. VirtueMart documents `R` as the Refunded status and notes that payment plugins can control refund handling. citeturn0search0
+Provider-side refunds are initiated through PayHarness. The Joomla integration synchronizes a successful `payment.refunded` event back to VirtueMart as status `R`.
 
 ## Certification
 
