@@ -14,7 +14,7 @@ type AppPageProps = AppProps & {
 };
 
 export default function App({ Component, pageProps, pathname }: AppPageProps) {
-  const isPublic = publicRoutes.includes(pathname);
+  const isPublic = publicRoutes.includes(pathname) || pathname.startsWith('/pay/');
   const isPlatformRoute = pathname.startsWith('/platform');
 
   if (isPublic || isPlatformRoute) {

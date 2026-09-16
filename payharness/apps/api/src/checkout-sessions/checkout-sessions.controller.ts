@@ -12,7 +12,12 @@ export class CheckoutSessionsController {
 
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateCheckoutSessionDto) {
-    return this.sessionsService.create(user.merchantId as string, user.userId || undefined, dto);
+    return this.sessionsService.create(
+      user.merchantId as string,
+      user.userId || undefined,
+      dto,
+      user.environment,
+    );
   }
 
   @Get(':id')

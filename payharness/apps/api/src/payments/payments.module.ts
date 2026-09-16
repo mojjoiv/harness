@@ -29,5 +29,6 @@ import { RefundService } from './refund.service';
     PaymentReconciliationService,
     RefundService,
   ],
+  exports: [PaymentsService],
 })
 export class PaymentsModule {}

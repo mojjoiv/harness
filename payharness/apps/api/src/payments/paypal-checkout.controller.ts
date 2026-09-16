@@ -1,4 +1,5 @@
-import { BadRequestException, Controller, Get, NotFoundException, Query } from '@nestjs/common';
+import { BadRequestException, Controller, Get, NotFoundException, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { PrismaService } from '../common/prisma.service';
 import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
 
@@ -10,19 +11,23 @@ export class PaypalCheckoutController {
   ) {}
 
   @Get('success')
-  async success(@Query('paymentId') paymentId?: string, @Query('token') token?: string) {
-    if (!paymentId || !token) {
-      throw new BadRequestException('PayPal paymentId and token are required');
-    }
+  async success(
+    @Query('paymentId') paymentId: string | undefined,
+    @Query('token') token: string | undefined,
+    @Res() response: Response,
+  ) {
+    if (!paymentId || !token) throw new BadRequestException('PayPal paymentId and token are required');
 
     const payment = await this.prisma.payment.findFirst({
       where: { id: paymentId, provider: 'PAYPAL' },
+      include: { checkoutSession: true },
     });
     if (!payment) throw new NotFoundException('PayPal payment not found');
-    if (payment.providerReference !== token) {
-      throw new BadRequestException('Invalid PayPal approval token');
-    }
+    if (payment.providerReference !== token) throw new BadRequestException('Invalid PayPal approval token');
 
-    return this.paypalPaymentService.captureOrder(payment.merchantId, undefined, payment.id);
+    const result = await this.paypalPaymentService.captureOrder(payment.merchantId, undefined, payment.id);
+    const redirectUrl = result.status === 'SUCCEEDED' ? payment.checkoutSession?.successUrl : payment.checkoutSession?.cancelUrl;
+    if (!redirectUrl) return response.json(result);
+    return response.redirect(303, redirectUrl);
   }
 }

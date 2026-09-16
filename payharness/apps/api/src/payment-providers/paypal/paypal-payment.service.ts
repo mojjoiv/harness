@@ -78,9 +78,9 @@ export class PaypalPaymentService {
 
     try {
       const appUrl = this.config.get<string>('APP_URL') || '';
-      const returnUrl =
-        session?.successUrl ||
-        `${appUrl}/payments/paypal/success?paymentId=${payment.id}`;
+      const returnUrl = session
+        ? `${appUrl.replace(/\/$/, '')}/payments/paypal/success?paymentId=${payment.id}`
+        : `${appUrl}/payments/paypal/success?paymentId=${payment.id}`;
       const cancelUrl =
         session?.cancelUrl ||
         `${appUrl}/payments/paypal/cancel?paymentId=${payment.id}`;
