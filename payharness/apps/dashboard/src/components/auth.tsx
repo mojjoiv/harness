@@ -50,7 +50,7 @@ export function PlatformAuthGate({ children }: React.PropsWithChildren) {
     const session = getSession();
     if (!token || session?.type !== 'platform') {
       clearSession();
-      router?.replace('/platform/login');
+      router?.replace('/login');
       return;
     }
     setReady(true);
@@ -64,5 +64,5 @@ export function PlatformAuthGate({ children }: React.PropsWithChildren) {
 
 export function platformLogout(router: ReturnType<typeof useRouter>) {
   clearSession();
-  router?.push('/platform/login');
+  router?.push('/login');
 }
