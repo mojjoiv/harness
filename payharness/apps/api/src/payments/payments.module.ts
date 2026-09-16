@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+import { CurrencyModule } from '../currency/currency.module';
 import { PaymentProvidersModule } from '../payment-providers/payment-providers.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
@@ -14,7 +15,7 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
 import { RefundService } from './refund.service';
 
 @Module({
-  imports: [AuditLogsModule, PaymentProvidersModule, WebhooksModule],
+  imports: [AuditLogsModule, CurrencyModule, PaymentProvidersModule, WebhooksModule],
   controllers: [
     PaymentsController,
     PaypalCheckoutController,
