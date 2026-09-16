@@ -42,7 +42,6 @@ export class HostedCheckoutController {
     const environment = metadata._payharnessEnvironment === 'LIVE' ? 'LIVE' : 'SANDBOX';
     const normalizedDto = await this.currencyService.normalizePayment(
       {
-        provider: dto.provider,
         amountCents: session.amountCents,
         currency: session.currency,
         environment,
@@ -57,6 +56,9 @@ export class HostedCheckoutController {
       dto.provider,
     );
 
-    return this.payments.createPayment(session.merchantId, undefined, normalizedDto);
+    return this.payments.createPayment(session.merchantId, undefined, {
+      provider: dto.provider,
+      ...normalizedDto,
+    });
   }
 }
