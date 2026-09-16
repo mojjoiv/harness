@@ -12,9 +12,9 @@ export class PaypalCheckoutController {
 
   @Get('success')
   async success(
-    @Query('paymentId') paymentId?: string,
-    @Query('token') token?: string,
-    @Res() response?: Response,
+    @Query('paymentId') paymentId: string | undefined,
+    @Query('token') token: string | undefined,
+    @Res() response: Response,
   ) {
     if (!paymentId || !token) throw new BadRequestException('PayPal paymentId and token are required');
 
@@ -26,12 +26,8 @@ export class PaypalCheckoutController {
     if (payment.providerReference !== token) throw new BadRequestException('Invalid PayPal approval token');
 
     const result = await this.paypalPaymentService.captureOrder(payment.merchantId, undefined, payment.id);
-    const redirectUrl =
-      result.status === 'SUCCEEDED'
-        ? payment.checkoutSession?.successUrl
-        : payment.checkoutSession?.cancelUrl;
-
-    if (!redirectUrl) return result;
-    return response?.redirect(303, redirectUrl) || result;
+    const redirectUrl = result.status === 'SUCCEEDED' ? payment.checkoutSession?.successUrl : payment.checkoutSession?.cancelUrl;
+    if (!redirectUrl) return response.json(result);
+    return response.redirect(303, redirectUrl);
   }
 }
