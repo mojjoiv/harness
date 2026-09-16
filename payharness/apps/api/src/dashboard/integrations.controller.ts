@@ -15,6 +15,7 @@ export function integrationRoot(name: PackageName): string | undefined {
   const candidates = [
     configuredRoot ? resolve(configuredRoot, PACKAGES[name]) : undefined,
     resolve(process.cwd(), 'integrations', PACKAGES[name]),
+    resolve(process.cwd(), '..', 'integrations', PACKAGES[name]),
     resolve(__dirname, '../../../integrations', PACKAGES[name]),
     resolve(__dirname, '../../../../integrations', PACKAGES[name]),
   ].filter((candidate): candidate is string => Boolean(candidate));
