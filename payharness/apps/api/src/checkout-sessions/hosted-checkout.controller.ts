@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { CurrencyService } from '../currency/currency.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CreateHostedPaymentDto } from './dto/create-hosted-payment.dto';
 import { CheckoutSessionsService } from './checkout-sessions.service';
@@ -10,6 +11,7 @@ export class HostedCheckoutController {
     private readonly sessions: CheckoutSessionsService,
     private readonly prisma: PrismaService,
     private readonly payments: PaymentsService,
+    private readonly currencyService: CurrencyService,
   ) {}
 
   @Get(':id')
@@ -38,18 +40,23 @@ export class HostedCheckoutController {
 
     const metadata = (session.metadata || {}) as Record<string, unknown>;
     const environment = metadata._payharnessEnvironment === 'LIVE' ? 'LIVE' : 'SANDBOX';
-    return this.payments.createPayment(session.merchantId, undefined, {
-      provider: dto.provider,
-      amountCents: session.amountCents,
-      currency: session.currency,
-      environment,
-      customerId: session.customerId || undefined,
-      checkoutSessionId: session.id,
-      phoneNumber: dto.phoneNumber,
-      metadata: {
-        ...(metadata as Record<string, unknown>),
-        hostedCheckout: true,
+    const normalizedDto = await this.currencyService.normalizePayment(
+      {
+        provider: dto.provider,
+        amountCents: session.amountCents,
+        currency: session.currency,
+        environment,
+        customerId: session.customerId || undefined,
+        checkoutSessionId: session.id,
+        phoneNumber: dto.phoneNumber,
+        metadata: {
+          ...(metadata as Record<string, unknown>),
+          hostedCheckout: true,
+        },
       },
-    });
+      dto.provider,
+    );
+
+    return this.payments.createPayment(session.merchantId, undefined, normalizedDto);
   }
 }
