@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
+import { navigateTopLevel } from '../../../lib/navigation';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 type Provider = 'MPESA' | 'STRIPE' | 'PAYPAL';
@@ -55,7 +56,7 @@ export default function HostedCheckoutPage() {
   const pollUntilFinished = async () => {
     for (let attempt = 0; attempt < 40; attempt += 1) {
       const status = await apiRequest<{ status: string; successUrl: string; cancelUrl: string }>(`/public/checkout-sessions/${sessionId}/status`);
-      if (status.status === 'SUCCEEDED') { window.location.assign(status.successUrl); return true; }
+      if (status.status === 'SUCCEEDED') { navigateTopLevel(status.successUrl); return true; }
       if (['FAILED', 'CANCELED'].includes(status.status)) { setProcessing(false); setError('The payment was not completed. Please try again.'); return false; }
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
@@ -74,7 +75,7 @@ export default function HostedCheckoutPage() {
         await pollUntilFinished(); return;
       }
       const payment = await apiRequest<{ approvalUrl?: string }>(`/public/checkout-sessions/${sessionId}/payments`, { method: 'POST', body: JSON.stringify({ provider: selectedProvider, ...(selectedProvider === 'MPESA' ? { phoneNumber: phone } : {}) }) });
-      if (selectedProvider === 'PAYPAL' && payment.approvalUrl) { window.top?.location.assign(payment.approvalUrl); return; }
+      if (selectedProvider === 'PAYPAL' && payment.approvalUrl) { navigateTopLevel(payment.approvalUrl); return; }
       setMessage(selectedProvider === 'MPESA' ? 'Check your phone and approve the M-Pesa prompt.' : 'Payment started.'); await pollUntilFinished();
     } catch (err) { setProcessing(false); setError(err instanceof Error ? err.message : 'Payment could not be started'); }
   };
