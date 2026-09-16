@@ -215,6 +215,7 @@ describe('AuthService', () => {
     });
 
     it('rejects a deactivated merchant user', async () => {
+      bcryptCompare.mockResolvedValue(true);
       prisma.platformUser.findUnique.mockResolvedValue(null);
       prisma.user.findUnique.mockResolvedValue({
         ...baseUser,
@@ -233,6 +234,7 @@ describe('AuthService', () => {
     it.each([MerchantStatus.PENDING, MerchantStatus.REJECTED, MerchantStatus.SUSPENDED])(
       'rejects an inactive merchant with %s status',
       async (status: MerchantStatus) => {
+        bcryptCompare.mockResolvedValue(true);
         prisma.platformUser.findUnique.mockResolvedValue(null);
         prisma.user.findUnique.mockResolvedValue({
           ...baseUser,
@@ -252,6 +254,7 @@ describe('AuthService', () => {
     );
 
     it('logs in an active merchant user and signs a merchant token', async () => {
+      bcryptCompare.mockResolvedValue(true);
       prisma.platformUser.findUnique.mockResolvedValue(null);
       prisma.user.findUnique.mockResolvedValue({
         ...baseUser,
