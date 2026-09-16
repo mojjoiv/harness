@@ -21,6 +21,7 @@ export class CheckoutSessionsService {
     const settings = await this.prisma.merchantSettings.findUnique({ where: { merchantId } });
     const successUrl = this.resolveRedirectUrl(dto.successUrl, settings?.successUrl, 'success');
     const cancelUrl = this.resolveRedirectUrl(dto.cancelUrl, settings?.cancelUrl, 'cancel');
+    const checkoutBaseUrl = this.getCheckoutBaseUrl();
 
     // Resolve merchant-dependent data before creating the session so a failed
     // response cannot leave behind a checkout session that the client never received.
@@ -52,7 +53,7 @@ export class CheckoutSessionsService {
       entityId: session.id,
     });
 
-    return this.withCheckoutUrl(session, branding);
+    return this.withCheckoutUrl(session, branding, checkoutBaseUrl);
   }
 
   async get(merchantId: string, id: string) {
@@ -64,7 +65,7 @@ export class CheckoutSessionsService {
       throw new NotFoundException('Checkout session not found');
     }
     const branding = await this.brandingService.get(merchantId);
-    return this.withCheckoutUrl(session, branding);
+    return this.withCheckoutUrl(session, branding, this.getCheckoutBaseUrl());
   }
 
   async list(merchantId: string, query: PaginationQueryDto) {
@@ -80,7 +81,8 @@ export class CheckoutSessionsService {
       this.prisma.checkoutSession.count({ where: { merchantId } }),
       this.brandingService.get(merchantId),
     ]);
-    const items = sessions.map((session) => this.withCheckoutUrl(session, branding));
+    const checkoutBaseUrl = this.getCheckoutBaseUrl();
+    const items = sessions.map((session) => this.withCheckoutUrl(session, branding, checkoutBaseUrl));
     return paginated(items, total, pagination);
   }
 
@@ -104,6 +106,25 @@ export class CheckoutSessionsService {
     }
 
     return value;
+  }
+
+  private getCheckoutBaseUrl() {
+    const configured = this.config.get<string>('CHECKOUT_URL')?.trim();
+    if (!configured) {
+      if (this.config.get<string>('NODE_ENV') === 'production') {
+        throw new InternalServerErrorException('PayHarness checkout URL is not configured');
+      }
+      return 'http://localhost:3001';
+    }
+
+    try {
+      const parsed = new URL(configured);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('unsupported protocol');
+    } catch {
+      throw new InternalServerErrorException('PayHarness checkout URL is invalid');
+    }
+
+    return configured.replace(/\/$/, '');
   }
 
   private async findOrCreateCustomer(
@@ -140,13 +161,8 @@ export class CheckoutSessionsService {
   private withCheckoutUrl<T extends { id: string }>(
     session: T,
     branding: Awaited<ReturnType<MerchantBrandingService['get']>>,
+    checkoutBaseUrl: string,
   ) {
-    const baseUrl = this.config.get<string>('CHECKOUT_URL')?.trim();
-    if (!baseUrl && this.config.get<string>('NODE_ENV') === 'production') {
-      throw new InternalServerErrorException('PayHarness checkout URL is not configured');
-    }
-
-    const checkoutBaseUrl = (baseUrl || 'http://localhost:3001').replace(/\/$/, '');
     return {
       ...session,
       checkoutUrl: `${checkoutBaseUrl}/pay/${session.id}`,
