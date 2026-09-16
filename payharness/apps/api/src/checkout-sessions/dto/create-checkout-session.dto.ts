@@ -35,11 +35,17 @@ export class CreateCheckoutSessionDto {
   @IsString()
   currency: string;
 
+  /**
+   * Per-session redirect URLs override the merchant's dashboard defaults.
+   * They are optional so API clients can rely on merchant-level defaults.
+   */
+  @IsOptional()
   @IsUrl()
-  successUrl: string;
+  successUrl?: string;
 
+  @IsOptional()
   @IsUrl()
-  cancelUrl: string;
+  cancelUrl?: string;
 
   @IsOptional()
   @ValidateNested()
