@@ -1,0 +1,1 @@
+Integration packages are copied into `/app/integrations` in the production API image. The API uses `PAYHARNESS_INTEGRATIONS_PATH` as the explicit runtime package directory, with development path fallbacks.
