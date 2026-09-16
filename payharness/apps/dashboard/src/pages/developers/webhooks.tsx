@@ -49,6 +49,7 @@ export default function WebhooksPage() {
   const [items, setItems] = useState<WebhookEndpointRecord[]>([]);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [secret, setSecret] = useState('');
+  const [secretModalOpen, setSecretModalOpen] = useState(false);
   const [endpointMeta, setEndpointMeta] = useState<PaginationMeta>({ page: 1, limit: 20, totalPages: 1 });
   const [deliveryMeta, setDeliveryMeta] = useState<PaginationMeta>({ page: 1, limit: 25, totalPages: 1 });
   const [page, setPage] = useState(1);
@@ -102,7 +103,16 @@ export default function WebhooksPage() {
 
   useEffect(() => {
     void loadDeliveries(deliveryPage);
-  }, [deliveryPage, loadDeliveries]);
+  }, [loadDeliveries, deliveryPage]);
+
+  useEffect(() => {
+    if (!secretModalOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSecretModalOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [secretModalOpen]);
 
   const filteredDeliveries = useMemo(
     () => deliveries.filter((delivery) => {
@@ -127,6 +137,12 @@ export default function WebhooksPage() {
     setActionType('');
   };
 
+  const showSecret = (value: string, messageText: string) => {
+    setSecret(value);
+    setMessage(messageText);
+    if (value) setSecretModalOpen(true);
+  };
+
   const create = async () => {
     const url = form.url.trim();
     const events = form.events.split(',').map((event) => event.trim()).filter(Boolean);
@@ -139,8 +155,7 @@ export default function WebhooksPage() {
     beginAction('create', 'test');
     try {
       const response = await api.post<WebhookEndpointRecord>('/webhooks/endpoints', { url, events });
-      setSecret(response.data.secret || '');
-      setMessage('Endpoint created. Save the secret below; it will not be returned by listing APIs.');
+      showSecret(response.data.secret || '', 'Endpoint created. Save the secret below; it will not be returned by listing APIs.');
       setForm({ url: '', events: form.events });
       setPage(1);
       await loadEndpoints(1);
@@ -156,8 +171,7 @@ export default function WebhooksPage() {
     beginAction(id, 'rotate');
     try {
       const response = await api.post<WebhookEndpointRecord>(`/webhooks/endpoints/${id}/rotate-secret`, {});
-      setSecret(response.data.secret || '');
-      setMessage('Webhook secret rotated. Save the new secret below.');
+      showSecret(response.data.secret || '', 'Webhook secret rotated. Save the new secret below.');
     } catch (err) {
       setActionError(formatError(err, 'Unable to rotate webhook secret.'));
     } finally {
@@ -236,8 +250,13 @@ export default function WebhooksPage() {
 
       {secret ? (
         <Panel className="p-4">
-          <div className="text-sm text-muted">Webhook secret — save it now. It is only returned on create or rotation.</div>
-          <div className="mt-2 flex flex-wrap items-center gap-2"><code className="rounded-xl bg-panelAlt px-3 py-2 text-sm">{secret}</code><CopyButton value={secret} /></div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-ink">Webhook secret</div>
+              <div className="mt-1 text-sm text-muted">The secret is only returned on create or rotation.</div>
+            </div>
+            <Button variant="secondary" onClick={() => setSecretModalOpen(true)}>View secret</Button>
+          </div>
         </Panel>
       ) : null}
 
@@ -292,6 +311,36 @@ export default function WebhooksPage() {
           <div className="mt-6 flex justify-end">{selected.status !== 'SUCCEEDED' ? <Button onClick={() => void retryDelivery()} disabled={actionLoading}>{actionLoading && actionId === selected.id ? 'Retrying…' : 'Retry delivery'}</Button> : null}</div>
         </> : null}
       </Panel> : null}
+
+      {secretModalOpen && secret ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSecretModalOpen(false);
+          }}
+        >
+          <div role="dialog" aria-modal="true" aria-labelledby="webhook-secret-title" className="w-full max-w-xl rounded-2xl border border-line bg-panel p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="webhook-secret-title" className="text-lg font-semibold text-ink">Webhook secret</h2>
+                <p className="mt-1 text-sm text-muted">Copy this secret now. It is shown only after creating or rotating an endpoint.</p>
+              </div>
+              <Button variant="ghost" onClick={() => setSecretModalOpen(false)} aria-label="Close webhook secret">Close</Button>
+            </div>
+            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              Keep this secret private. You will not be able to retrieve it from the endpoint list later. If you lose it, rotate the secret and update your integration.
+            </div>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <code className="min-w-0 flex-1 break-all rounded-xl bg-panelAlt px-4 py-3 text-sm text-ink">{secret}</code>
+              <CopyButton value={secret} label="Copy secret" />
+            </div>
+            <div className="mt-6 flex justify-end">
+              <Button onClick={() => setSecretModalOpen(false)}>Done</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
