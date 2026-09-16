@@ -23,7 +23,6 @@ const sections: NavSection[] = [
       { label: 'Transactions', href: '/transactions' },
       { label: 'Checkout Sessions', href: '/checkout-sessions' },
       { label: 'Receipts', href: '/receipts' },
-      { label: 'Integrations', href: '/integrations', exact: true },
     ],
   },
   {
@@ -39,6 +38,7 @@ const sections: NavSection[] = [
     title: 'Developers',
     items: [
       { label: 'Developer Portal', href: '/developers', exact: true },
+      { label: 'Integrations', href: '/integrations', exact: true },
       { label: 'API Keys', href: '/developers/api-keys' },
       { label: 'Webhooks', href: '/developers/webhooks' },
       { label: 'Usage', href: '/developers/usage' },
