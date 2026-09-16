@@ -31,6 +31,7 @@
     "verify:joomla": "node scripts/joomla-certification.mjs",
     "verify:security": "node scripts/security-certification.mjs",
     "verify:disaster-recovery": "node scripts/disaster-recovery-certification.mjs",
+    "verify:production": "node scripts/final-production-certification.mjs",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "format:check": "prettier --check .",
     "format:check:changed": "node scripts/check-format-changed.js",
