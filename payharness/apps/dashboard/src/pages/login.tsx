@@ -40,10 +40,15 @@ export default function LoginPage() {
 
   useEffect(() => {
     const session = getSession();
-    if (getToken() && session?.type === 'merchant') {
-      router.replace('/dashboard');
-    } else if (getToken() && session?.type === 'platform') {
-      router.replace('/platform');
+    if (!getToken()) return;
+
+    if (session?.type === 'platform') {
+      void router.replace('/platform');
+      return;
+    }
+
+    if (session?.type === 'merchant') {
+      void router.replace('/dashboard');
     }
   }, [router]);
 
@@ -76,8 +81,13 @@ export default function LoginPage() {
       if (!isAuthSession(data)) {
         throw new ApiError('We received an unexpected login response. Please try again.', 'INVALID_AUTH_RESPONSE', 500);
       }
+
       setSession(data);
-      await router.replace(data.type === 'platform' ? '/platform' : '/dashboard');
+
+      // /platform is the Superadmin dashboard. Use a hard navigation after
+      // persisting the token so the platform auth gate always reads the new session.
+      const destination = data.type === 'platform' ? '/platform' : '/dashboard';
+      window.location.href = destination;
     } catch (err) {
       const message = formatError(err);
       if (process.env.NODE_ENV === 'development') {
