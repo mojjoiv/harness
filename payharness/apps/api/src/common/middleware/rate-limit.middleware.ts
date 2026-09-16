@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { Injectable } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { ConfigService } from '@nestjs/config';
 
@@ -7,6 +8,7 @@ interface RateLimitBucket {
   resetAt: number;
 }
 
+@Injectable()
 export class RateLimitMiddleware {
   private readonly buckets = new Map<string, RateLimitBucket>();
   private readonly windowMs: number;
