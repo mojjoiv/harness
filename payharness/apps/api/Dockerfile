@@ -11,6 +11,7 @@ RUN npm --workspace apps/api run build
 
 FROM node:20.11.1-bookworm-slim AS runtime
 ENV NODE_ENV=production
+ENV PAYHARNESS_INTEGRATIONS_PATH=/app/integrations
 WORKDIR /app
 
 COPY --from=build /app/node_modules ./node_modules

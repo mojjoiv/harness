@@ -10,6 +10,18 @@ const PACKAGES = {
 
 type PackageName = keyof typeof PACKAGES;
 
+export function integrationRoot(name: PackageName): string | undefined {
+  const configuredRoot = process.env.PAYHARNESS_INTEGRATIONS_PATH?.trim();
+  const candidates = [
+    configuredRoot ? resolve(configuredRoot, PACKAGES[name]) : undefined,
+    resolve(process.cwd(), 'integrations', PACKAGES[name]),
+    resolve(__dirname, '../../../integrations', PACKAGES[name]),
+    resolve(__dirname, '../../../../integrations', PACKAGES[name]),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  return candidates.find((candidate) => existsSync(candidate));
+}
+
 function crc32(buffer: Buffer): number {
   let crc = 0xffffffff;
   for (const byte of buffer) {
@@ -108,15 +120,6 @@ function createZip(root: string): Buffer {
   end.writeUInt16LE(0, 20);
 
   return Buffer.concat([...localParts, centralDirectory, end]);
-}
-
-function integrationRoot(name: PackageName) {
-  const candidates = [
-    resolve(process.cwd(), 'integrations', PACKAGES[name]),
-    resolve(__dirname, '../../../integrations', PACKAGES[name]),
-    resolve(__dirname, '../../../../integrations', PACKAGES[name]),
-  ];
-  return candidates.find((candidate) => existsSync(candidate));
 }
 
 @UseGuards(JwtAuthGuard)
