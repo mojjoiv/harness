@@ -36,7 +36,7 @@ describe('PaymentsController environment safety and orchestration', () => {
       refund: jest.fn(),
     };
     currencyService = {
-      normalizePayment: jest.fn(async (dto) => dto),
+      normalizePayment: jest.fn(async (dto, _provider) => dto),
     };
     controller = new PaymentsController(
       paymentsService as unknown as PaymentsService,
