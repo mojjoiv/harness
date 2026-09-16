@@ -35,11 +35,17 @@ export class PaymentsController {
   @UseInterceptors(PaymentIdempotencyInterceptor)
   async create(@CurrentUser() user: AuthUser, @Body() dto: CreatePaymentDto) {
     const lockedDto = this.lockEnvironment(user, dto);
-    const normalizedDto = await this.currencyService.normalizePayment(lockedDto, dto.provider);
+    const normalizedDto = await this.currencyService.normalizePayment(
+      lockedDto,
+      lockedDto.provider,
+    );
     return this.paymentsService.createPayment(
       user.merchantId as string,
       user.userId || undefined,
-      normalizedDto,
+      {
+        ...normalizedDto,
+        provider: lockedDto.provider,
+      },
     );
   }
 
