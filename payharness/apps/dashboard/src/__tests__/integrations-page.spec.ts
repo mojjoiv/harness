@@ -6,7 +6,7 @@ describe('Ecommerce integrations UI certification', () => {
   const readPage = (relativePath: string) =>
     fs.readFileSync(path.join(srcRoot, 'pages', relativePath), 'utf8');
 
-  it('exposes the integrations page and merchant navigation entry', () => {
+  it('exposes the integrations page under Developers', () => {
     const page = readPage('integrations.tsx');
     const layout = fs.readFileSync(path.join(srcRoot, 'components', 'layout.tsx'), 'utf8');
 
@@ -14,7 +14,10 @@ describe('Ecommerce integrations UI certification', () => {
     expect(page).toContain('WooCommerce');
     expect(page).toContain('Joomla / VirtueMart');
     expect(page).toContain('Certified');
-    expect(page).toContain('/developers/api-keys');
+    expect(page).toContain('Download ZIP package');
+    expect(page).toContain('/dashboard/integrations/${slug}/download');
+    expect(page).not.toContain('github.com/mojjoiv/harness');
+    expect(layout).toContain("title: 'Developers'");
     expect(layout).toContain("{ label: 'Integrations', href: '/integrations', exact: true }");
   });
 
