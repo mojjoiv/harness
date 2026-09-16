@@ -12,7 +12,7 @@
   <config>
     <fields name="params">
       <fieldset name="basic">
-        <field name="api_url" type="url" label="PayHarness API URL" default="https://harness-1.onrender.com" />
+        <field name="api_url" type="url" label="PayHarness API URL" default="https://harness-m6qs.onrender.com" description="PayHarness production API base URL. The downloaded package is preconfigured; change this only for an approved alternate deployment." />
         <field name="api_key" type="password" label="PayHarness API Key" filter="raw" />
         <field name="environment" type="list" label="Environment" default="SANDBOX">
           <option value="SANDBOX">Sandbox</option>

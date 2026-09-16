@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { Badge, Button, Panel, SectionTitle } from '@/components/ui';
-import { buildApiUrl } from '@/lib/api';
+import { buildApiUrl, getApiUrl } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 
 const integrations = [
@@ -75,6 +75,14 @@ export default function IntegrationsPage() {
     }
   }
 
+  async function copyApiUrl() {
+    try {
+      await navigator.clipboard.writeText(getApiUrl());
+    } catch {
+      setDownloadError('Unable to copy the PayHarness API URL.');
+    }
+  }
+
   return (
     <div className="space-y-8">
       <SectionTitle
@@ -96,6 +104,23 @@ export default function IntegrationsPage() {
           <Link href="/developers">
             <Button variant="secondary">Open Developer Portal</Button>
           </Link>
+        </div>
+      </Panel>
+
+      <Panel className="p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">PayHarness API URL</h2>
+            <p className="mt-1 text-sm leading-6 text-muted">
+              This is the PayHarness API endpoint used by the downloaded integrations. It is preconfigured in the packages, so merchants normally do not need to change it.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-xl border border-line bg-panelAlt px-4 py-3">
+            <code className="text-sm text-ink">{getApiUrl()}</code>
+            <Button variant="secondary" onClick={() => void copyApiUrl()}>
+              Copy
+            </Button>
+          </div>
         </div>
       </Panel>
 

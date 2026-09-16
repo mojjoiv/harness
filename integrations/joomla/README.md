@@ -23,12 +23,15 @@ VirtueMart's standard statuses include `P` Pending, `U` Confirmed by Shopper, `C
 
 ## Installation
 
-1. Install Joomla and VirtueMart.
-2. Install the PayHarness Joomla package.
-3. Enable the PayHarness VirtueMart payment plugin.
-4. Enable the PayHarness webhook system plugin.
-5. In VirtueMart → Payment Methods, create a PayHarness method and publish it.
-6. Configure the PayHarness API URL, `ph_sandbox_...` or `ph_live_...` API key, environment, provider, and webhook secret.
+1. Download the PayHarness ZIP package from **PayHarness Dashboard → Developers → Integrations**.
+2. Install Joomla and VirtueMart.
+3. Install the PayHarness Joomla package.
+4. Enable the PayHarness VirtueMart payment plugin.
+5. Enable the PayHarness webhook system plugin.
+6. In VirtueMart → Payment Methods, create a PayHarness method and publish it.
+7. The PayHarness API URL is preconfigured to the PayHarness production API. Only change it when PayHarness support provides an alternate deployment URL.
+8. Generate a PayHarness API key from **Developers → API Keys** and paste it into the payment method configuration.
+9. Select Sandbox or Live, choose M-Pesa or PayPal, and configure the webhook secret.
 
 Keep the API key and webhook secret server-side. Never place either value in browser JavaScript.
 
