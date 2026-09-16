@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { EnvironmentIsolationGuard } from '../common/guards/environment-isolation.guard';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
+import { CurrencyService } from '../currency/currency.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
 import { RefundPaymentDto } from './dto/refund-payment.dto';
@@ -27,45 +28,60 @@ export class PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
     private readonly refundService: RefundService,
+    private readonly currencyService: CurrencyService,
   ) {}
 
   @Post()
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  create(@CurrentUser() user: AuthUser, @Body() dto: CreatePaymentDto) {
+  async create(@CurrentUser() user: AuthUser, @Body() dto: CreatePaymentDto) {
+    const lockedDto = this.lockEnvironment(user, dto);
+    const normalizedDto = await this.currencyService.normalizePayment(
+      lockedDto,
+      lockedDto.provider,
+    );
     return this.paymentsService.createPayment(
       user.merchantId as string,
       user.userId || undefined,
-      this.lockEnvironment(user, dto),
+      {
+        ...normalizedDto,
+        provider: lockedDto.provider,
+      },
     );
   }
 
   @Post('mpesa/stk')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  mpesaStk(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
+  async mpesaStk(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
+    const lockedDto = this.lockEnvironment(user, dto);
+    const normalizedDto = await this.currencyService.normalizePayment(lockedDto, 'MPESA');
     return this.paymentsService.createMpesaStk(
       user.merchantId as string,
       user.userId || undefined,
-      this.lockEnvironment(user, dto),
+      normalizedDto,
     );
   }
 
   @Post('stripe/intent')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  stripeIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
+  async stripeIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
+    const lockedDto = this.lockEnvironment(user, dto);
+    const normalizedDto = await this.currencyService.normalizePayment(lockedDto, 'STRIPE');
     return this.paymentsService.createStripeIntent(
       user.merchantId as string,
       user.userId || undefined,
-      this.lockEnvironment(user, dto),
+      normalizedDto,
     );
   }
 
   @Post('paypal/order')
   @UseInterceptors(PaymentIdempotencyInterceptor)
-  paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
+  async paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
+    const lockedDto = this.lockEnvironment(user, dto);
+    const normalizedDto = await this.currencyService.normalizePayment(lockedDto, 'PAYPAL');
     return this.paymentsService.createPaypalOrder(
       user.merchantId as string,
       user.userId || undefined,
-      this.lockEnvironment(user, dto),
+      normalizedDto,
     );
   }
 

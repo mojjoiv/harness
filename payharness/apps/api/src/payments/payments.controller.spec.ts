@@ -1,3 +1,4 @@
+import { CurrencyService } from '../currency/currency.service';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { RefundService } from './refund.service';
@@ -18,6 +19,7 @@ describe('PaymentsController environment safety and orchestration', () => {
     >
   >;
   let refundService: jest.Mocked<Pick<RefundService, 'refund'>>;
+  let currencyService: jest.Mocked<Pick<CurrencyService, 'normalizePayment'>>;
 
   beforeEach(() => {
     paymentsService = {
@@ -33,13 +35,17 @@ describe('PaymentsController environment safety and orchestration', () => {
     refundService = {
       refund: jest.fn(),
     };
+    currencyService = {
+      normalizePayment: jest.fn(async (dto, _provider) => dto),
+    };
     controller = new PaymentsController(
       paymentsService as unknown as PaymentsService,
       refundService as unknown as RefundService,
+      currencyService as unknown as CurrencyService,
     );
   });
 
-  it('routes unified payment creation to the orchestration service', () => {
+  it('routes unified payment creation to the orchestration service after currency normalization', async () => {
     const user = {
       userId: 'user-1',
       merchantId: 'merchant-1',
@@ -54,8 +60,12 @@ describe('PaymentsController environment safety and orchestration', () => {
       environment: 'LIVE',
     } as any;
 
-    controller.create(user, dto);
+    await controller.create(user, dto);
 
+    expect(currencyService.normalizePayment).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'STRIPE', environment: 'SANDBOX' }),
+      'STRIPE',
+    );
     expect(paymentsService.createPayment).toHaveBeenCalledWith(
       'merchant-1',
       'user-1',
@@ -66,7 +76,7 @@ describe('PaymentsController environment safety and orchestration', () => {
     );
   });
 
-  it('forces API-key requests to use the environment encoded in the API key', () => {
+  it('forces API-key requests to use the environment encoded in the API key', async () => {
     const user = {
       userId: 'user-1',
       merchantId: 'merchant-1',
@@ -81,7 +91,7 @@ describe('PaymentsController environment safety and orchestration', () => {
       phoneNumber: '254700000000',
     } as any;
 
-    controller.mpesaStk(user, dto);
+    await controller.mpesaStk(user, dto);
 
     expect(paymentsService.createMpesaStk).toHaveBeenCalledWith(
       'merchant-1',
@@ -90,7 +100,7 @@ describe('PaymentsController environment safety and orchestration', () => {
     );
   });
 
-  it('does not rewrite the environment for dashboard JWT callers', () => {
+  it('does not rewrite the environment for dashboard JWT callers', async () => {
     const user = {
       userId: 'user-1',
       merchantId: 'merchant-1',
@@ -103,7 +113,7 @@ describe('PaymentsController environment safety and orchestration', () => {
       environment: 'LIVE',
     } as any;
 
-    controller.stripeIntent(user, dto);
+    await controller.stripeIntent(user, dto);
 
     expect(paymentsService.createStripeIntent).toHaveBeenCalledWith(
       'merchant-1',
@@ -112,7 +122,7 @@ describe('PaymentsController environment safety and orchestration', () => {
     );
   });
 
-  it('forces LIVE API-key PayPal requests back to the key environment', () => {
+  it('forces LIVE API-key PayPal requests back to the key environment', async () => {
     const user = {
       userId: 'user-2',
       merchantId: 'merchant-2',
@@ -126,7 +136,7 @@ describe('PaymentsController environment safety and orchestration', () => {
       environment: 'SANDBOX',
     } as any;
 
-    controller.paypalOrder(user, dto);
+    await controller.paypalOrder(user, dto);
 
     expect(paymentsService.createPaypalOrder).toHaveBeenCalledWith(
       'merchant-2',
