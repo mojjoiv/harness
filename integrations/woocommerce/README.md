@@ -5,14 +5,17 @@ PayHarness provides a native WooCommerce payment gateway that sends server-to-se
 ## Included
 
 - PayHarness API-key configuration.
-- Sandbox/live environment selection.
+- Sandbox/live environment selection with environment-matched API-key validation.
 - M-Pesa and PayPal provider selection.
 - WooCommerce order → PayHarness payment mapping.
-- Stable payment idempotency for checkout creation.
-- PayPal approval redirect support.
+- Stable payment idempotency for checkout creation and WooCommerce refund retries.
+- PayPal approval redirect support over HTTPS only.
 - M-Pesa asynchronous payment confirmation through PayHarness webhooks.
-- WooCommerce refunds routed through `POST /payments/:id/refund`.
+- WooCommerce refunds routed through `POST /payments/:id/refund` with the WooCommerce refund reason when supplied.
+- HTTPS-only PayHarness API transport.
 - Signed webhook verification with the PayHarness Phase 21 format.
+- Webhook event-header/payload consistency validation.
+- Duplicate webhook protection using a bounded per-order event fingerprint history.
 - Automatic order transitions for `payment.succeeded`, `payment.failed`, and `payment.refunded`.
 
 ## Installation
@@ -26,6 +29,8 @@ PayHarness provides a native WooCommerce payment gateway that sends server-to-se
 7. Save settings.
 
 For production, use a `ph_live_...` API key and keep it server-side in WordPress. Never put a PayHarness API key into browser JavaScript.
+
+The plugin rejects an API key whose environment prefix does not match the configured environment and rejects non-HTTPS PayHarness API URLs.
 
 ## Webhook configuration
 
@@ -43,13 +48,15 @@ PayHarness signs the raw JSON body with:
 HMAC_SHA256(SHA256(webhook_secret), `${timestamp}.${raw_body}`)
 ```
 
-The plugin rejects malformed signatures and timestamps older than five minutes, and uses constant-time comparison with `hash_equals`.
+The plugin rejects malformed signatures and timestamps older than five minutes, uses constant-time comparison with `hash_equals`, and checks that `X-PayHarness-Event` matches the event type in the signed payload when the header is present.
+
+Repeated delivery of the same signed event is treated as an idempotent duplicate and does not re-apply the WooCommerce state transition.
 
 ## Payment flow
 
 ### PayPal
 
-WooCommerce creates a PayHarness payment. PayHarness returns the PayPal approval URL, and WooCommerce redirects the shopper there. PayHarness webhook confirmation completes the WooCommerce order.
+WooCommerce creates a PayHarness payment. PayHarness returns the PayPal approval URL, and WooCommerce redirects the shopper there. Only HTTPS approval/redirect URLs are accepted. PayHarness webhook confirmation completes the WooCommerce order.
 
 ### M-Pesa
 
@@ -61,7 +68,7 @@ Stripe is intentionally not enabled in this first WooCommerce gateway release be
 
 ## Refunds
 
-WooCommerce refunds call the PayHarness refund endpoint using the order's stored PayHarness payment ID. Partial refunds pass `amountCents`; full refunds omit the amount.
+WooCommerce refunds call the PayHarness refund endpoint using the order's stored PayHarness payment ID. Partial refunds pass `amountCents`; full refunds omit the amount. The gateway uses a deterministic idempotency key derived from the WooCommerce order, refund sequence, and amount so a retry of the same WooCommerce refund can safely reuse the PayHarness request identity.
 
 ## Stored order metadata
 
@@ -70,8 +77,21 @@ The plugin stores:
 - `_payharness_payment_id`
 - `_payharness_provider`
 - `_payharness_environment`
+- `_payharness_processed_webhook_events`
 
 These values are server-side WooCommerce order metadata and are not exposed as payment credentials.
+
+## Certification
+
+Run from `payharness/`:
+
+```bash
+npm run verify:woocommerce
+```
+
+The certification checks the gateway's API-key/environment isolation, HTTPS requirements, stable checkout/refund idempotency, webhook event handling, duplicate-event protection, and refund contract. It also executes the real PHP webhook signature verifier against a known-good signature and verifies that a signature outside the five-minute replay window is rejected.
+
+The normal CI pipeline also validates PHP syntax and the broader PayHarness integration contracts.
 
 ## Package layout
 
@@ -80,6 +100,7 @@ payharness/
 ├── payharness.php
 ├── includes/
 │   ├── class-payharness-api.php
+│   ├── class-payharness-webhook.php
 │   └── class-wc-gateway-payharness.php
 └── README.md
 ```
