@@ -114,6 +114,7 @@ function integrationRoot(name: PackageName) {
   const candidates = [
     resolve(process.cwd(), 'integrations', PACKAGES[name]),
     resolve(__dirname, '../../../integrations', PACKAGES[name]),
+    resolve(__dirname, '../../../../integrations', PACKAGES[name]),
   ];
   return candidates.find((candidate) => existsSync(candidate));
 }
