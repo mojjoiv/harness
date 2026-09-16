@@ -16,6 +16,8 @@ describe('Ecommerce integrations UI certification', () => {
     expect(page).toContain('Certified');
     expect(page).toContain('Download ZIP package');
     expect(page).toContain('/dashboard/integrations/${slug}/download');
+    expect(page).toContain('PayHarness API URL');
+    expect(page).toContain('getApiUrl()');
     expect(page).not.toContain('github.com/mojjoiv/harness');
     expect(layout).toContain("title: 'Developers'");
     expect(layout).toContain("{ label: 'Integrations', href: '/integrations', exact: true }");

@@ -44,8 +44,8 @@ class WC_Gateway_PayHarness extends WC_Payment_Gateway {
             'api_url' => [
                 'title' => 'PayHarness API URL',
                 'type' => 'url',
-                'default' => 'https://harness-1.onrender.com',
-                'description' => 'Use the PayHarness API base URL. Do not add /payments.',
+                'default' => 'https://harness-m6qs.onrender.com',
+                'description' => 'PayHarness production API base URL. The downloaded plugin is preconfigured; change this only for an approved alternate deployment. Do not add /payments.',
             ],
             'api_key' => [
                 'title' => 'PayHarness API Key',
