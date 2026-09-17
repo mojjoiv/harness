@@ -1,4 +1,5 @@
 import { CurrencyService } from '../currency/currency.service';
+import { PrismaService } from '../common/prisma.service';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { RefundService } from './refund.service';
@@ -20,6 +21,11 @@ describe('PaymentsController environment safety and orchestration', () => {
   >;
   let refundService: jest.Mocked<Pick<RefundService, 'refund'>>;
   let currencyService: jest.Mocked<Pick<CurrencyService, 'normalizePayment'>>;
+  let prisma: {
+    checkoutSession: {
+      findFirst: jest.Mock;
+    };
+  };
 
   beforeEach(() => {
     paymentsService = {
@@ -38,10 +44,16 @@ describe('PaymentsController environment safety and orchestration', () => {
     currencyService = {
       normalizePayment: jest.fn(async (dto, _provider) => dto),
     };
+    prisma = {
+      checkoutSession: {
+        findFirst: jest.fn(),
+      },
+    };
     controller = new PaymentsController(
       paymentsService as unknown as PaymentsService,
       refundService as unknown as RefundService,
       currencyService as unknown as CurrencyService,
+      prisma as unknown as PrismaService,
     );
   });
 
@@ -74,6 +86,70 @@ describe('PaymentsController environment safety and orchestration', () => {
         environment: 'SANDBOX',
       }),
     );
+  });
+
+  it('locks the payment amount and currency to the checkout session', async () => {
+    prisma.checkoutSession.findFirst.mockResolvedValue({
+      id: 'checkout-1',
+      merchantId: 'merchant-1',
+      amountCents: 875000,
+      currency: 'KES',
+    } as any);
+
+    const user = {
+      userId: 'user-1',
+      merchantId: 'merchant-1',
+      role: 'DEVELOPER',
+      type: 'api_key',
+      environment: 'SANDBOX',
+    } as any;
+    const dto = {
+      provider: 'STRIPE',
+      amountCents: 100,
+      currency: 'USD',
+      environment: 'LIVE',
+      checkoutSessionId: 'checkout-1',
+    } as any;
+
+    await controller.create(user, dto);
+
+    expect(currencyService.normalizePayment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amountCents: 875000,
+        currency: 'KES',
+        checkoutSessionId: 'checkout-1',
+        environment: 'SANDBOX',
+      }),
+      'STRIPE',
+    );
+    expect(paymentsService.createPayment).toHaveBeenCalledWith(
+      'merchant-1',
+      'user-1',
+      expect.objectContaining({ amountCents: 875000, currency: 'KES' }),
+    );
+  });
+
+  it('rejects a checkout session belonging to another merchant', async () => {
+    prisma.checkoutSession.findFirst.mockResolvedValue(null);
+
+    const user = {
+      userId: 'user-1',
+      merchantId: 'merchant-1',
+      role: 'DEVELOPER',
+      type: 'api_key',
+      environment: 'SANDBOX',
+    } as any;
+    const dto = {
+      provider: 'STRIPE',
+      amountCents: 1000,
+      currency: 'KES',
+      environment: 'SANDBOX',
+      checkoutSessionId: 'checkout-other-merchant',
+    } as any;
+
+    await expect(controller.create(user, dto)).rejects.toThrow('Checkout session not found');
+    expect(currencyService.normalizePayment).not.toHaveBeenCalled();
+    expect(paymentsService.createPayment).not.toHaveBeenCalled();
   });
 
   it('forces API-key requests to use the environment encoded in the API key', async () => {
