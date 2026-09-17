@@ -70,10 +70,7 @@ describe('PaymentReceiptService', () => {
     prisma.payment.findFirst
       .mockResolvedValueOnce({ id: 'payment-1', status: 'SUCCEEDED' })
       .mockResolvedValueOnce({ status: 'SUCCEEDED' });
-    prisma.$queryRaw
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([receipt]);
+    prisma.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([receipt]);
     prisma.$executeRaw.mockResolvedValue(1);
 
     await expect(service.getReceipt('merchant-1', 'payment-1')).resolves.toEqual(receipt);
