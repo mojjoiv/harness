@@ -1,4 +1,4 @@
-CREATE TABLE "payment_receipts" (
+CREATE TABLE IF NOT EXISTS "payment_receipts" (
   "id" TEXT NOT NULL,
   "merchant_id" TEXT NOT NULL,
   "payment_id" TEXT NOT NULL,
@@ -21,8 +21,8 @@ CREATE TABLE "payment_receipts" (
   CONSTRAINT "payment_receipts_payment_id_fkey" FOREIGN KEY ("payment_id") REFERENCES "payments"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE INDEX "payment_receipts_merchant_id_issued_at_idx" ON "payment_receipts"("merchant_id", "issued_at");
-CREATE INDEX "payment_receipts_merchant_id_payment_status_idx" ON "payment_receipts"("merchant_id", "payment_status");
+CREATE INDEX IF NOT EXISTS "payment_receipts_merchant_id_issued_at_idx" ON "payment_receipts"("merchant_id", "issued_at");
+CREATE INDEX IF NOT EXISTS "payment_receipts_merchant_id_payment_status_idx" ON "payment_receipts"("merchant_id", "payment_status");
 
 CREATE OR REPLACE FUNCTION "create_payment_receipt_on_success"()
 RETURNS TRIGGER AS $$
@@ -71,6 +71,8 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS "payment_success_receipt_trigger" ON "payments";
 
 CREATE TRIGGER "payment_success_receipt_trigger"
 AFTER INSERT OR UPDATE OF "status" ON "payments"
