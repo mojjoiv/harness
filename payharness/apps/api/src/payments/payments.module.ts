@@ -17,9 +17,9 @@ import { RefundService } from './refund.service';
 @Module({
   imports: [AuditLogsModule, CurrencyModule, PaymentProvidersModule, WebhooksModule],
   controllers: [
+    PaymentReceiptController,
     PaymentsController,
     PaypalCheckoutController,
-    PaymentReceiptController,
   ],
   providers: [
     PaymentsService,
