@@ -46,11 +46,12 @@ export class MerchantProfileService {
       select: { country: true },
     });
     const country = dto.country || existing?.country || 'KE';
-    const { currency: _ignoredCurrency, ...profileData } = dto;
+    const profileData = { ...dto, currency: currencyForCountry(country) };
+
     const profile = await this.prisma.merchantProfile.upsert({
       where: { merchantId },
-      update: { ...profileData, currency: currencyForCountry(country) },
-      create: { merchantId, ...profileData, currency: currencyForCountry(country) },
+      update: profileData,
+      create: { merchantId, ...profileData },
     });
 
     await this.auditLogs.create({
