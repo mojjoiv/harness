@@ -1,5 +1,6 @@
 export interface DashboardSummary {
   todayRevenue: number;
+  displayCurrency: string;
   todayTransactions: number;
   successfulPayments: number;
   failedPayments: number;
@@ -98,6 +99,10 @@ export interface TransactionRecord {
   provider: 'MPESA' | 'STRIPE' | 'PAYPAL';
   amountCents: number;
   currency: string;
+  displayAmountCents: number;
+  displayCurrency: string;
+  displayExchangeRate: number;
+  displayRateTimestamp: string;
   status: string;
   type: string;
   createdAt: string;
