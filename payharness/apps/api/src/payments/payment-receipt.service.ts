@@ -24,6 +24,43 @@ export interface PaymentReceipt {
 export class PaymentReceiptService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async listReceipts(merchantId: string): Promise<PaymentReceipt[]> {
+    const succeededPayments = await this.prisma.payment.findMany({
+      where: { merchantId, status: 'SUCCEEDED' },
+      select: { id: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+    });
+
+    await Promise.all(
+      succeededPayments.map(({ id }) => this.ensureReceipt(merchantId, id)),
+    );
+
+    const rows = await this.prisma.$queryRaw<PaymentReceipt[]>(Prisma.sql`
+      SELECT
+        r.id,
+        r.merchant_id AS "merchantId",
+        r.payment_id AS "paymentId",
+        r.receipt_number AS "receiptNumber",
+        r.amount_cents AS "amountCents",
+        r.currency,
+        r.provider,
+        r.provider_reference AS "providerReference",
+        r.payment_status AS "paymentStatus",
+        r.customer_id AS "customerId",
+        r.customer_name AS "customerName",
+        r.customer_email AS "customerEmail",
+        r.customer_phone AS "customerPhone",
+        r.issued_at AS "issuedAt"
+      FROM payment_receipts r
+      WHERE r.merchant_id = ${merchantId}
+      ORDER BY r.issued_at DESC
+      LIMIT 100
+    `);
+
+    return rows;
+  }
+
   async getReceipt(merchantId: string, paymentId: string): Promise<PaymentReceipt> {
     const payment = await this.prisma.payment.findFirst({
       where: { id: paymentId, merchantId },
@@ -35,24 +72,12 @@ export class PaymentReceiptService {
       throw new BadRequestException('Receipt is only available for succeeded payments');
     }
 
-    const existing = await this.findReceipt(merchantId, paymentId);
-    if (existing) return existing;
-
-    return this.createReceipt(merchantId, paymentId);
+    return this.ensureReceipt(merchantId, paymentId);
   }
 
-  private async createReceipt(merchantId: string, paymentId: string): Promise<PaymentReceipt> {
+  private async ensureReceipt(merchantId: string, paymentId: string): Promise<PaymentReceipt> {
     const existing = await this.findReceipt(merchantId, paymentId);
     if (existing) return existing;
-
-    const payment = await this.prisma.payment.findFirst({
-      where: { id: paymentId, merchantId },
-      select: { status: true },
-    });
-    if (!payment) throw new NotFoundException('Payment not found');
-    if (payment.status !== 'SUCCEEDED') {
-      throw new BadRequestException('Receipt is only available for succeeded payments');
-    }
 
     const receiptNumber = `RCP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID()
       .replace(/-/g, '')
