@@ -137,7 +137,7 @@ export class PaymentsController {
   private async prepareProviderPayment<T extends CreateProviderPaymentDto>(
     user: AuthUser,
     dto: T,
-    provider: CreateProviderPaymentDto['provider'] | CreatePaymentDto['provider'],
+    provider: CreatePaymentDto['provider'],
   ) {
     const lockedDto = this.lockEnvironment(user, dto);
 
