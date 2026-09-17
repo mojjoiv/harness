@@ -32,6 +32,7 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedDisplay, setSelectedDisplay] = useState<TransactionRecord | null>(null);
   const [detail, setDetail] = useState<TransactionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
@@ -62,8 +63,9 @@ export default function TransactionsPage() {
     }
   };
 
-  const loadDetail = async (paymentId: string) => {
+  const loadDetail = async (paymentId: string, display?: TransactionRecord) => {
     setSelectedId(paymentId);
+    setSelectedDisplay(display || null);
     setDetail(null);
     setDetailError('');
     setDetailLoading(true);
@@ -93,7 +95,7 @@ export default function TransactionsPage() {
     setDetailError('');
     try {
       await api.get(`/payments/${detail.paymentId}/query`);
-      await loadDetail(detail.paymentId);
+      await loadDetail(detail.paymentId, selectedDisplay || undefined);
       await load(page, filters);
     } catch (err) {
       setDetailError(err instanceof ApiError ? err.message : 'Unable to refresh provider status.');
@@ -114,14 +116,14 @@ export default function TransactionsPage() {
       key={tx.id}
       type="button"
       className="font-medium text-brand hover:underline"
-      onClick={() => void loadDetail(tx.id)}
+      onClick={() => void loadDetail(tx.id, tx)}
     >
       {compactId(tx.id)}
     </button>,
     <Badge key={`${tx.id}-provider`} tone="blue">{tx.provider}</Badge>,
     <Badge key={`${tx.id}-status`} tone={statusTone(tx.status)}>{tx.status}</Badge>,
     tx.type,
-    money(tx.amountCents, tx.currency),
+    money(tx.displayAmountCents, tx.displayCurrency),
     dateTime(tx.createdAt),
   ]);
 
@@ -129,7 +131,7 @@ export default function TransactionsPage() {
     <div className="space-y-6">
       <SectionTitle
         title="Transactions"
-        description="Monitor payment activity and inspect provider-backed transaction details."
+        description="Monitor payment activity and inspect provider-backed transaction details. Amounts are shown in your organization currency."
         action={
           <Button variant="secondary" type="button" onClick={() => void load()} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
@@ -196,7 +198,7 @@ export default function TransactionsPage() {
               <h2 className="text-lg font-semibold text-ink">Payment details</h2>
               <p className="mt-1 text-sm text-muted">{compactId(selectedId)}</p>
             </div>
-            <Button variant="ghost" type="button" onClick={() => setSelectedId(null)}>Close</Button>
+            <Button variant="ghost" type="button" onClick={() => { setSelectedId(null); setSelectedDisplay(null); }}>Close</Button>
           </div>
 
           {detailLoading ? <div className="mt-6 text-sm text-muted">Loading payment details…</div> : null}
@@ -205,7 +207,17 @@ export default function TransactionsPage() {
           {detail ? (
             <div className="mt-6 space-y-6">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div><div className="text-xs uppercase tracking-wide text-muted">Amount</div><div className="mt-1 font-semibold">{money(detail.amountCents, detail.currency)}</div></div>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted">Amount</div>
+                  <div className="mt-1 font-semibold">
+                    {selectedDisplay ? money(selectedDisplay.displayAmountCents, selectedDisplay.displayCurrency) : money(detail.amountCents, detail.currency)}
+                  </div>
+                  {selectedDisplay && selectedDisplay.currency !== selectedDisplay.displayCurrency ? (
+                    <div className="mt-1 text-xs text-muted">
+                      Converted from {money(selectedDisplay.amountCents, selectedDisplay.currency)} at {selectedDisplay.displayExchangeRate.toFixed(6)}
+                    </div>
+                  ) : null}
+                </div>
                 <div><div className="text-xs uppercase tracking-wide text-muted">Provider</div><div className="mt-1"><Badge tone="blue">{detail.provider}</Badge></div></div>
                 <div><div className="text-xs uppercase tracking-wide text-muted">Status</div><div className="mt-1"><Badge tone={statusTone(detail.status)}>{detail.status}</Badge></div></div>
                 <div><div className="text-xs uppercase tracking-wide text-muted">Environment</div><div className="mt-1 font-medium">{detail.environment}</div></div>
