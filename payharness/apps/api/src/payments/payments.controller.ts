@@ -138,7 +138,7 @@ export class PaymentsController {
     user: AuthUser,
     dto: T,
     provider: CreatePaymentDto['provider'],
-  ) {
+  ): Promise<T> {
     const lockedDto = this.lockEnvironment(user, dto);
 
     if (lockedDto.checkoutSessionId) {
@@ -160,9 +160,9 @@ export class PaymentsController {
           currency: session.currency,
         },
         provider,
-      );
+      ) as T;
     }
 
-    return this.currencyService.normalizePayment(lockedDto, provider);
+    return this.currencyService.normalizePayment(lockedDto, provider) as T;
   }
 }
