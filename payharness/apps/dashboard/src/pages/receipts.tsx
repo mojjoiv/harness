@@ -37,6 +37,7 @@ export default function ReceiptsPage() {
 
   const loadReceipts = async () => {
     setLoadingList(true);
+    setError('');
     try {
       const response = await api.get<Receipt[]>('/payments/receipts');
       setReceipts(response.data);
@@ -66,6 +67,12 @@ export default function ReceiptsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const selectReceipt = (item: Receipt) => {
+    setError('');
+    setReceipt(item);
+    setPaymentId(item.paymentId);
   };
 
   useEffect(() => {
@@ -133,7 +140,7 @@ export default function ReceiptsPage() {
                   key={item.id}
                   type="button"
                   className="grid w-full gap-3 px-6 py-4 text-left transition hover:bg-surface sm:grid-cols-[1fr_auto_auto] sm:items-center"
-                  onClick={() => void loadReceipt(item.paymentId)}
+                  onClick={() => selectReceipt(item)}
                 >
                   <div className="min-w-0">
                     <div className="font-medium text-ink">{item.receiptNumber}</div>
