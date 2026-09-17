@@ -1,8 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PaymentStatus, Prisma, Provider } from '@prisma/client';
+import { DisplayCurrencyService } from '../common/currency/display-currency.service';
+import { PrismaService } from '../common/prisma.service';
+import { currencyForCountry } from '../common/utils/country-currency.util';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, paginated } from '../common/pagination/pagination';
-import { PrismaService } from '../common/prisma.service';
 
 interface TransactionFilters {
   status?: string;
@@ -13,7 +15,10 @@ interface TransactionFilters {
 
 @Injectable()
 export class TransactionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly displayCurrency: DisplayCurrencyService,
+  ) {}
 
   async list(merchantId: string, filters: TransactionFilters, query: PaginationQueryDto) {
     const pagination = getPagination(query, ['createdAt', 'amountCents', 'currency', 'status', 'type']);
@@ -31,7 +36,7 @@ export class TransactionsService {
       };
     }
 
-    const [items, total] = await Promise.all([
+    const [items, total, profile] = await Promise.all([
       this.prisma.transaction.findMany({
         where,
         include: { payment: true },
@@ -40,31 +45,65 @@ export class TransactionsService {
         take: pagination.take,
       }),
       this.prisma.transaction.count({ where }),
+      this.prisma.merchantProfile.findUnique({
+        where: { merchantId },
+        select: { country: true, currency: true },
+      }),
     ]);
 
-    const data = items.map(({ payment, ...transaction }) => ({
-      ...transaction,
-      provider: payment.provider,
-      payment,
-    }));
+    const displayCurrency = profile?.currency?.trim().toUpperCase() || currencyForCountry(profile?.country);
+    const data = await Promise.all(
+      items.map(async ({ payment, ...transaction }) => {
+        const conversion = await this.displayCurrency.convertAmount(
+          transaction.amountCents,
+          transaction.currency,
+          displayCurrency,
+        );
+        return {
+          ...transaction,
+          provider: payment?.provider,
+          payment,
+          displayAmountCents: conversion.displayAmountCents,
+          displayCurrency: conversion.displayCurrency,
+          displayExchangeRate: conversion.exchangeRate,
+          displayRateTimestamp: conversion.rateTimestamp,
+        };
+      }),
+    );
 
     return paginated(data, total, pagination);
   }
 
   async get(merchantId: string, id: string) {
-    const transaction = await this.prisma.transaction.findFirst({
-      where: { id, merchantId },
-      include: { payment: true },
-    });
+    const [transaction, profile] = await Promise.all([
+      this.prisma.transaction.findFirst({
+        where: { id, merchantId },
+        include: { payment: true },
+      }),
+      this.prisma.merchantProfile.findUnique({
+        where: { merchantId },
+        select: { country: true, currency: true },
+      }),
+    ]);
     if (!transaction) {
       throw new NotFoundException('Transaction not found');
     }
 
+    const displayCurrency = profile?.currency?.trim().toUpperCase() || currencyForCountry(profile?.country);
+    const conversion = await this.displayCurrency.convertAmount(
+      transaction.amountCents,
+      transaction.currency,
+      displayCurrency,
+    );
     const { payment, ...transactionData } = transaction;
     return {
       ...transactionData,
-      provider: payment.provider,
+      provider: payment?.provider,
       payment,
+      displayAmountCents: conversion.displayAmountCents,
+      displayCurrency: conversion.displayCurrency,
+      displayExchangeRate: conversion.exchangeRate,
+      displayRateTimestamp: conversion.rateTimestamp,
     };
   }
 }

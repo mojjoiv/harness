@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../common/prisma.service';
 import { compareRoles } from '../common/authz/roles';
+import { currencyForCountry } from '../common/utils/country-currency.util';
 import { slugify } from '../common/utils/slug.util';
 import { MailerService } from '../mailer/mailer.service';
 import { RegisterDto } from './dto/register.dto';
@@ -28,6 +29,7 @@ export class AuthService {
     const baseSlug = slugify(dto.merchantName);
     const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`;
     const passwordHash = await bcrypt.hash(dto.password, 12);
+    const merchantCurrency = currencyForCountry(dto.country);
 
     const result = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -54,6 +56,7 @@ export class AuthService {
               businessName: dto.merchantName,
               legalName: dto.merchantName,
               country: dto.country.toUpperCase(),
+              currency: merchantCurrency,
             },
           },
           branding: { create: {} },
