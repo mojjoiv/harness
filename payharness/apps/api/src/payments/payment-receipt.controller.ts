@@ -8,6 +8,11 @@ import { PaymentReceiptService } from './payment-receipt.service';
 export class PaymentReceiptController {
   constructor(private readonly paymentReceiptService: PaymentReceiptService) {}
 
+  @Get('receipts')
+  listReceipts(@CurrentUser() user: AuthUser) {
+    return this.paymentReceiptService.listReceipts(user.merchantId as string);
+  }
+
   @Get(':id/receipt')
   getReceipt(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.paymentReceiptService.getReceipt(user.merchantId as string, id);
