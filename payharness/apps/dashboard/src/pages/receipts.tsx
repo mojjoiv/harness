@@ -30,8 +30,22 @@ export default function ReceiptsPage() {
   const router = useRouter();
   const [paymentId, setPaymentId] = useState('');
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingList, setLoadingList] = useState(true);
   const [error, setError] = useState('');
+
+  const loadReceipts = async () => {
+    setLoadingList(true);
+    try {
+      const response = await api.get<Receipt[]>('/payments/receipts');
+      setReceipts(response.data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Unable to load receipts.');
+    } finally {
+      setLoadingList(false);
+    }
+  };
 
   const loadReceipt = async (id: string) => {
     const normalizedId = id.trim();
@@ -42,6 +56,10 @@ export default function ReceiptsPage() {
       const response = await api.get<Receipt>(`/payments/${encodeURIComponent(normalizedId)}/receipt`);
       setReceipt(response.data);
       setPaymentId(normalizedId);
+      setReceipts((current) => [
+        response.data,
+        ...current.filter((item) => item.paymentId !== response.data.paymentId),
+      ]);
     } catch (err) {
       setReceipt(null);
       setError(err instanceof ApiError ? err.message : 'Unable to load the payment receipt.');
@@ -49,6 +67,10 @@ export default function ReceiptsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    void loadReceipts();
+  }, []);
 
   useEffect(() => {
     const queryPaymentId = typeof router?.query?.paymentId === 'string' ? router.query.paymentId : '';
@@ -66,8 +88,12 @@ export default function ReceiptsPage() {
     <div className="space-y-6">
       <SectionTitle
         title="Receipts"
-        description="Retrieve and print a receipt for a succeeded payment."
-        action={receipt ? <Button type="button" variant="secondary" onClick={() => window.print()}>Print receipt</Button> : undefined}
+        description="Successful payments automatically appear here as merchant receipts."
+        action={receipt ? (
+          <Button type="button" variant="secondary" onClick={() => window.print()}>
+            Download / Print PDF
+          </Button>
+        ) : undefined}
       />
 
       <Panel className="p-6 print:hidden">
@@ -77,7 +103,7 @@ export default function ReceiptsPage() {
               <Input
                 value={paymentId}
                 onChange={(event) => setPaymentId(event.target.value)}
-                placeholder="Enter a payment ID"
+                placeholder="Enter a successful payment ID"
                 autoComplete="off"
               />
             </FieldRow>
@@ -89,9 +115,36 @@ export default function ReceiptsPage() {
       </Panel>
 
       {error ? <Panel className="border-rose-200 p-6 text-sm text-rose-700 print:hidden">{error}</Panel> : null}
+
       {!receipt && !loading && !error ? (
-        <Panel className="p-8 text-center text-sm text-muted print:hidden">
-          Enter a succeeded payment ID to retrieve its receipt.
+        <Panel className="overflow-hidden print:hidden">
+          <div className="border-b border-line px-6 py-4">
+            <div className="font-semibold text-ink">Recent receipts</div>
+            <div className="mt-1 text-sm text-muted">Receipts are generated from successful payment records.</div>
+          </div>
+          {loadingList ? (
+            <div className="p-8 text-center text-sm text-muted">Loading receipts…</div>
+          ) : receipts.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted">No successful payments have receipts yet.</div>
+          ) : (
+            <div className="divide-y divide-line">
+              {receipts.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="grid w-full gap-3 px-6 py-4 text-left transition hover:bg-surface sm:grid-cols-[1fr_auto_auto] sm:items-center"
+                  onClick={() => void loadReceipt(item.paymentId)}
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium text-ink">{item.receiptNumber}</div>
+                    <div className="mt-1 break-all text-xs text-muted">Payment {item.paymentId}</div>
+                  </div>
+                  <div className="text-sm text-muted">{dateTime(item.issuedAt)}</div>
+                  <div className="font-semibold text-ink">{money(item.amountCents, item.currency)}</div>
+                </button>
+              ))}
+            </div>
+          )}
         </Panel>
       ) : null}
 
