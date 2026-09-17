@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { api, ApiError } from '@/lib/api';
 import { MerchantProfile } from '@/lib/types';
+import { currencyForCountry } from '@/lib/countries';
 import { Button, Input, Panel, SectionTitle } from '@/components/ui';
 import { FieldRow, FormGrid } from '@/components/blocks';
 
@@ -22,14 +23,15 @@ const emptyProfile: MerchantProfile = {
 };
 
 function normalizeProfile(profile: MerchantProfile): MerchantProfile {
+  const country = profile.country || 'KE';
   return {
     ...profile,
     businessName: profile.businessName || '',
     legalName: profile.legalName || '',
     registrationNumber: profile.registrationNumber || '',
     taxPin: profile.taxPin || '',
-    country: profile.country || '',
-    currency: profile.currency || '',
+    country,
+    currency: currencyForCountry(country),
     timezone: profile.timezone || '',
     supportEmail: profile.supportEmail || '',
     supportPhone: profile.supportPhone || '',
@@ -51,9 +53,11 @@ export default function ProfileSettingsPage() {
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [status, setStatus] = useState('');
-  const { register, handleSubmit, reset, formState } = useForm<MerchantProfile>({
+  const { register, handleSubmit, reset, watch, formState } = useForm<MerchantProfile>({
     defaultValues: emptyProfile,
   });
+  const country = watch('country');
+  const derivedCurrency = currencyForCountry(country || 'KE');
 
   useEffect(() => {
     let active = true;
@@ -88,7 +92,6 @@ export default function ProfileSettingsPage() {
       registrationNumber: values.registrationNumber,
       taxPin: values.taxPin,
       country: values.country,
-      currency: values.currency,
       timezone: values.timezone,
       supportEmail: values.supportEmail,
       supportPhone: values.supportPhone,
@@ -99,9 +102,9 @@ export default function ProfileSettingsPage() {
     };
 
     try {
-      await api.patch('/merchant/profile', profilePayload);
-      reset(values);
-      setStatus('Profile saved successfully.');
+      const { data } = await api.patch<MerchantProfile>('/merchant/profile', profilePayload);
+      reset(normalizeProfile(data));
+      setStatus('Profile saved successfully. Currency is derived from the registered country.');
     } catch (error) {
       setSaveError(formatError(error));
     }
@@ -113,19 +116,13 @@ export default function ProfileSettingsPage() {
     <div className="space-y-6">
       <SectionTitle title="Merchant profile" description="Business and support information." />
       {loadError ? (
-        <Panel className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {loadError}
-        </Panel>
+        <Panel className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">{loadError}</Panel>
       ) : null}
       {saveError ? (
-        <Panel className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {saveError}
-        </Panel>
+        <Panel className="border border-red-200 bg-red-50 p-4 text-sm text-red-700">{saveError}</Panel>
       ) : null}
       {status ? (
-        <Panel className="border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-          {status}
-        </Panel>
+        <Panel className="border border-green-200 bg-green-50 p-4 text-sm text-green-700">{status}</Panel>
       ) : null}
       <Panel className="p-6">
         {loading ? (
@@ -138,7 +135,9 @@ export default function ProfileSettingsPage() {
               <FieldRow label="Registration number"><Input {...register('registrationNumber')} /></FieldRow>
               <FieldRow label="Tax PIN"><Input {...register('taxPin')} /></FieldRow>
               <FieldRow label="Country"><Input {...register('country')} /></FieldRow>
-              <FieldRow label="Currency"><Input {...register('currency')} /></FieldRow>
+              <FieldRow label="Currency" hint="Automatically determined from the registered country">
+                <Input value={derivedCurrency} readOnly aria-readonly="true" />
+              </FieldRow>
               <FieldRow label="Timezone"><Input {...register('timezone')} /></FieldRow>
               <FieldRow label="Support email"><Input type="email" {...register('supportEmail')} /></FieldRow>
               <FieldRow label="Support phone"><Input {...register('supportPhone')} /></FieldRow>

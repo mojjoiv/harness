@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { ApiError, api } from '@/lib/api';
-import { MerchantSettings } from '@/lib/types';
+import { MerchantSettings, MerchantProfile } from '@/lib/types';
+import { currencyForCountry } from '@/lib/countries';
 import { Button, Input, Panel, Select, SectionTitle } from '@/components/ui';
 import { FieldRow, FormGrid } from '@/components/blocks';
 
@@ -29,19 +30,25 @@ export default function GeneralSettingsPage() {
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [status, setStatus] = useState('');
+  const [country, setCountry] = useState('KE');
   const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<MerchantSettings>({
     defaultValues: emptySettings,
   });
+  const derivedCurrency = currencyForCountry(country);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setLoadError('');
 
-    api
-      .get<MerchantSettings>('/merchant/settings')
-      .then(({ data }) => {
-        if (active) reset(data);
+    Promise.all([
+      api.get<MerchantSettings>('/merchant/settings'),
+      api.get<MerchantProfile>('/merchant/profile'),
+    ])
+      .then(([settingsResponse, profileResponse]) => {
+        if (!active) return;
+        reset({ ...settingsResponse.data, defaultCurrency: currencyForCountry(profileResponse.data.country || 'KE') });
+        setCountry(profileResponse.data.country || 'KE');
       })
       .catch((error) => {
         if (active) setLoadError(formatError(error));
@@ -59,7 +66,6 @@ export default function GeneralSettingsPage() {
     setStatus('');
     setSaveError('');
     const settingsPayload = {
-      defaultCurrency: values.defaultCurrency,
       defaultEnvironment: values.defaultEnvironment,
       receiptEmailsEnabled: values.receiptEmailsEnabled,
       webhookRetriesEnabled: values.webhookRetriesEnabled,
@@ -73,8 +79,9 @@ export default function GeneralSettingsPage() {
     };
 
     try {
-      await api.patch('/merchant/settings', settingsPayload);
-      setStatus('Settings saved successfully.');
+      const { data } = await api.patch<MerchantSettings>('/merchant/settings', settingsPayload);
+      reset(data);
+      setStatus('Settings saved successfully. Currency is locked to the registered country.');
     } catch (error) {
       setSaveError(formatError(error));
     }
@@ -84,23 +91,9 @@ export default function GeneralSettingsPage() {
     <div className="space-y-6">
       <SectionTitle title="General settings" description="Currency, timeouts, customer requirements, and receipts." />
 
-      {loadError ? (
-        <Panel className="border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-          {loadError}
-        </Panel>
-      ) : null}
-
-      {saveError ? (
-        <Panel className="border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-          {saveError}
-        </Panel>
-      ) : null}
-
-      {status ? (
-        <Panel className="border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
-          {status}
-        </Panel>
-      ) : null}
+      {loadError ? <Panel className="border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{loadError}</Panel> : null}
+      {saveError ? <Panel className="border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{saveError}</Panel> : null}
+      {status ? <Panel className="border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{status}</Panel> : null}
 
       <Panel className="p-6">
         {loading ? (
@@ -108,7 +101,9 @@ export default function GeneralSettingsPage() {
         ) : (
           <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
             <FormGrid>
-              <FieldRow label="Default currency"><Input {...register('defaultCurrency')} /></FieldRow>
+              <FieldRow label="Default currency" hint={`Determined by registered country (${country})`}>
+                <Input value={derivedCurrency} readOnly aria-readonly="true" />
+              </FieldRow>
               <FieldRow label="Default environment">
                 <Select {...register('defaultEnvironment')}>
                   <option value="SANDBOX">SANDBOX</option>
