@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../common/prisma.service';
+import { currencyForCountry } from '../common/utils/country-currency.util';
 import { UpdateMerchantProfileDto } from './dto/update-merchant-profile.dto';
 
 @Injectable()
@@ -19,13 +20,14 @@ export class MerchantProfileService {
       throw new NotFoundException('Merchant not found');
     }
 
+    const country = merchant.profile?.country || 'KE';
     return {
       businessName: merchant.profile?.businessName || merchant.name,
       legalName: merchant.profile?.legalName || merchant.name,
       registrationNumber: merchant.profile?.registrationNumber || null,
       taxPin: merchant.profile?.taxPin || null,
-      country: merchant.profile?.country || 'KE',
-      currency: merchant.profile?.currency || 'KES',
+      country,
+      currency: currencyForCountry(country),
       timezone: merchant.profile?.timezone || 'Africa/Nairobi',
       supportEmail: merchant.profile?.supportEmail || null,
       supportPhone: merchant.profile?.supportPhone || null,
@@ -39,10 +41,12 @@ export class MerchantProfileService {
   }
 
   async update(merchantId: string, userId: string, dto: UpdateMerchantProfileDto) {
+    const country = dto.country || 'KE';
+    const { currency: _ignoredCurrency, ...profileData } = dto;
     const profile = await this.prisma.merchantProfile.upsert({
       where: { merchantId },
-      update: dto,
-      create: { merchantId, ...dto },
+      update: { ...profileData, currency: currencyForCountry(country) },
+      create: { merchantId, ...profileData, currency: currencyForCountry(country) },
     });
 
     await this.auditLogs.create({
@@ -53,6 +57,6 @@ export class MerchantProfileService {
       entityId: profile.id,
     });
 
-    return profile;
+    return { ...profile, currency: currencyForCountry(profile.country) };
   }
 }
