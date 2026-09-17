@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PrismaService } from '../common/prisma.service';
+import { currencyForCountry } from '../common/utils/country-currency.util';
 import { UpdateMerchantSettingsDto } from './dto/update-merchant-settings.dto';
 
 export const DEFAULT_SETTINGS = {
@@ -22,15 +23,28 @@ export class MerchantSettingsService {
   ) {}
 
   async get(merchantId: string) {
-    const settings = await this.prisma.merchantSettings.findUnique({ where: { merchantId } });
-    return settings || { merchantId, ...DEFAULT_SETTINGS };
+    const [settings, profile] = await Promise.all([
+      this.prisma.merchantSettings.findUnique({ where: { merchantId } }),
+      this.prisma.merchantProfile.findUnique({ where: { merchantId }, select: { country: true } }),
+    ]);
+
+    const country = profile?.country || 'KE';
+    const defaultCurrency = currencyForCountry(country);
+    return { ...(settings || { merchantId, ...DEFAULT_SETTINGS }), defaultCurrency };
   }
 
   async update(merchantId: string, userId: string, dto: UpdateMerchantSettingsDto) {
+    const profile = await this.prisma.merchantProfile.findUnique({
+      where: { merchantId },
+      select: { country: true },
+    });
+    const defaultCurrency = currencyForCountry(profile?.country || 'KE');
+    const { defaultCurrency: _ignoredCurrency, ...settingsData } = dto;
+
     const settings = await this.prisma.merchantSettings.upsert({
       where: { merchantId },
-      update: dto,
-      create: { merchantId, ...DEFAULT_SETTINGS, ...dto },
+      update: { ...settingsData, defaultCurrency },
+      create: { merchantId, ...DEFAULT_SETTINGS, ...settingsData, defaultCurrency },
     });
 
     await this.auditLogs.create({
