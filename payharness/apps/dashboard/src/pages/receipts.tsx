@@ -75,6 +75,11 @@ export default function ReceiptsPage() {
     setPaymentId(item.paymentId);
   };
 
+  const downloadReceipt = (item: Receipt) => {
+    selectReceipt(item);
+    window.setTimeout(() => window.print(), 100);
+  };
+
   useEffect(() => {
     void loadReceipts();
   }, []);
@@ -98,7 +103,7 @@ export default function ReceiptsPage() {
         description="Successful payments automatically appear here as merchant receipts."
         action={receipt ? (
           <Button type="button" variant="secondary" onClick={() => window.print()}>
-            Download / Print PDF
+            Download PDF
           </Button>
         ) : undefined}
       />
@@ -136,19 +141,27 @@ export default function ReceiptsPage() {
           ) : (
             <div className="divide-y divide-line">
               {receipts.map((item) => (
-                <button
+                <div
                   key={item.id}
-                  type="button"
-                  className="grid w-full gap-3 px-6 py-4 text-left transition hover:bg-surface sm:grid-cols-[1fr_auto_auto] sm:items-center"
-                  onClick={() => selectReceipt(item)}
+                  className="grid w-full gap-4 px-6 py-4 transition hover:bg-surface sm:grid-cols-[1fr_auto_auto] sm:items-center"
                 >
                   <div className="min-w-0">
                     <div className="font-medium text-ink">{item.receiptNumber}</div>
                     <div className="mt-1 break-all text-xs text-muted">Payment {item.paymentId}</div>
                   </div>
                   <div className="text-sm text-muted">{dateTime(item.issuedAt)}</div>
-                  <div className="font-semibold text-ink">{money(item.amountCents, item.currency)}</div>
-                </button>
+                  <div className="flex items-center justify-between gap-4 sm:justify-end">
+                    <div className="font-semibold text-ink">{money(item.amountCents, item.currency)}</div>
+                    <div className="flex gap-2">
+                      <Button type="button" variant="secondary" onClick={() => selectReceipt(item)}>
+                        View
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={() => downloadReceipt(item)}>
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           )}
