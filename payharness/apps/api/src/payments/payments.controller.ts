@@ -2,29 +2,23 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   NotFoundException,
   Param,
   Post,
-  UseGuards,
-  UseInterceptors,
+  Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
-import { EnvironmentIsolationGuard } from '../common/guards/environment-isolation.guard';
-import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
-import { PrismaService } from '../common/prisma.service';
-import { CurrencyService } from '../currency/currency.service';
-import { CreatePaymentDto } from './dto/create-payment.dto';
-import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
-import { RefundPaymentDto } from './dto/refund-payment.dto';
-import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor';
+import { ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AuthUser } from '../auth/types/auth-user.type';
+import { PrismaService } from '../prisma/prisma.service';
+import { CurrencyService } from './currency.service';
 import { PaymentsService } from './payments.service';
 import { RefundService } from './refund.service';
+import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor';
+import { CreatePaymentDto } from './dto/create-payment.dto';
+import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
 
 @ApiTags('payments')
-@ApiBearerAuth()
-@UseGuards(MerchantAuthGuard, EnvironmentIsolationGuard)
 @Controller('payments')
 export class PaymentsController {
   constructor(
@@ -41,7 +35,10 @@ export class PaymentsController {
     return this.paymentsService.createPayment(
       user.merchantId as string,
       user.userId || undefined,
-      normalizedDto,
+      {
+        ...normalizedDto,
+        provider: dto.provider,
+      },
     );
   }
 
@@ -51,7 +48,6 @@ export class PaymentsController {
     const normalizedDto = await this.prepareProviderPayment(user, dto, 'MPESA');
     return this.paymentsService.createMpesaStk(
       user.merchantId as string,
-      user.userId || undefined,
       normalizedDto,
     );
   }
@@ -62,7 +58,6 @@ export class PaymentsController {
     const normalizedDto = await this.prepareProviderPayment(user, dto, 'STRIPE');
     return this.paymentsService.createStripeIntent(
       user.merchantId as string,
-      user.userId || undefined,
       normalizedDto,
     );
   }
@@ -73,65 +68,12 @@ export class PaymentsController {
     const normalizedDto = await this.prepareProviderPayment(user, dto, 'PAYPAL');
     return this.paymentsService.createPaypalOrder(
       user.merchantId as string,
-      user.userId || undefined,
       normalizedDto,
     );
   }
 
-  @Post('paypal/:id/capture')
-  @UseInterceptors(PaymentIdempotencyInterceptor)
-  paypalCapture(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paymentsService.capturePaypalOrder(
-      user.merchantId as string,
-      user.userId || undefined,
-      id,
-    );
-  }
-
-  @Post(':id/refund')
-  refund(
-    @CurrentUser() user: AuthUser,
-    @Param('id') id: string,
-    @Body() dto: RefundPaymentDto,
-    @Headers('idempotency-key') idempotencyKey?: string,
-  ) {
-    return this.refundService.refund(
-      user.merchantId as string,
-      user.userId || undefined,
-      id,
-      idempotencyKey,
-      dto.amountCents,
-    );
-  }
-
-  @Get('paypal/:id/query')
-  paypalQuery(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paymentsService.queryPaypalOrder(
-      user.merchantId as string,
-      user.userId || undefined,
-      id,
-    );
-  }
-
-  @Get(':id/query')
-  query(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paymentsService.queryPayment(
-      user.merchantId as string,
-      user.userId || undefined,
-      id,
-    );
-  }
-
-  @Get(':id')
-  get(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.paymentsService.getPayment(user.merchantId as string, user.userId || undefined, id);
-  }
-
-  private lockEnvironment<T extends CreateProviderPaymentDto>(user: AuthUser, dto: T): T {
-    if (user.type === 'api_key' && user.environment) {
-      return { ...dto, environment: user.environment };
-    }
-    return dto;
+  private lockEnvironment(user: AuthUser, dto: CreateProviderPaymentDto) {
+    return this.currencyService.lockEnvironment(user, dto);
   }
 
   private async prepareProviderPayment(
