@@ -41,7 +41,11 @@ export class MerchantProfileService {
   }
 
   async update(merchantId: string, userId: string, dto: UpdateMerchantProfileDto) {
-    const country = dto.country || 'KE';
+    const existing = await this.prisma.merchantProfile.findUnique({
+      where: { merchantId },
+      select: { country: true },
+    });
+    const country = dto.country || existing?.country || 'KE';
     const { currency: _ignoredCurrency, ...profileData } = dto;
     const profile = await this.prisma.merchantProfile.upsert({
       where: { merchantId },
