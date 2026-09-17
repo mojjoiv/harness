@@ -39,12 +39,12 @@ export class MerchantSettingsService {
       select: { country: true },
     });
     const defaultCurrency = currencyForCountry(profile?.country || 'KE');
-    const { defaultCurrency: _ignoredCurrency, ...settingsData } = dto;
+    const settingsData = { ...dto, defaultCurrency };
 
     const settings = await this.prisma.merchantSettings.upsert({
       where: { merchantId },
-      update: { ...settingsData, defaultCurrency },
-      create: { merchantId, ...DEFAULT_SETTINGS, ...settingsData, defaultCurrency },
+      update: settingsData,
+      create: { merchantId, ...DEFAULT_SETTINGS, ...settingsData },
     });
 
     await this.auditLogs.create({
