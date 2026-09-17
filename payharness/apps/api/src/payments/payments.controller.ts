@@ -134,11 +134,11 @@ export class PaymentsController {
     return dto;
   }
 
-  private async prepareProviderPayment<T extends CreateProviderPaymentDto>(
+  private async prepareProviderPayment(
     user: AuthUser,
-    dto: T,
+    dto: CreateProviderPaymentDto,
     provider: CreatePaymentDto['provider'],
-  ): Promise<T> {
+  ): Promise<CreateProviderPaymentDto> {
     const lockedDto = this.lockEnvironment(user, dto);
 
     if (lockedDto.checkoutSessionId) {
@@ -160,9 +160,9 @@ export class PaymentsController {
           currency: session.currency,
         },
         provider,
-      ) as T;
+      );
     }
 
-    return this.currencyService.normalizePayment(lockedDto, provider) as T;
+    return this.currencyService.normalizePayment(lockedDto, provider);
   }
 }
