@@ -79,7 +79,27 @@ export class PaymentReceiptService {
     const existing = await this.findReceipt(merchantId, paymentId);
     if (existing) return existing;
 
-    const receiptNumber = `RCP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID()
+    // Recheck immediately before creation to avoid generating a receipt
+    // for a payment whose status changed during the request.
+    const payment = await this.prisma.payment.findFirst({
+      where: { id: paymentId, merchantId },
+      select: { status: true },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+
+    if (payment.status !== 'SUCCEEDED') {
+      throw new BadRequestException(
+        'Receipt is only available for succeeded payments',
+      );
+    }
+
+    const receiptNumber = `RCP-${new Date()
+      .toISOString()
+      .slice(0, 10)
+      .replace(/-/g, '')}-${randomUUID()
       .replace(/-/g, '')
       .slice(0, 10)
       .toUpperCase()}`;
