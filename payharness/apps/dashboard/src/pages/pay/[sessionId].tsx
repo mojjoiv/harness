@@ -32,6 +32,24 @@ export default function HostedCheckoutPage() {
 
   useEffect(() => { if (!sessionId) return; apiRequest<CheckoutData>(`/public/checkout-sessions/${sessionId}`).then((data) => { setCheckout(data); setSelectedProvider(data.availableProviders[0]?.provider || null); setPhone(data.customer?.phone || ''); }).catch((err) => setError(err instanceof Error ? err.message : 'Unable to load checkout')).finally(() => setLoading(false)); }, [sessionId]);
 
+  useEffect(() => {
+    if (!sessionId || loading) return;
+    let cancelled = false;
+    const checkExistingStatus = async () => {
+      try {
+        const status = await apiRequest<{ status: string }>(`/public/checkout-sessions/${sessionId}/status`);
+        if (cancelled) return;
+        if (status.status === 'SUCCEEDED') navigateTopLevel(`/checkout/success?sessionId=${encodeURIComponent(sessionId)}`);
+        if (status.status === 'FAILED') navigateTopLevel(`/checkout/failed?sessionId=${encodeURIComponent(sessionId)}`);
+        if (status.status === 'CANCELED') navigateTopLevel(`/checkout/cancelled?sessionId=${encodeURIComponent(sessionId)}`);
+      } catch {
+        // Keep the checkout usable when the status check is temporarily unavailable.
+      }
+    };
+    void checkExistingStatus();
+    return () => { cancelled = true; };
+  }, [sessionId, loading]);
+
   const stripeConfig = useMemo(() => checkout?.availableProviders.find((item) => item.provider === 'STRIPE')?.publicConfig.publishableKey || null, [checkout]);
 
   useEffect(() => {
@@ -56,9 +74,9 @@ export default function HostedCheckoutPage() {
 
   const pollUntilFinished = async () => {
     for (let attempt = 0; attempt < 40; attempt += 1) {
-      const status = await apiRequest<{ status: string; successUrl: string; cancelUrl: string }>(`/public/checkout-sessions/${sessionId}/status`);
-      if (status.status === 'SUCCEEDED') { navigateTopLevel(status.successUrl); return true; }
-      if (['FAILED', 'CANCELED'].includes(status.status)) { setProcessing(false); setError('The payment was not completed. Please try again.'); return false; }
+      const status = await apiRequest<{ status: string }>(`/public/checkout-sessions/${sessionId}/status`);
+      if (status.status === 'SUCCEEDED') { navigateTopLevel(`/checkout/success?sessionId=${encodeURIComponent(sessionId)}`); return true; }
+      if (['FAILED', 'CANCELED'].includes(status.status)) { navigateTopLevel(`/checkout/${status.status === 'CANCELED' ? 'cancelled' : 'failed'}?sessionId=${encodeURIComponent(sessionId)}`); return false; }
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
     setProcessing(false); setError('Payment is still processing. You can safely leave this page and return to the merchant.'); return false;
