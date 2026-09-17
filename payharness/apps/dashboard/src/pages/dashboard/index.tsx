@@ -14,7 +14,7 @@ export default function DashboardPage() {
 
   const stats = data
     ? [
-        { label: 'Today revenue', value: money(data.todayRevenue) },
+        { label: 'Today revenue', value: money(data.todayRevenue, data.displayCurrency) },
         { label: 'Today transactions', value: data.todayTransactions },
         { label: 'Successful payments', value: data.successfulPayments },
         { label: 'Failed payments', value: data.failedPayments },
@@ -29,6 +29,9 @@ export default function DashboardPage() {
       {loading ? <Panel className="p-6 text-sm text-muted">Loading dashboard...</Panel> : null}
       {data ? (
         <>
+          <div className="flex items-center justify-end text-xs text-muted">
+            Dashboard currency: <span className="ml-1 font-semibold text-ink">{data.displayCurrency}</span>
+          </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {stats.map((stat) => (
               <StatCard key={stat.label} label={stat.label} value={stat.value} />
