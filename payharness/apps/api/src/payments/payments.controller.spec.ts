@@ -21,7 +21,11 @@ describe('PaymentsController environment safety and orchestration', () => {
   >;
   let refundService: jest.Mocked<Pick<RefundService, 'refund'>>;
   let currencyService: jest.Mocked<Pick<CurrencyService, 'normalizePayment'>>;
-  let prisma: jest.Mocked<Pick<PrismaService, 'checkoutSession'>>;
+  let prisma: {
+    checkoutSession: {
+      findFirst: jest.Mock;
+    };
+  };
 
   beforeEach(() => {
     paymentsService = {
@@ -44,7 +48,7 @@ describe('PaymentsController environment safety and orchestration', () => {
       checkoutSession: {
         findFirst: jest.fn(),
       },
-    } as unknown as jest.Mocked<Pick<PrismaService, 'checkoutSession'>>;
+    };
     controller = new PaymentsController(
       paymentsService as unknown as PaymentsService,
       refundService as unknown as RefundService,
