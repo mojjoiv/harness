@@ -3,8 +3,7 @@ import { WebhooksService } from './webhooks.service';
 
 describe('WebhooksService', () => {
   function mocks() {
-    return {
-      prisma: {
+    const prisma: any = {
         webhookEndpoint: {
           create: jest.fn(),
           findMany: jest.fn(),
@@ -23,10 +22,13 @@ describe('WebhooksService', () => {
         transaction: { updateMany: jest.fn() },
         checkoutSession: { update: jest.fn() },
         $queryRaw: jest.fn(),
+        $transaction: jest.fn(async (callback: any) => callback(prisma)),
+        backgroundJob: { create: jest.fn() },
       },
       auditLogs: { create: jest.fn() },
       deliveryService: { deliver: jest.fn(), deliverToUrl: jest.fn() },
     };
+    return { prisma, auditLogs: { create: jest.fn() }, deliveryService: { deliver: jest.fn(), deliverToUrl: jest.fn() } };
   }
 
   it('creates an endpoint, audits it, and never returns the secret hash', async () => {
