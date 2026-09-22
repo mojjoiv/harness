@@ -107,7 +107,8 @@ export class SavePaypalCredentialDto {
 export type SaveProviderCredentialDto =
   | SaveMpesaCredentialDto
   | SaveStripeCredentialDto
-  | SavePaypalCredentialDto;
+  | SavePaypalCredentialDto
+  | SavePesapalCredentialDto;
 
 
 export class PesapalPublicConfigDto {
