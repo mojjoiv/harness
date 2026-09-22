@@ -7,6 +7,7 @@ import { CredentialCryptoService } from '../common/crypto/credential-crypto.serv
 import { PrismaService } from '../common/prisma.service';
 import { MpesaProviderService } from '../payment-providers/mpesa/mpesa-provider.service';
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
+import { ProviderRegistry } from '../payment-providers/provider-registry';
 import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
 import { PesapalPaymentService } from './pesapal-payment.service';
 import { StripeProviderService } from '../payment-providers/stripe/stripe-provider.service';
@@ -29,6 +30,7 @@ export class PaymentsService {
     private readonly pesapalPaymentService: PesapalPaymentService,
     private readonly auditLogs: AuditLogsService,
     private readonly webhooks: WebhooksService,
+    private readonly providers: ProviderRegistry,
   ) {
     this.logStartupInfo();
   }
@@ -58,6 +60,8 @@ export class PaymentsService {
 
   async createPayment(merchantId: string, userId: string | undefined, dto: CreatePaymentDto) {
     const providerDto: CreateProviderPaymentDto = dto;
+    this.providers.get(dto.provider);
+    this.providers.assertPaymentSupported(dto.provider, dto.environment);
 
     switch (dto.provider) {
       case 'MPESA':
@@ -594,9 +598,9 @@ export class PaymentsService {
     },
   ) {
     if (environment !== 'LIVE') return;
-    if (!['MPESA', 'STRIPE', 'PESAPAL'].includes(provider)) {
+    if (!this.providers.supportsEnvironment(provider, environment)) {
       throw new BadRequestException(
-        `Live ${provider} processing is not enabled yet because the ${provider} adapter is still sandbox/mock-only.`,
+        `Live ${provider} processing is not enabled yet because this provider is sandbox-only.`,
       );
     }
     if (
