@@ -147,7 +147,10 @@ export class WebhooksController {
       return response.json({ received: true, paymentId: result.payment.id, providerStatus: result.providerStatus });
     }
     const normalized = result.providerStatus.toUpperCase();
-    const resultPath = normalized === 'COMPLETED' ? 'success' : ['FAILED', 'INVALID'].includes(normalized) ? 'failed' : 'cancelled';
+    if (!['COMPLETED', 'FAILED', 'INVALID', 'REVERSED'].includes(normalized)) {
+      return response.redirect(302, `${checkoutUrl}/pay/${encodeURIComponent(result.payment.checkoutSessionId)}`);
+    }
+    const resultPath = normalized === 'COMPLETED' ? 'success' : 'failed';
     return response.redirect(302, `${checkoutUrl}/checkout/${resultPath}?sessionId=${encodeURIComponent(result.payment.checkoutSessionId)}`);
   }
 
