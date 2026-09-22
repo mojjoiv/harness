@@ -258,16 +258,20 @@ export class PaymentsService {
         shortcode: publicConfig.shortcode,
         providerReference: payment.providerReference,
       });
-      if (result.status === 'PENDING') return { paymentId: payment.id, status: 'PENDING' as const };
+      const finalStatus = result.status;
+      if (finalStatus === 'PENDING') return { paymentId: payment.id, status: 'PENDING' as const };
+      if (finalStatus !== 'SUCCEEDED' && finalStatus !== 'FAILED') {
+        throw new BadRequestException('M-Pesa adapter returned an unsupported payment status');
+      }
       await this.settlePendingPayment(
         merchantId,
         userId,
         payment,
-        result.status,
+        finalStatus,
         result.resultDesc,
         correlationId,
       );
-      return { paymentId: payment.id, status: result.status };
+      return { paymentId: payment.id, status: finalStatus };
     } catch (error) {
       this.logger.error(
         `[correlationId=${correlationId}] queryPayment failed:`,
