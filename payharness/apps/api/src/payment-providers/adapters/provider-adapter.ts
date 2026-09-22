@@ -6,7 +6,7 @@ export interface ProviderAdapterContext {
   amountCents?: number;
   currency?: string;
   metadata?: Record<string, unknown>;
-  providerReference?: string;
+  providerReference: string;
   [key: string]: unknown;
 }
 
