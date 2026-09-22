@@ -188,7 +188,7 @@ export class PesapalPaymentService {
     const normalized = providerStatus.toUpperCase();
     let status: PaymentStatus | undefined;
     if (normalized === 'COMPLETED') status = PaymentStatus.SUCCEEDED;
-    else if (['FAILED', 'INVALID'].includes(normalized)) status = PaymentStatus.FAILED;
+    else if (['FAILED', 'INVALID', 'REVERSED'].includes(normalized)) status = PaymentStatus.FAILED;
     if (!status) return { paymentId: payment.id, status: PaymentStatus.PENDING, providerStatus };
 
     if (payment.status !== status) {
