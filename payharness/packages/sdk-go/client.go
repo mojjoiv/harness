@@ -12,14 +12,14 @@ import (
 )
 
 const (
-	APIVersion    = "0.1.0"
-	DefaultBaseURL = "https://harness-1.onrender.com"
+	APIVersion     = "0.1.0"
+	DefaultBaseURL = "https://harness-m6qs.onrender.com"
 )
 
 type Client struct {
-	APIKey    string
-	BaseURL   string
-	HTTP      *http.Client
+	APIKey     string
+	BaseURL    string
+	HTTP       *http.Client
 	APIVersion string
 }
 
@@ -44,7 +44,17 @@ func (c *Client) QueryPayment(paymentID string, params map[string]string) (map[s
 }
 
 func (c *Client) CreateRefund(payload map[string]any, opts *RequestOptions) (map[string]any, error) {
-	return c.request(http.MethodPost, "/refunds", payload, opts, nil)
+	paymentID, ok := payload["paymentId"].(string)
+	if !ok || paymentID == "" {
+		return nil, fmt.Errorf("PayHarness paymentId is required for refunds")
+	}
+	body := make(map[string]any, len(payload))
+	for key, value := range payload {
+		if key != "paymentId" {
+			body[key] = value
+		}
+	}
+	return c.request(http.MethodPost, "/payments/"+url.PathEscape(paymentID)+"/refund", body, opts, nil)
 }
 
 func (c *Client) CreatePayout(payload map[string]any, opts *RequestOptions) (map[string]any, error) {
