@@ -1,11 +1,11 @@
 import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
 
 export const PAYHARNESS_API_VERSION = '0.1.0';
-export const DEFAULT_BASE_URL = 'https://harness-1.onrender.com';
+export const DEFAULT_BASE_URL = 'https://harness-m6qs.onrender.com';
 export const WEBHOOK_SIGNATURE_TOLERANCE_SECONDS = 300;
 
 export type Environment = 'SANDBOX' | 'LIVE';
-export type Provider = 'MPESA' | 'STRIPE' | 'PAYPAL';
+export type Provider = 'MPESA' | 'STRIPE' | 'PAYPAL' | 'PESAPAL';
 
 export interface PayHarnessClientOptions { apiKey: string; baseUrl?: string; fetch?: typeof globalThis.fetch }
 export interface PayHarnessResponse<T> { success: boolean; data: T; meta?: { apiVersion?: string; requestId?: string; [key: string]: unknown }; timestamp?: string }
