@@ -11,6 +11,7 @@ import { CredentialCryptoService } from '../common/crypto/credential-crypto.serv
 import { PrismaService } from '../common/prisma.service';
 import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
 import { StripeProviderService } from '../payment-providers/stripe/stripe-provider.service';
+import { PesapalProviderService } from '../payment-providers/pesapal/pesapal-provider.service';
 import { PaymentIdempotencyService } from './payment-idempotency.service';
 
 @Injectable()
@@ -20,6 +21,7 @@ export class RefundService {
     private readonly crypto: CredentialCryptoService,
     private readonly stripe: StripeProviderService,
     private readonly paypal: PaypalPaymentService,
+    private readonly pesapal: PesapalProviderService,
     private readonly idempotency: PaymentIdempotencyService,
     private readonly auditLogs: AuditLogsService,
   ) {}
@@ -130,6 +132,10 @@ export class RefundService {
         );
         refundId = result.refundId;
         providerRefundAmountCents = result.amountCents;
+      } else if (payment.provider === 'PESAPAL') {
+        const result = await this.refundPesapal(merchantId, userId, payment, amountCents);
+        refundId = result.refundId;
+        providerRefundAmountCents = result.amountCents;
       } else {
         throw new BadRequestException(`Unsupported payment provider: ${payment.provider}`);
       }
@@ -202,6 +208,38 @@ export class RefundService {
       }
       throw error;
     }
+  }
+
+  private async refundPesapal(
+    merchantId: string,
+    userId: string | undefined,
+    payment: Payment,
+    amountCents: number,
+  ): Promise<{ refundId: string; amountCents: number }> {
+    const metadata = (payment.metadata || {}) as Record<string, any>;
+    const confirmationCode = metadata.pesapal?.confirmationCode;
+    if (typeof confirmationCode !== 'string' || !confirmationCode) {
+      throw new BadRequestException('Pesapal confirmation code is missing; refresh the payment status before refunding.');
+    }
+    const credential = await this.prisma.providerCredential.findFirst({
+      where: { merchantId, provider: 'PESAPAL', environment: payment.environment, status: 'ACTIVE' },
+      orderBy: [{ isDefault: 'desc' }, { lastVerifiedAt: 'desc' }, { updatedAt: 'desc' }],
+    });
+    if (!credential) throw new BadRequestException(`No active PESAPAL credential for ${payment.environment}`);
+    const secrets = this.crypto.decrypt(credential.encryptedSecretConfig as any) as { consumerKey?: string; consumerSecret?: string };
+    if (!secrets.consumerKey || !secrets.consumerSecret) throw new BadRequestException('Pesapal credentials are incomplete');
+    const result = await this.pesapal.refundRequest({
+      credentials: { consumerKey: secrets.consumerKey, consumerSecret: secrets.consumerSecret },
+      environment: payment.environment,
+      confirmationCode,
+      amountCents,
+      username: userId || 'PayHarness',
+      remarks: `PayHarness refund for payment ${payment.id}`,
+    });
+    if (String(result.status) !== '200') {
+      throw new BadRequestException(`Pesapal refund was not accepted: ${result.message || 'unknown error'}`);
+    }
+    return { refundId: `PESAPAL-${payment.id}-${amountCents}`, amountCents };
   }
 
   private async refundStripe(
