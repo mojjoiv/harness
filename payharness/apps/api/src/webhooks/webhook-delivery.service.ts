@@ -37,6 +37,26 @@ export class WebhookDeliveryService {
         alreadyDelivered: true,
       };
     }
+
+    if (delivery.status === 'PENDING') {
+      const claimed = await this.prisma.webhookDelivery.updateMany({
+        where: { id: delivery.id, status: 'PENDING' },
+        data: { status: 'PROCESSING' },
+      });
+      if (claimed.count === 0) {
+        const current = await this.prisma.webhookDelivery.findUnique({ where: { id: delivery.id } });
+        if (!current || current.status === 'SUCCEEDED') {
+          return {
+            delivered: current?.status === 'SUCCEEDED',
+            deliveryId: delivery.id,
+            attempts: current?.attempts ?? delivery.attempts,
+            responseCode: current?.responseCode,
+            alreadyDelivered: current?.status === 'SUCCEEDED',
+          };
+        }
+      }
+    }
+
     if (delivery.endpoint.status !== 'ACTIVE') {
       throw new BadRequestException('Webhook endpoint is not active');
     }
@@ -121,7 +141,7 @@ export class WebhookDeliveryService {
       completedAttempts = attempt;
       await this.prisma.webhookDelivery.update({
         where: { id: delivery.id },
-        data: { attempts: attempt, status: 'PENDING' },
+        data: { attempts: attempt, status: 'PROCESSING' },
       });
 
       try {
