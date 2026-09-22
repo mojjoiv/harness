@@ -164,7 +164,7 @@ export class PesapalPaymentService {
       environment: payment.environment,
       orderTrackingId: payment.providerReference,
     });
-    return this.applyStatus(merchantId, userId, payment, status.payment_status_description || '');
+    return this.applyStatus(merchantId, userId, payment, status.payment_status_description || '', status);
   }
 
   async applyCallbackStatus(merchantId: string, orderTrackingId: string) {
@@ -180,11 +180,11 @@ export class PesapalPaymentService {
       environment: payment.environment,
       orderTrackingId,
     });
-    const result = await this.applyStatus(merchantId, undefined, payment, status.payment_status_description || '');
+    const result = await this.applyStatus(merchantId, undefined, payment, status.payment_status_description || '', status);
     return { ...result, matched: true };
   }
 
-  private async applyStatus(merchantId: string, userId: string | undefined, payment: Payment, providerStatus: string) {
+  private async applyStatus(merchantId: string, userId: string | undefined, payment: Payment, providerStatus: string, providerDetails?: { confirmation_code?: string; payment_method?: string }) {
     const normalized = providerStatus.toUpperCase();
     let status: PaymentStatus | undefined;
     if (normalized === 'COMPLETED') status = PaymentStatus.SUCCEEDED;
@@ -192,7 +192,7 @@ export class PesapalPaymentService {
     if (!status) return { paymentId: payment.id, status: PaymentStatus.PENDING, providerStatus };
 
     if (payment.status !== status) {
-      await this.prisma.payment.update({ where: { id: payment.id }, data: { status } });
+      await this.prisma.payment.update({ where: { id: payment.id }, data: { status, metadata: { ...((payment.metadata || {}) as Record<string, unknown>), pesapal: { confirmationCode: providerDetails?.confirmation_code || null, paymentMethod: providerDetails?.payment_method || null, providerStatus } } as Prisma.InputJsonValue } });
       await this.prisma.transaction.updateMany({ where: { paymentId: payment.id }, data: { status } });
       if (payment.checkoutSessionId) {
         await this.prisma.checkoutSession.update({ where: { id: payment.checkoutSessionId }, data: { status } });
