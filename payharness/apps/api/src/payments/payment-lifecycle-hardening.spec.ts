@@ -1,4 +1,5 @@
 import { PaymentsService } from './payments.service';
+import { ProviderRegistry } from '../payment-providers/provider-registry';
 
 describe('PaymentsService payment lifecycle hardening', () => {
   const prisma = {
@@ -19,6 +20,7 @@ describe('PaymentsService payment lifecycle hardening', () => {
   const pesapalPaymentService = {} as any;
   const auditLogs = { create: jest.fn() } as any;
   const webhooks = { forwardToUrl: jest.fn() } as any;
+  const providers = new ProviderRegistry();
 
   let service: PaymentsService;
 
@@ -35,6 +37,7 @@ describe('PaymentsService payment lifecycle hardening', () => {
       pesapalPaymentService,
       auditLogs,
       webhooks,
+      providers,
     );
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
     prisma.transaction.updateMany.mockResolvedValue({ count: 1 });

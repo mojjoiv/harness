@@ -5,6 +5,7 @@ import { StripeProviderService } from './stripe/stripe-provider.service';
 import { StripeVerificationService } from './stripe/stripe-verification.service';
 import { PaypalProviderService } from './paypal/paypal-provider.service';
 import { PesapalProviderService } from './pesapal/pesapal-provider.service';
+import { ProviderRegistry } from './provider-registry';
 
 @Module({
   providers: [
@@ -14,6 +15,7 @@ import { PesapalProviderService } from './pesapal/pesapal-provider.service';
     StripeVerificationService,
     PaypalProviderService,
     PesapalProviderService,
+    ProviderRegistry,
   ],
   exports: [
     MpesaProviderService,
@@ -22,6 +24,7 @@ import { PesapalProviderService } from './pesapal/pesapal-provider.service';
     StripeVerificationService,
     PaypalProviderService,
     PesapalProviderService,
+    ProviderRegistry,
   ],
 })
 export class PaymentProvidersModule {}

@@ -1,4 +1,5 @@
 import { PaymentsService } from './payments.service';
+import { ProviderRegistry } from '../payment-providers/provider-registry';
 
 describe('PaymentsService', () => {
   const prisma = {
@@ -31,6 +32,7 @@ describe('PaymentsService', () => {
   } as any;
   const auditLogs = { create: jest.fn() } as any;
   const webhooks = { forwardToUrl: jest.fn() } as any;
+  const providers = new ProviderRegistry();
   let service: PaymentsService;
 
   beforeEach(() => {
@@ -54,6 +56,7 @@ describe('PaymentsService', () => {
       pesapalPaymentService,
       auditLogs,
       webhooks,
+      providers,
     );
     jest.spyOn(service as any, 'getActiveCredential').mockResolvedValue({
       id: 'credential-1',
