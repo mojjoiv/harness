@@ -7,6 +7,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { timingSafeEqual } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { MailerService } from '../mailer/mailer.service';
 import { PrismaService } from '../common/prisma.service';
@@ -146,7 +147,10 @@ export class TransactionalEmailsService implements OnModuleInit, OnModuleDestroy
 
   verifyWebhookSecret(secret?: string): boolean {
     const expected = this.config.get<string>('POSTMARK_WEBHOOK_SECRET');
-    return Boolean(expected && secret && secret.length === expected.length && secret === expected);
+    if (!expected || !secret) return false;
+    const actual = Buffer.from(secret);
+    const target = Buffer.from(expected);
+    return actual.length === target.length && timingSafeEqual(actual, target);
   }
 
   async processProviderEvent(payload: Record<string, unknown>) {
