@@ -84,7 +84,8 @@ export default function CheckoutSessionsPage() {
               <Select multiple size={3} {...register('allowedProviders')}>
                 <option value="MPESA">MPESA</option>
                 <option value="STRIPE">STRIPE</option>
-                <option value="PAYPAL">PAYPAL</option>\n                <option value="PESAPAL">PESAPAL</option>
+                <option value="PAYPAL">PAYPAL</option>
+                <option value="PESAPAL">PESAPAL</option>
               </Select>
             </FieldRow>
           </FormGrid>
