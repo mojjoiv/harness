@@ -201,11 +201,16 @@ export class WebhooksService {
         return { received: true, deliveryId: delivery.deliveryId, duplicate: true };
       }
 
-      await this.processProviderPaymentEvent(provider, payload);
+      const job = await this.prisma.backgroundJob.create({
+        data: {
+          type: 'provider.webhook.process',
+          payload: { provider, payload } as Prisma.InputJsonValue,
+        },
+      });
       this.logger.log(
-        `[Webhook receive] STORED provider=${provider} eventType=${eventType} eventId=${eventId} deliveryId=${delivery.deliveryId} correlationId=${correlationId}`,
+        `[Webhook receive] QUEUED provider=${provider} eventType=${eventType} eventId=${eventId} deliveryId=${delivery.deliveryId} jobId=${job.id} correlationId=${correlationId}`,
       );
-      return { received: true, deliveryId: delivery.deliveryId };
+      return { received: true, deliveryId: delivery.deliveryId, jobId: job.id };
     } catch (error) {
       this.logger.error(
         `[Webhook receive] FAILED provider=${provider} eventType=${eventType} eventId=${eventId} correlationId=${correlationId}`,
@@ -278,7 +283,7 @@ export class WebhooksService {
     return { deliveryId: existing[0].id, duplicate: true };
   }
 
-  private async processProviderPaymentEvent(provider: Provider, payload: Record<string, unknown>): Promise<void> {
+  async processProviderPaymentEvent(provider: Provider, payload: Record<string, unknown>): Promise<void> {
     const merchantId = typeof payload._merchantId === 'string' ? payload._merchantId : undefined;
     if (!merchantId) return;
     const eventType = String(payload.type || payload.event || '');
