@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export const TRANSACTIONAL_EMAIL_TEMPLATES = [
   'payment.succeeded',
@@ -13,11 +13,6 @@ export type TransactionalEmailTemplate = (typeof TRANSACTIONAL_EMAIL_TEMPLATES)[
 export class SendTransactionalEmailDto {
   @IsIn(TRANSACTIONAL_EMAIL_TEMPLATES)
   template!: TransactionalEmailTemplate;
-
-  @IsOptional()
-  @IsEmail()
-  @MaxLength(254)
-  to?: string;
 
   @IsUUID()
   paymentId!: string;
