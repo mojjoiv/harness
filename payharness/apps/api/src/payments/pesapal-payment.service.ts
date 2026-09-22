@@ -1,7 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Environment, Payment, PaymentStatus, Prisma } from '@prisma/client';
-import { randomUUID } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
