@@ -4,31 +4,34 @@ import { WebhooksService } from './webhooks.service';
 describe('WebhooksService', () => {
   function mocks() {
     const prisma: any = {
-        webhookEndpoint: {
-          create: jest.fn(),
-          findMany: jest.fn(),
-          count: jest.fn(),
-          findFirst: jest.fn(),
-          update: jest.fn(),
-        },
-        webhookDelivery: {
-          create: jest.fn(),
-          findFirst: jest.fn(),
-          findMany: jest.fn(),
-          count: jest.fn(),
-        },
-        merchant: { findUnique: jest.fn() },
-        payment: { findFirst: jest.fn(), update: jest.fn() },
-        transaction: { updateMany: jest.fn() },
-        checkoutSession: { update: jest.fn() },
-        $queryRaw: jest.fn(),
-        $transaction: jest.fn(async (callback: any) => callback(prisma)),
-        backgroundJob: { create: jest.fn() },
+      webhookEndpoint: {
+        create: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
+        findFirst: jest.fn(),
+        update: jest.fn(),
       },
+      webhookDelivery: {
+        create: jest.fn(),
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      merchant: { findUnique: jest.fn() },
+      payment: { findFirst: jest.fn(), update: jest.fn() },
+      transaction: { updateMany: jest.fn() },
+      checkoutSession: { update: jest.fn() },
+      $queryRaw: jest.fn(),
+      backgroundJob: { create: jest.fn() },
+    };
+    prisma.$transaction = jest.fn(async (callback: any) => callback(prisma));
+
+    return {
+      prisma,
       auditLogs: { create: jest.fn() },
       deliveryService: { deliver: jest.fn(), deliverToUrl: jest.fn() },
     };
-    return { prisma, auditLogs: { create: jest.fn() }, deliveryService: { deliver: jest.fn(), deliverToUrl: jest.fn() } };
   }
 
   it('creates an endpoint, audits it, and never returns the secret hash', async () => {
