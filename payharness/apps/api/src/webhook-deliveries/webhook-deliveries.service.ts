@@ -42,6 +42,7 @@ export class WebhookDeliveriesService implements OnModuleInit, OnModuleDestroy {
 
     try {
       await this.recoverStaleJobs();
+      await this.recoverStaleDeliveries();
       await this.processBackgroundJobs();
       await this.processPendingDeliveries();
     } finally {
@@ -140,6 +141,17 @@ export class WebhookDeliveriesService implements OnModuleInit, OnModuleDestroy {
       data.provider as Provider,
       data.payload,
     );
+  }
+
+  private async recoverStaleDeliveries() {
+    const cutoff = new Date(Date.now() - JOB_LEASE_MS);
+    await this.prisma.webhookDelivery.updateMany({
+      where: {
+        status: 'PROCESSING',
+        createdAt: { lt: cutoff },
+      },
+      data: { status: 'PENDING' },
+    });
   }
 
   private async recoverStaleJobs() {
