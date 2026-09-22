@@ -13,6 +13,7 @@ import { PaymentIdempotencyService } from './payment-idempotency.service';
 import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
 import { RefundService } from './refund.service';
+import { PesapalPaymentService } from './pesapal-payment.service';
 
 @Module({
   imports: [AuditLogsModule, CurrencyModule, PaymentProvidersModule, WebhooksModule],
@@ -24,6 +25,7 @@ import { RefundService } from './refund.service';
   providers: [
     PaymentsService,
     PaypalPaymentService,
+    PesapalPaymentService,
     PaymentReceiptService,
     PaymentIdempotencyService,
     PaymentIdempotencyInterceptor,
