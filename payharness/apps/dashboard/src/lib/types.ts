@@ -57,7 +57,7 @@ export interface MerchantSettings {
 }
 
 export interface ProviderStatus {
-  provider: 'MPESA' | 'STRIPE' | 'PAYPAL';
+  provider: 'MPESA' | 'STRIPE' | 'PAYPAL' | 'PESAPAL';
   connected: boolean;
   sandboxConnected: boolean;
   liveConnected: boolean;
@@ -96,7 +96,7 @@ export interface CheckoutSessionRecord {
 
 export interface TransactionRecord {
   id: string;
-  provider: 'MPESA' | 'STRIPE' | 'PAYPAL';
+  provider: 'MPESA' | 'STRIPE' | 'PAYPAL' | 'PESAPAL';
   amountCents: number;
   currency: string;
   displayAmountCents: number;
