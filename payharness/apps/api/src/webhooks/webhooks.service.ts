@@ -295,6 +295,13 @@ export class WebhooksService {
       }
     }
 
+    if (provider === Provider.PESAPAL) {
+      providerReference = typeof payload.orderTrackingId === 'string' ? payload.orderTrackingId : undefined;
+      const providerStatus = typeof payload.providerStatus === 'string' ? payload.providerStatus.toUpperCase() : '';
+      if (providerStatus === 'COMPLETED') status = PaymentStatus.SUCCEEDED;
+      if (['FAILED', 'INVALID'].includes(providerStatus)) status = PaymentStatus.FAILED;
+    }
+
     if (provider === Provider.MPESA) {
       const body = payload.Body as Record<string, unknown> | undefined;
       const callback = body?.stkCallback as Record<string, unknown> | undefined;

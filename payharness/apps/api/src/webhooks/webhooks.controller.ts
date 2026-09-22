@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -7,16 +8,19 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CreateWebhookEndpointDto } from './dto/create-webhook-endpoint.dto';
 import { PaypalWebhookService } from './paypal-webhook.service';
 import { WebhooksService } from './webhooks.service';
+import { PesapalWebhookService } from './pesapal-webhook.service';
 
 @Controller('webhooks')
 export class WebhooksController {
@@ -25,6 +29,8 @@ export class WebhooksController {
   constructor(
     private readonly webhooksService: WebhooksService,
     private readonly paypalWebhookService: PaypalWebhookService,
+    private readonly pesapalWebhookService: PesapalWebhookService,
+    private readonly config: ConfigService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -118,6 +124,36 @@ export class WebhooksController {
     return this.webhooksService.receive('PAYPAL', payload);
   }
 
+  @Get('provider/pesapal/:merchantId')
+  async pesapalCallback(
+    @Param('merchantId') merchantId: string,
+    @Query('OrderTrackingId') orderTrackingId?: string,
+    @Query('OrderMerchantReference') merchantReference?: string,
+    @Res() response: Response,
+  ) {
+    const trackingId = orderTrackingId || merchantReference;
+    if (!trackingId) return response.status(400).json({ message: 'Missing Pesapal order tracking ID' });
+    const result = await this.pesapalWebhookService.resolveStatus(merchantId, trackingId);
+    await this.webhooksService.receiveForMerchant('PESAPAL', merchantId, {
+      id: `${trackingId}:${result.providerStatus.toUpperCase()}`,
+      event: 'pesapal.transaction.status',
+      orderTrackingId: trackingId,
+      merchantReference: result.payment.id,
+      providerStatus: result.providerStatus,
+      _merchantId: merchantId,
+    });
+    const checkoutUrl = this.config.get<string>('CHECKOUT_URL')?.replace(/\/$/, '');
+    if (!checkoutUrl || !result.payment.checkoutSessionId) {
+      return response.json({ received: true, paymentId: result.payment.id, providerStatus: result.providerStatus });
+    }
+    const normalized = result.providerStatus.toUpperCase();
+    if (!['COMPLETED', 'FAILED', 'INVALID', 'REVERSED'].includes(normalized)) {
+      return response.redirect(302, `${checkoutUrl}/pay/${encodeURIComponent(result.payment.checkoutSessionId)}`);
+    }
+    const resultPath = normalized === 'COMPLETED' ? 'success' : 'failed';
+    return response.redirect(302, `${checkoutUrl}/checkout/${resultPath}?sessionId=${encodeURIComponent(result.payment.checkoutSessionId)}`);
+  }
+
   @Post('provider/:provider/:merchantId')
   async providerCallback(
     @Param('provider') provider: string,
@@ -166,6 +202,25 @@ export class WebhooksController {
         request.rawBody || Buffer.from(JSON.stringify(payload)),
         payload,
       );
+    }
+    if (normalizedProvider === 'PESAPAL') {
+      const orderTrackingId = typeof payload.OrderTrackingId === 'string' ? payload.OrderTrackingId : undefined;
+      if (!orderTrackingId) throw new BadRequestException('Missing Pesapal OrderTrackingId');
+      const result = await this.pesapalWebhookService.resolveStatus(merchantId, orderTrackingId);
+      await this.webhooksService.receiveForMerchant('PESAPAL', merchantId, {
+        id: `${orderTrackingId}:${result.providerStatus.toUpperCase()}`,
+        event: 'pesapal.transaction.status',
+        orderTrackingId,
+        merchantReference: result.payment.id,
+        providerStatus: result.providerStatus,
+        _merchantId: merchantId,
+      });
+      return {
+        orderNotificationType: payload.OrderNotificationType || 'IPNCHANGE',
+        orderTrackingId,
+        orderMerchantReference: payload.OrderMerchantReference || result.payment.id,
+        status: 200,
+      };
     }
     return this.webhooksService.receiveForMerchant(provider, merchantId, payload);
   }

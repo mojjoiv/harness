@@ -107,4 +107,37 @@ export class SavePaypalCredentialDto {
 export type SaveProviderCredentialDto =
   | SaveMpesaCredentialDto
   | SaveStripeCredentialDto
-  | SavePaypalCredentialDto;
+  | SavePaypalCredentialDto
+  | SavePesapalCredentialDto;
+
+
+export class PesapalPublicConfigDto {
+  @IsOptional()
+  @IsString()
+  branch?: string;
+}
+
+export class PesapalSecretConfigDto {
+  @IsString()
+  consumerKey: string;
+
+  @IsString()
+  consumerSecret: string;
+}
+
+export class SavePesapalCredentialDto {
+  @IsEnum(Environment)
+  environment: Environment;
+
+  @IsOptional()
+  @IsString()
+  label?: string;
+
+  @ValidateNested()
+  @Type(() => PesapalPublicConfigDto)
+  publicConfig: PesapalPublicConfigDto;
+
+  @ValidateNested()
+  @Type(() => PesapalSecretConfigDto)
+  secretConfig: PesapalSecretConfigDto;
+}

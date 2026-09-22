@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { navigateTopLevel } from '../../lib/navigation';
 
-type Provider = 'MPESA' | 'STRIPE' | 'PAYPAL';
+type Provider = 'MPESA' | 'STRIPE' | 'PAYPAL' | 'PESAPAL';
 type CheckoutData = { id: string; merchantId: string; amountCents: number; currency: string; status: string; expiresAt: string; customer: { name?: string | null; email?: string | null; phone?: string | null } | null; environment: 'SANDBOX' | 'LIVE'; availableProviders: Array<{ provider: Provider; publicConfig: { publishableKey?: string | null; clientId?: string | null } }>; branding: { merchantName: string; logoUrl: string | null; primaryColor: string; secondaryColor: string; buttonColor: string } };
 type StripeInstance = { elements: () => { create: (type: 'card') => StripeCardElement }; confirmCardPayment: (clientSecret: string, data: { payment_method: { card: StripeCardElement } }) => Promise<{ error?: { message?: string } }> };
 type StripeCardElement = { mount: (selector: string) => void; unmount: () => void };
@@ -13,7 +13,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 function unwrap<T>(payload: { success?: boolean; data?: T; message?: string }): T { if (!payload.success || payload.data === undefined) throw new Error(payload.message || 'PayHarness request failed'); return payload.data; }
 async function apiRequest<T>(path: string, init?: RequestInit) { const response = await fetch(`${API_URL}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } }); const payload = (await response.json()) as { success?: boolean; data?: T; message?: string }; if (!response.ok) throw new Error(payload.message || `Request failed (${response.status})`); return unwrap(payload); }
 function formatMoney(amountCents: number, currency: string) { return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amountCents / 100); }
-function providerLabel(provider: Provider) { if (provider === 'MPESA') return 'M-Pesa'; if (provider === 'PAYPAL') return 'PayPal'; return 'Card'; }
+function providerLabel(provider: Provider) { if (provider === 'MPESA') return 'M-Pesa'; if (provider === 'PAYPAL') return 'PayPal'; if (provider === 'PESAPAL') return 'Pesapal'; return 'Card'; }
 
 export default function HostedCheckoutPage() {
   const router = useRouter();
@@ -94,7 +94,7 @@ export default function HostedCheckoutPage() {
         await pollUntilFinished(); return;
       }
       const payment = await apiRequest<{ approvalUrl?: string }>(`/public/checkout-sessions/${sessionId}/payments`, { method: 'POST', body: JSON.stringify({ provider: selectedProvider, ...(selectedProvider === 'MPESA' ? { phoneNumber: phone } : {}) }) });
-      if (selectedProvider === 'PAYPAL' && payment.approvalUrl) { navigateTopLevel(payment.approvalUrl); return; }
+      if (['PAYPAL', 'PESAPAL'].includes(selectedProvider) && payment.approvalUrl) { navigateTopLevel(payment.approvalUrl); return; }
       setMessage(selectedProvider === 'MPESA' ? 'Check your phone and approve the M-Pesa prompt.' : 'Payment started.'); await pollUntilFinished();
     } catch (err) { setProcessing(false); setError(err instanceof Error ? err.message : 'Payment could not be started'); }
   };
@@ -111,7 +111,7 @@ export default function HostedCheckoutPage() {
           <div className="p-6">
             {checkout.availableProviders.length === 0 ? <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">No payment method is currently available for this checkout.</div> : (
               <form onSubmit={submit} className="space-y-5">
-                <div><div className="mb-3 text-sm font-semibold text-slate-900">Choose how to pay</div><div className="grid gap-2">{checkout.availableProviders.map(({ provider }) => <button key={provider} type="button" onClick={() => { setSelectedProvider(provider); setError(''); setMessage(''); }} className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${selectedProvider === provider ? 'border-slate-900 bg-slate-50 ring-2 ring-slate-200' : 'border-slate-200 hover:border-slate-300'}`}><span>{providerLabel(provider)}</span><span className="text-xs text-slate-400">{selectedProvider === provider ? 'Selected' : 'Select'}</span></button>)}</div></div>
+                <div><label className="mb-3 block text-sm font-semibold text-slate-900" htmlFor="payment-provider">Choose how to pay</label><select id="payment-provider" value={selectedProvider || ''} onChange={(event) => { setSelectedProvider(event.target.value as Provider); setError(''); setMessage(''); }} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none focus:border-slate-400"><option value="" disabled>Select a payment method</option>{checkout.availableProviders.map(({ provider }) => <option key={provider} value={provider}>{providerLabel(provider)}</option>)}</select></div>
                 {selectedProvider === 'MPESA' ? <div><label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="phone">M-Pesa phone number</label><input id="phone" value={phone} onChange={(event) => setPhone(event.target.value)} required placeholder="2547XXXXXXXX" className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-slate-400" /></div> : null}
                 {selectedProvider === 'STRIPE' ? <div><label className="mb-2 block text-sm font-medium text-slate-700">Card details</label><div id="payharness-card" className="rounded-2xl border border-slate-200 p-4" />{stripeLoading || !cardReady ? <p className="mt-2 text-xs text-slate-400">Preparing secure card fields…</p> : null}</div> : null}
                 {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null}

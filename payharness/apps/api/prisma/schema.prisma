@@ -50,6 +50,7 @@ enum Provider {
   MPESA
   STRIPE
   PAYPAL
+  PESAPAL
 }
 
 enum Status {

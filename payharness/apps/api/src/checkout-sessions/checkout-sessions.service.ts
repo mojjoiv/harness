@@ -8,7 +8,7 @@ import { getPagination, paginated } from '../common/pagination/pagination';
 import { MerchantBrandingService } from '../merchant-branding/merchant-branding.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 
-const ALL_PROVIDERS: Provider[] = ['MPESA', 'STRIPE', 'PAYPAL'];
+const ALL_PROVIDERS: Provider[] = ['MPESA', 'STRIPE', 'PAYPAL', 'PESAPAL'];
 
 @Injectable()
 export class CheckoutSessionsService {

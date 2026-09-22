@@ -7,6 +7,7 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
+import { PesapalProviderService } from '../payment-providers/pesapal/pesapal-provider.service';
 import {
   computeOverallStatus,
   ProviderVerificationResult,
@@ -47,6 +48,7 @@ export class ProviderCredentialsService {
     private readonly availability: ProviderAvailabilityService,
     private readonly config: ConfigService,
     private readonly mpesaVerification: MpesaVerificationService,
+    private readonly pesapal: PesapalProviderService,
   ) {
     this.verifiers = {
       MPESA: async (ctx) => {
@@ -68,6 +70,27 @@ export class ProviderCredentialsService {
           environment: ctx.environment,
           callbackUrl: ctx.callbackUrl,
         });
+      },
+      PESAPAL: async ({ secretConfig, environment }) => {
+        const consumerKey = String(secretConfig.consumerKey || '');
+        const consumerSecret = String(secretConfig.consumerSecret || '');
+        if (!consumerKey || !consumerSecret) {
+          return this.shapeFailure('PESAPAL', ['Pesapal consumer key and consumer secret are required']);
+        }
+        try {
+          await this.pesapal.verifyCredentials({
+            credentials: { consumerKey, consumerSecret },
+            environment,
+          });
+          return this.shapeResult('PESAPAL', {
+            oauthVerified: true,
+            accountVerified: true,
+            environmentVerified: true,
+            errors: [],
+          });
+        } catch (error) {
+          return this.shapeFailure('PESAPAL', [error instanceof Error ? error.message : 'Pesapal authentication failed']);
+        }
       },
       // Mocked shape-checks for now, matching StripeProviderService/
       // PaypalProviderService's own still-mocked payment adapters -- but

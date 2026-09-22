@@ -12,6 +12,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   MPESA: 'M-Pesa',
   STRIPE: 'Stripe',
   PAYPAL: 'PayPal',
+  PESAPAL: 'Pesapal',
 };
 
 const countryName = (code: string) => COUNTRY_CURRENCIES.find((c) => c.countryCode === code)?.country || code;
@@ -177,6 +178,7 @@ export default function PlatformPaymentGatewaysPage() {
                 <option value="MPESA">M-Pesa</option>
                 <option value="STRIPE">Stripe</option>
                 <option value="PAYPAL">PayPal</option>
+                <option value="PESAPAL">Pesapal</option>
               </Select>
             </div>
             <SimpleTable
