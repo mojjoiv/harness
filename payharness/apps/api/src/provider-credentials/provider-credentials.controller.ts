@@ -7,6 +7,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import {
   SaveMpesaCredentialDto,
   SavePaypalCredentialDto,
+  SavePesapalCredentialDto,
   SaveStripeCredentialDto,
 } from './dto/provider-credential.dto';
 import { ProviderCredentialsService } from './provider-credentials.service';
@@ -26,6 +27,12 @@ export class ProviderCredentialsController {
   @Roles(UserRole.OWNER)
   saveStripe(@CurrentUser() user: AuthUser, @Body() dto: SaveStripeCredentialDto) {
     return this.credentialsService.save(user.merchantId, user.userId, 'STRIPE', dto);
+  }
+
+  @Post('pesapal')
+  @Roles(UserRole.OWNER)
+  savePesapal(@CurrentUser() user: AuthUser, @Body() dto: SavePesapalCredentialDto) {
+    return this.credentialsService.save(user.merchantId, user.userId, 'PESAPAL', dto);
   }
 
   @Post('paypal')
