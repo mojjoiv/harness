@@ -127,9 +127,9 @@ export class WebhooksController {
   @Get('provider/pesapal/:merchantId')
   async pesapalCallback(
     @Param('merchantId') merchantId: string,
+    @Res() response: Response,
     @Query('OrderTrackingId') orderTrackingId?: string,
     @Query('OrderMerchantReference') merchantReference?: string,
-    @Res() response: Response,
   ) {
     const trackingId = orderTrackingId || merchantReference;
     if (!trackingId) return response.status(400).json({ message: 'Missing Pesapal order tracking ID' });
