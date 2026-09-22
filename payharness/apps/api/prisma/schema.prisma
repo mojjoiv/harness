@@ -62,6 +62,22 @@ enum Status {
   SUCCEEDED
 }
 
+enum TransactionalEmailStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+}
+
+enum TransactionalEmailEventType {
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  COMPLAINT
+}
+
 enum PaymentStatus {
   PENDING
   REQUIRES_ACTION
@@ -126,6 +142,8 @@ model Merchant {
   subscriptions       MerchantSubscription[]
   auditLogs           AuditLog[]
   apiUsage            ApiUsage[]
+  transactionalEmails TransactionalEmail[]
+  transactionalEmailEvents TransactionalEmailEvent[]
 
   @@map("merchants")
 }
@@ -393,6 +411,7 @@ model Payment {
   customer          Customer?        @relation(fields: [customerId], references: [id])
   checkoutSession   CheckoutSession? @relation(fields: [checkoutSessionId], references: [id])
   transactions      Transaction[]
+  transactionalEmails TransactionalEmail[]
 
   @@map("payments")
 }
@@ -477,4 +496,46 @@ model ApiUsage {
 
   @@index([merchantId, createdAt])
   @@map("api_usage")
+}
+
+
+model TransactionalEmail {
+  id                String                    @id @default(uuid())
+  merchantId        String                    @map("merchant_id")
+  paymentId         String?                   @map("payment_id")
+  templateKey       String                    @map("template_key")
+  recipient         String
+  subject           String
+  status            TransactionalEmailStatus  @default(QUEUED)
+  attempts          Int                       @default(0)
+  nextAttemptAt     DateTime?                 @map("next_attempt_at")
+  providerMessageId String?                   @unique @map("provider_message_id")
+  idempotencyKey    String                    @map("idempotency_key")
+  lastError         String?                   @map("last_error")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  sentAt            DateTime?                 @map("sent_at")
+  merchant          Merchant                  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  payment           Payment?                  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  events            TransactionalEmailEvent[]
+
+  @@unique([merchantId, idempotencyKey])
+  @@index([merchantId, createdAt])
+  @@index([status, nextAttemptAt])
+  @@map("transactional_emails")
+}
+
+model TransactionalEmailEvent {
+  id                  String                       @id @default(uuid())
+  merchantId          String                       @map("merchant_id")
+  transactionalEmailId String                       @map("transactional_email_id")
+  providerEventId     String                       @unique @map("provider_event_id")
+  type                TransactionalEmailEventType
+  payload             Json                         @default("{}")
+  createdAt            DateTime                     @default(now()) @map("created_at")
+  merchant             Merchant                     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  transactionalEmail   TransactionalEmail            @relation(fields: [transactionalEmailId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, createdAt])
+  @@index([transactionalEmailId, createdAt])
+  @@map("transactional_email_events")
 }

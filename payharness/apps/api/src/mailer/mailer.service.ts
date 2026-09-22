@@ -2,7 +2,21 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OAuth2Client } from 'google-auth-library';
 import * as https from 'https';
+import { randomUUID } from 'crypto';
 import MailComposer from 'nodemailer/lib/mail-composer';
+
+export interface TransactionalSendEmailInput {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface TransactionalSendEmailResult {
+  provider: 'postmark' | 'gmail';
+  providerMessageId: string;
+}
 
 export interface SendEmailInput {
   to: string;
@@ -60,6 +74,91 @@ export class MailerService {
    * and swallowed so that the calling action (approving a merchant, creating
    * a user, etc.) always succeeds regardless of email delivery status.
    */
+  /**
+   * Transactional sending path. Postmark is preferred because it exposes a
+   * provider message ID and delivery/open/bounce webhooks. Gmail remains a
+   * development-compatible fallback until a dedicated transactional provider
+   * is configured.
+   */
+  async sendTransactional(input: TransactionalSendEmailInput): Promise<TransactionalSendEmailResult> {
+    const postmarkToken = this.config.get<string>('POSTMARK_SERVER_TOKEN');
+    if (postmarkToken) {
+      return this.sendViaPostmark(input, postmarkToken);
+    }
+
+    const sent = await this.send({
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+      html: input.html,
+    });
+    if (!sent) {
+      throw new Error('Transactional email provider is not configured or rejected the message');
+    }
+    return { provider: 'gmail', providerMessageId: `gmail:${randomUUID()}` };
+  }
+
+  private sendViaPostmark(
+    input: TransactionalSendEmailInput,
+    token: string,
+  ): Promise<TransactionalSendEmailResult> {
+    const from = this.config.get<string>('POSTMARK_FROM_EMAIL');
+    if (!from) {
+      throw new Error('POSTMARK_FROM_EMAIL must be configured for transactional email');
+    }
+
+    const payload = JSON.stringify({
+      From: `"${this.config.get<string>('POSTMARK_FROM_NAME') || this.fromName}" <${from}>`,
+      To: input.to,
+      Subject: input.subject,
+      TextBody: input.text,
+      HtmlBody: input.html,
+      MessageStream: this.config.get<string>('POSTMARK_MESSAGE_STREAM') || 'outbound',
+      Metadata: input.metadata,
+    });
+
+    return new Promise((resolve, reject) => {
+      const request = https.request(
+        {
+          hostname: 'api.postmarkapp.com',
+          path: '/email',
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-Postmark-Server-Token': token,
+            'Content-Length': Buffer.byteLength(payload),
+          },
+          timeout: 10000,
+        },
+        (res) => {
+          let data = '';
+          res.on('data', (chunk) => (data += chunk));
+          res.on('end', () => {
+            if ((res.statusCode || 500) >= 300) {
+              reject(new Error(`Postmark API responded with ${res.statusCode}: ${data.slice(0, 500)}`));
+              return;
+            }
+            try {
+              const parsed = JSON.parse(data) as { MessageID?: string; ErrorCode?: number; Message?: string };
+              if (!parsed.MessageID) {
+                reject(new Error(parsed.Message || 'Postmark did not return a message ID'));
+                return;
+              }
+              resolve({ provider: 'postmark', providerMessageId: parsed.MessageID });
+            } catch {
+              reject(new Error('Postmark returned an invalid response'));
+            }
+          });
+        },
+      );
+      request.on('error', reject);
+      request.on('timeout', () => request.destroy(new Error('Postmark request timed out')));
+      request.write(payload);
+      request.end();
+    });
+  }
+
   async send(input: SendEmailInput): Promise<boolean> {
     if (!this.oauth2Client || !this.senderEmail) {
       this.logger.log(`[email disabled] Would send "${input.subject}" to ${input.to}`);

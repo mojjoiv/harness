@@ -27,6 +27,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ProviderStatusModule } from './provider-status/provider-status.module';
 import { UsageModule } from './usage/usage.module';
+import { TransactionalEmailsModule } from './transactional-emails/transactional-emails.module';
 import { PlatformModule } from './platform/platform.module';
 import { SandboxModule } from './sandbox/sandbox.module';
 import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
@@ -62,6 +63,7 @@ import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
     AnalyticsModule,
     ProviderStatusModule,
     UsageModule,
+    TransactionalEmailsModule,
     PlatformModule,
   ],
 })
