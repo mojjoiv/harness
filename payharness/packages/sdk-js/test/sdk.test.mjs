@@ -19,14 +19,14 @@ test('creates payments with bearer auth and idempotency', async () => {
     },
   });
 
-  const result = await client.payments.create({ amountCents: 1000, currency: 'KES', environment: 'SANDBOX', provider: 'MPESA' }, 'checkout-123');
+  const result = await client.payments.create({ amountCents: 1000, currency: 'KES', environment: 'SANDBOX', provider: 'PESAPAL' }, 'checkout-123');
   assert.equal(result.data.paymentId, 'pay_123');
   assert.equal(request.url, 'https://example.test/payments');
   assert.equal(request.init.headers.authorization, 'Bearer ph_sandbox_test');
   assert.equal(request.init.headers['idempotency-key'], 'checkout-123');
 });
 
-test('supports payment query and refunds', async () => {
+test('supports payment query and canonical refunds endpoint', async () => {
   const calls = [];
   const client = new PayHarnessClient({
     apiKey: 'ph_live_test',
@@ -40,6 +40,7 @@ test('supports payment query and refunds', async () => {
   await client.payments.query('pay/123');
   await client.refunds.create('pay_123', { amountCents: 500 }, 'refund-1');
   assert.equal(calls[0].url, 'https://example.test/payments/pay%2F123/query');
+  assert.equal(calls[1].url, 'https://example.test/payments/pay_123/refund');
   assert.equal(calls[1].init.headers['idempotency-key'], 'refund-1');
 });
 
