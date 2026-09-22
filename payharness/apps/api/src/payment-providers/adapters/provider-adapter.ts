@@ -16,6 +16,12 @@ export interface ProviderAdapterResult {
   status?: string;
   clientSecret?: string;
   approvalUrl?: string;
+  resultDesc?: string;
+  merchantRequestId?: string;
+  confirmationCode?: string;
+  paymentMethod?: string;
+  amount?: number;
+  currency?: string;
   [key: string]: unknown;
 }
 
