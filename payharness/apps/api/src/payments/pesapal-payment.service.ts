@@ -106,7 +106,7 @@ export class PesapalPaymentService {
               name: session.customer.name,
               email: session.customer.email,
               phone: session.customer.phone,
-              countryCode: this.countryCodeForMerchant(merchantId),
+              countryCode: await this.countryCodeForMerchant(merchantId),
             }
           : undefined,
       });
