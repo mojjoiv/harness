@@ -25,6 +25,10 @@ describe('PaymentsService', () => {
     captureOrder: jest.fn(),
     queryOrder: jest.fn(),
   } as any;
+  const pesapalPaymentService = {
+    createOrder: jest.fn(),
+    queryOrder: jest.fn(),
+  } as any;
   const auditLogs = { create: jest.fn() } as any;
   const webhooks = { forwardToUrl: jest.fn() } as any;
   let service: PaymentsService;
@@ -47,6 +51,7 @@ describe('PaymentsService', () => {
       mpesaVerification,
       stripe,
       paypalPaymentService,
+      pesapalPaymentService,
       auditLogs,
       webhooks,
     );
