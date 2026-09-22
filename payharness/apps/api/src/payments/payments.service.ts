@@ -124,8 +124,9 @@ export class PaymentsService {
       this.assertLiveSupported('STRIPE', dto.environment, credential);
       const session = await this.getAndValidateSession(merchantId, dto.checkoutSessionId);
       const secrets = this.decryptSecrets<{ secretKey: string }>(credential);
-      const intent = await this.stripe.createPaymentIntent({
-        secretKey: secrets.secretKey,
+      const intent = await this.providers.getAdapter('STRIPE').createPayment({
+        environment: dto.environment,
+        credentials: { secretKey: secrets.secretKey },
         amountCents: dto.amountCents,
         currency: dto.currency,
         metadata: dto.metadata,
@@ -247,13 +248,15 @@ export class PaymentsService {
         passkey: string;
       }>(credential);
       const publicConfig = credential.publicConfig as { shortcode: string };
-      const result = await this.mpesaVerification.queryStkStatus({
-        consumerKey: secrets.consumerKey,
-        consumerSecret: secrets.consumerSecret,
-        shortcode: publicConfig.shortcode,
-        passkey: secrets.passkey,
+      const result = await this.providers.getAdapter('MPESA').queryPayment({
         environment: payment.environment,
-        checkoutRequestId: payment.providerReference,
+        credentials: {
+          consumerKey: secrets.consumerKey,
+          consumerSecret: secrets.consumerSecret,
+          passkey: secrets.passkey,
+        },
+        shortcode: publicConfig.shortcode,
+        providerReference: payment.providerReference,
       });
       if (result.status === 'PENDING') return { paymentId: payment.id, status: 'PENDING' as const };
       await this.settlePendingPayment(
@@ -314,7 +317,11 @@ export class PaymentsService {
       return { paymentId: payment.id, status: payment.status };
     const credential = await this.getActiveCredential(merchantId, 'STRIPE', payment.environment);
     const secrets = this.decryptSecrets<{ secretKey: string }>(credential);
-    const intent = await this.stripe.retrievePaymentIntent(secrets.secretKey, payment.providerReference);
+    const intent = await this.providers.getAdapter('STRIPE').queryPayment({
+      environment: payment.environment,
+      credentials: { secretKey: secrets.secretKey },
+      providerReference: payment.providerReference,
+    });
     const status = this.mapStripeStatus(intent.status);
     if (status === 'PENDING') {
       return {
@@ -366,13 +373,15 @@ export class PaymentsService {
         accountReference?: string;
       };
       const callbackUrl = this.webhookUrl('MPESA', merchantId);
-      const pushResult = await this.mpesaVerification.initiateStkPush({
-        consumerKey: secrets.consumerKey,
-        consumerSecret: secrets.consumerSecret,
-        shortcode: publicConfig.shortcode,
-        passkey: secrets.passkey,
-        businessType: publicConfig.businessType,
+      const pushResult = await this.providers.getAdapter('MPESA').createPayment({
         environment: dto.environment,
+        credentials: {
+          consumerKey: secrets.consumerKey,
+          consumerSecret: secrets.consumerSecret,
+          passkey: secrets.passkey,
+        },
+        shortcode: publicConfig.shortcode,
+        businessType: publicConfig.businessType,
         callbackUrl,
         amountCents: dto.amountCents,
         phoneNumber: dto.phoneNumber!,
