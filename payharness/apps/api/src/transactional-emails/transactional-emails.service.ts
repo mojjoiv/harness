@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -8,7 +7,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PaymentStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { MailerService } from '../mailer/mailer.service';
 import { PrismaService } from '../common/prisma.service';
 import {
