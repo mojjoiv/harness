@@ -16,7 +16,12 @@ export class PesapalProviderService {
   private readonly liveBaseUrl = 'https://pay.pesapal.com/v3';
   private readonly tokenCache = new Map<string, TokenCacheEntry>();
 
-  async verifyCredentials(input: { credentials: PesapalCredentials; environment: 'SANDBOX' | 'LIVE' }) {\n    await this.getAccessToken(input.credentials, input.environment);\n    return true;\n  }\n\n  async registerIpn(input: {
+  async verifyCredentials(input: { credentials: PesapalCredentials; environment: 'SANDBOX' | 'LIVE' }) {
+    await this.getAccessToken(input.credentials, input.environment);
+    return true;
+  }
+
+  async registerIpn(input: {
     credentials: PesapalCredentials;
     environment: 'SANDBOX' | 'LIVE';
     url: string;
