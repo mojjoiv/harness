@@ -142,6 +142,8 @@ model Merchant {
   subscriptions       MerchantSubscription[]
   auditLogs           AuditLog[]
   apiUsage            ApiUsage[]
+  transactionalEmails TransactionalEmail[]
+  transactionalEmailEvents TransactionalEmailEvent[]
 
   @@map("merchants")
 }
