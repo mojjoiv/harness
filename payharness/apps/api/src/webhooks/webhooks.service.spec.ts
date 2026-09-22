@@ -19,9 +19,9 @@ describe('WebhooksService', () => {
         updateMany: jest.fn(),
       },
       merchant: { findUnique: jest.fn() },
-      payment: { findFirst: jest.fn(), update: jest.fn() },
+      payment: { findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
       transaction: { updateMany: jest.fn() },
-      checkoutSession: { update: jest.fn() },
+      checkoutSession: { updateMany: jest.fn() },
       $queryRaw: jest.fn(),
       backgroundJob: { create: jest.fn() },
     };
