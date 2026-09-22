@@ -208,7 +208,7 @@ export class WebhooksController {
       if (!orderTrackingId) throw new BadRequestException('Missing Pesapal OrderTrackingId');
       const result = await this.pesapalWebhookService.resolveStatus(merchantId, orderTrackingId);
       await this.webhooksService.receiveForMerchant('PESAPAL', merchantId, {
-        id: orderTrackingId,
+        id: `${orderTrackingId}:${result.providerStatus.toUpperCase()}`,
         event: 'pesapal.transaction.status',
         orderTrackingId,
         merchantReference: result.payment.id,
