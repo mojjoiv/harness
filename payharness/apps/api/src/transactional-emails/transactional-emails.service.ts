@@ -55,10 +55,12 @@ export class TransactionalEmailsService implements OnModuleInit, OnModuleDestroy
       throw new BadRequestException('Payment environment does not match the API key environment');
     }
 
-    const recipient = dto.to || payment.customer?.email;
+    const recipient = payment.customer?.email;
     if (!recipient) {
-      throw new BadRequestException('A recipient email is required or the payment must have a customer email');
+      throw new BadRequestException('Transactional payment emails require a verified customer email on the payment');
     }
+
+    await this.assertTemplateMatchesPayment(dto.template, payment);
 
     const idempotencyKey = headerIdempotencyKey || dto.idempotencyKey ||
       `payment:${payment.id}:transactional:${dto.template}`;
@@ -266,6 +268,30 @@ export class TransactionalEmailsService implements OnModuleInit, OnModuleDestroy
         },
       });
       this.logger.error(`Transactional email ${id} failed (attempt ${attempts}): ${message}`);
+    }
+  }
+
+  private async assertTemplateMatchesPayment(
+    template: TransactionalEmailTemplate,
+    payment: Prisma.PaymentGetPayload<{ include: { customer: true } }>,
+  ): Promise<void> {
+    if (template === 'payment.succeeded' && payment.status !== 'SUCCEEDED') {
+      throw new BadRequestException('payment.succeeded can only be sent for a succeeded payment');
+    }
+    if (template === 'payment.failed' && payment.status !== 'FAILED') {
+      throw new BadRequestException('payment.failed can only be sent for a failed payment');
+    }
+    if (template === 'payment.pending' && !['PENDING', 'REQUIRES_ACTION'].includes(payment.status)) {
+      throw new BadRequestException('payment.pending can only be sent for a pending payment');
+    }
+    if (template === 'payment.refunded') {
+      const refund = await this.prisma.transaction.findFirst({
+        where: { paymentId: payment.id, type: 'REFUND', status: 'SUCCEEDED' },
+        select: { id: true },
+      });
+      if (!refund) {
+        throw new BadRequestException('payment.refunded requires a succeeded refund transaction');
+      }
     }
   }
 
