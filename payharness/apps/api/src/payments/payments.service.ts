@@ -131,7 +131,7 @@ export class PaymentsService {
         currency: dto.currency,
         metadata: dto.metadata,
       });
-      const status = this.mapStripeStatus(intent.providerStatus);
+      const status = this.mapStripeStatus(intent.providerStatus || '');
       const payment = await this.prisma.payment.create({
         data: {
           merchantId,
