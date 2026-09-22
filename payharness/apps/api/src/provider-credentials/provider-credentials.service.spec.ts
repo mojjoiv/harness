@@ -52,6 +52,7 @@ describe('ProviderCredentialsService', () => {
   const availability = { isAvailable: jest.fn() };
   const config = { get: jest.fn() };
   const mpesaVerification = { verify: jest.fn() };
+  const pesapal = { verifyCredentials: jest.fn() };
 
   const service = new ProviderCredentialsService(
     prisma as never,
@@ -61,6 +62,7 @@ describe('ProviderCredentialsService', () => {
     availability as never,
     config as never,
     mpesaVerification as never,
+    pesapal as never,
   );
 
   beforeEach(() => {
