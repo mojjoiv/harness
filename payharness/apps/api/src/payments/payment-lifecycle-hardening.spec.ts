@@ -16,6 +16,7 @@ describe('PaymentsService payment lifecycle hardening', () => {
   const mpesaVerification = {} as any;
   const stripe = {} as any;
   const paypalPaymentService = {} as any;
+  const pesapalPaymentService = {} as any;
   const auditLogs = { create: jest.fn() } as any;
   const webhooks = { forwardToUrl: jest.fn() } as any;
 
@@ -31,6 +32,7 @@ describe('PaymentsService payment lifecycle hardening', () => {
       mpesaVerification,
       stripe,
       paypalPaymentService,
+      pesapalPaymentService,
       auditLogs,
       webhooks,
     );
