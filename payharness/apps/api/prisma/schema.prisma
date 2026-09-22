@@ -409,6 +409,7 @@ model Payment {
   customer          Customer?        @relation(fields: [customerId], references: [id])
   checkoutSession   CheckoutSession? @relation(fields: [checkoutSessionId], references: [id])
   transactions      Transaction[]
+  transactionalEmails TransactionalEmail[]
 
   @@map("payments")
 }
