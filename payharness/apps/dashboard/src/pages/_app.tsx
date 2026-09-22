@@ -21,6 +21,7 @@ export default function App({ Component, pageProps, pathname }: AppPageProps) {
   if (isPublic || isPlatformRoute) {
     return (
       <main className={font.className}>
+        <ApiWakeup />
         <AppErrorBoundary>
           <Component {...pageProps} />
         </AppErrorBoundary>
