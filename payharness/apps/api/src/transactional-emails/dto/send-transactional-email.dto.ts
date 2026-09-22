@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export const TRANSACTIONAL_EMAIL_TEMPLATES = [
   'payment.succeeded',
