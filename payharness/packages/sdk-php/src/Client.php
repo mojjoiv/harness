@@ -10,7 +10,7 @@ use RuntimeException;
 final class Client
 {
     public const API_VERSION = '0.1.0';
-    public const DEFAULT_BASE_URL = 'https://harness-1.onrender.com';
+    public const DEFAULT_BASE_URL = 'https://harness-m6qs.onrender.com';
 
     public function __construct(
         private readonly string $apiKey,
@@ -43,7 +43,13 @@ final class Client
     /** @return array<string, mixed> */
     public function createRefund(array $input, ?string $idempotencyKey = null): array
     {
-        return $this->request('POST', '/refunds', $input, $idempotencyKey);
+        $paymentId = $input['paymentId'] ?? null;
+        if (!is_string($paymentId) || $paymentId === '') {
+            throw new RuntimeException('PayHarness paymentId is required for refunds.');
+        }
+        unset($input['paymentId']);
+
+        return $this->request('POST', '/payments/' . rawurlencode($paymentId) . '/refund', $input, $idempotencyKey);
     }
 
     /** @return array<string, mixed> */
