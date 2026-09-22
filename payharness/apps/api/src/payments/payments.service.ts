@@ -131,7 +131,7 @@ export class PaymentsService {
         currency: dto.currency,
         metadata: dto.metadata,
       });
-      const status = this.mapStripeStatus(intent.status);
+      const status = this.mapStripeStatus(intent.providerStatus);
       const payment = await this.prisma.payment.create({
         data: {
           merchantId,
@@ -142,7 +142,7 @@ export class PaymentsService {
           status,
           customerId: dto.customerId,
           checkoutSessionId: session?.id,
-          providerReference: intent.id,
+          providerReference: intent.providerReference,
           metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
           transactions: {
             create: {
@@ -151,7 +151,7 @@ export class PaymentsService {
               amountCents: dto.amountCents,
               currency: dto.currency,
               status,
-              reference: intent.id,
+              reference: intent.providerReference,
               metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
             },
           },
@@ -167,7 +167,7 @@ export class PaymentsService {
           provider: 'STRIPE',
           environment: dto.environment,
           status,
-          stripePaymentIntentId: intent.id,
+          stripePaymentIntentId: intent.providerReference,
         },
       });
       let redirectUrl: string | undefined;
@@ -190,7 +190,7 @@ export class PaymentsService {
         provider: 'STRIPE' as const,
         environment: dto.environment,
         status,
-        providerReference: intent.id,
+        providerReference: intent.providerReference,
         clientSecret: intent.clientSecret,
         redirectUrl,
       };
@@ -322,12 +322,12 @@ export class PaymentsService {
       credentials: { secretKey: secrets.secretKey },
       providerReference: payment.providerReference,
     });
-    const status = this.mapStripeStatus(intent.status);
+    const status = this.mapStripeStatus(intent.providerStatus);
     if (status === 'PENDING') {
       return {
         paymentId: payment.id,
         status: 'PENDING' as const,
-        providerStatus: intent.status,
+        providerStatus: intent.providerStatus,
         clientSecret: intent.clientSecret,
       };
     }
@@ -336,13 +336,13 @@ export class PaymentsService {
       userId,
       payment,
       status,
-      `Stripe PaymentIntent status: ${intent.status}`,
+      `Stripe PaymentIntent status: ${intent.providerStatus}`,
       correlationId,
     );
     return {
       paymentId: payment.id,
       status,
-      providerStatus: intent.status,
+      providerStatus: intent.providerStatus,
       clientSecret: intent.clientSecret,
     };
   }
@@ -401,7 +401,7 @@ export class PaymentsService {
           status: 'PENDING',
           customerId: dto.customerId,
           checkoutSessionId: session?.id,
-          providerReference: pushResult.checkoutRequestId,
+          providerReference: pushResult.providerReference,
           metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
           transactions: {
             create: {
@@ -410,7 +410,7 @@ export class PaymentsService {
               amountCents: dto.amountCents,
               currency: dto.currency,
               status: 'PENDING',
-              reference: pushResult.checkoutRequestId,
+              reference: pushResult.providerReference,
               metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
             },
           },
@@ -424,7 +424,7 @@ export class PaymentsService {
           entity: 'payment',
           entityId: payment.id,
           metadata: {
-            checkoutRequestId: pushResult.checkoutRequestId,
+            checkoutRequestId: pushResult.providerReference,
             phoneNumber: this.maskPhone(dto.phoneNumber!),
           },
         });
@@ -439,7 +439,7 @@ export class PaymentsService {
         provider: 'MPESA' as const,
         environment: dto.environment,
         status: 'PENDING' as const,
-        checkoutRequestId: pushResult.checkoutRequestId,
+        checkoutRequestId: pushResult.providerReference,
         message:
           'STK push sent -- ask the customer to check their phone, then poll GET /payments/:id/query',
       };
