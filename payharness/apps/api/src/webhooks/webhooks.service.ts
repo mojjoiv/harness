@@ -166,8 +166,11 @@ export class WebhooksService {
       },
     });
 
-    const result = await this.deliveryService.deliver(delivery.id);
-    return { ...result, payload };
+    return {
+      queued: true,
+      deliveryId: delivery.id,
+      payload,
+    };
   }
 
   async retryDelivery(merchantId: string, deliveryId: string) {
@@ -176,7 +179,11 @@ export class WebhooksService {
       select: { id: true },
     });
     if (!delivery) throw new NotFoundException('Webhook delivery not found');
-    return this.deliveryService.deliver(delivery.id);
+    await this.prisma.webhookDelivery.updateMany({
+      where: { id: delivery.id, status: { in: ['FAILED', 'PENDING'] } },
+      data: { status: 'PENDING', deliveredAt: null },
+    });
+    return { queued: true, deliveryId: delivery.id };
   }
 
   async forwardToUrl(url: string, eventType: string, payload: Record<string, unknown>) {
