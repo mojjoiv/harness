@@ -6,6 +6,10 @@ import { StripeVerificationService } from './stripe/stripe-verification.service'
 import { PaypalProviderService } from './paypal/paypal-provider.service';
 import { PesapalProviderService } from './pesapal/pesapal-provider.service';
 import { ProviderRegistry } from './provider-registry';
+import { MpesaPaymentAdapter } from './adapters/mpesa-payment.adapter';
+import { StripePaymentAdapter } from './adapters/stripe-payment.adapter';
+import { PaypalPaymentAdapter } from './adapters/paypal-payment.adapter';
+import { PesapalPaymentAdapter } from './adapters/pesapal-payment.adapter';
 
 @Module({
   providers: [
@@ -16,6 +20,10 @@ import { ProviderRegistry } from './provider-registry';
     PaypalProviderService,
     PesapalProviderService,
     ProviderRegistry,
+    MpesaPaymentAdapter,
+    StripePaymentAdapter,
+    PaypalPaymentAdapter,
+    PesapalPaymentAdapter,
   ],
   exports: [
     MpesaProviderService,

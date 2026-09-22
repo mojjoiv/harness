@@ -45,6 +45,34 @@ describe('PaymentsService', () => {
     });
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
     webhooks.forwardToUrl.mockResolvedValue({ delivered: true });
+    jest.spyOn(providers, 'getAdapter').mockImplementation((provider: any) => {
+      if (provider === 'MPESA') {
+        return {
+          createPayment: async (input: any) => {
+            const result = await mpesaVerification.initiateStkPush(input);
+            return {
+              providerReference: result.checkoutRequestId,
+              providerStatus: result.responseCode,
+              status: 'PENDING',
+              resultDesc: result.responseDescription,
+            };
+          },
+          queryPayment: async (input: any) => {
+            const result = await mpesaVerification.queryStkStatus(input);
+            return {
+              providerReference: input.providerReference,
+              status: result.status,
+              providerStatus: result.resultCode,
+              resultDesc: result.resultDesc,
+            };
+          },
+        } as any;
+      }
+      return {
+        createPayment: jest.fn(),
+        queryPayment: jest.fn(),
+      } as any;
+    });
     service = new PaymentsService(
       prisma,
       config,
