@@ -102,13 +102,13 @@ export class MailerService {
     input: TransactionalSendEmailInput,
     token: string,
   ): Promise<TransactionalSendEmailResult> {
-    const from = this.senderEmail;
+    const from = this.config.get<string>('POSTMARK_FROM_EMAIL');
     if (!from) {
-      throw new Error('GMAIL_SENDER_EMAIL must be configured until a dedicated Postmark From address is added');
+      throw new Error('POSTMARK_FROM_EMAIL must be configured for transactional email');
     }
 
     const payload = JSON.stringify({
-      From: `"${this.fromName}" <${from}>`,
+      From: `"${this.config.get<string>('POSTMARK_FROM_NAME') || this.fromName}" <${from}>`,
       To: input.to,
       Subject: input.subject,
       TextBody: input.text,
