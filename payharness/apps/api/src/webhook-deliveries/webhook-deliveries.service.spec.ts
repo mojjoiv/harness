@@ -65,6 +65,7 @@ describe('WebhookDeliveriesService', () => {
         max_attempts: 5,
       },
     ]);
+    prisma.$queryRaw.mockResolvedValueOnce([]);
     prisma.webhookDelivery.findMany.mockResolvedValue([]);
     webhooksService.processProviderPaymentEvent.mockRejectedValue(new Error('temporary failure'));
     prisma.backgroundJob.updateMany.mockResolvedValue({ count: 1 });
