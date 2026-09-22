@@ -204,7 +204,7 @@ export class WebhooksController {
       const orderTrackingId = typeof payload.OrderTrackingId === 'string' ? payload.OrderTrackingId : undefined;
       if (!orderTrackingId) throw new BadRequestException('Missing Pesapal OrderTrackingId');
       const result = await this.pesapalWebhookService.resolveStatus(merchantId, orderTrackingId);
-      return this.webhooksService.receiveForMerchant('PESAPAL', merchantId, {
+      await this.webhooksService.receiveForMerchant('PESAPAL', merchantId, {
         id: orderTrackingId,
         event: 'pesapal.transaction.status',
         orderTrackingId,
@@ -212,6 +212,12 @@ export class WebhooksController {
         providerStatus: result.providerStatus,
         _merchantId: merchantId,
       });
+      return {
+        orderNotificationType: payload.OrderNotificationType || 'IPNCHANGE',
+        orderTrackingId,
+        orderMerchantReference: payload.OrderMerchantReference || result.payment.id,
+        status: 200,
+      };
     }
     return this.webhooksService.receiveForMerchant(provider, merchantId, payload);
   }
