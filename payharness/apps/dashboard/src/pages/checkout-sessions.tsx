@@ -16,7 +16,7 @@ type FormValues = {
     email?: string;
     phone?: string;
   };
-  allowedProviders?: ('MPESA' | 'STRIPE' | 'PAYPAL')[];
+  allowedProviders?: ('MPESA' | 'STRIPE' | 'PAYPAL' | 'PESAPAL')[];
 };
 
 export default function CheckoutSessionsPage() {
@@ -84,7 +84,7 @@ export default function CheckoutSessionsPage() {
               <Select multiple size={3} {...register('allowedProviders')}>
                 <option value="MPESA">MPESA</option>
                 <option value="STRIPE">STRIPE</option>
-                <option value="PAYPAL">PAYPAL</option>
+                <option value="PAYPAL">PAYPAL</option>\n                <option value="PESAPAL">PESAPAL</option>
               </Select>
             </FieldRow>
           </FormGrid>
