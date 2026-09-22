@@ -7,6 +7,7 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
+import { PesapalProviderService } from '../payment-providers/pesapal/pesapal-provider.service';
 import {
   computeOverallStatus,
   ProviderVerificationResult,
@@ -47,6 +48,7 @@ export class ProviderCredentialsService {
     private readonly availability: ProviderAvailabilityService,
     private readonly config: ConfigService,
     private readonly mpesaVerification: MpesaVerificationService,
+    private readonly pesapal: PesapalProviderService,
   ) {
     this.verifiers = {
       MPESA: async (ctx) => {
@@ -69,7 +71,7 @@ export class ProviderCredentialsService {
           callbackUrl: ctx.callbackUrl,
         });
       },
-      // Mocked shape-checks for now, matching StripeProviderService/
+      PESAPAL: async ({ secretConfig, environment }) => {\n        const consumerKey = String(secretConfig.consumerKey || '');\n        const consumerSecret = String(secretConfig.consumerSecret || '');\n        if (!consumerKey || !consumerSecret) {\n          return this.shapeFailure('PESAPAL', ['Pesapal consumer key and consumer secret are required']);\n        }\n        try {\n          await this.pesapal.verifyCredentials({\n            credentials: { consumerKey, consumerSecret },\n            environment,\n          });\n          return this.shapeResult('PESAPAL', {\n            oauthVerified: true,\n            accountVerified: true,\n            environmentVerified: true,\n            errors: [],\n          });\n        } catch (error) {\n          return this.shapeFailure('PESAPAL', [error instanceof Error ? error.message : 'Pesapal authentication failed']);\n        }\n      },\n      // Mocked shape-checks for now, matching StripeProviderService/
       // PaypalProviderService's own still-mocked payment adapters -- but
       // already returning the SAME generic result shape M-Pesa does, so a
       // future phase can wire real Stripe/PayPal API calls in here without
