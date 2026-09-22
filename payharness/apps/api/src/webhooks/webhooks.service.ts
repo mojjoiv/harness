@@ -166,8 +166,11 @@ export class WebhooksService {
       },
     });
 
-    const result = await this.deliveryService.deliver(delivery.id);
-    return { ...result, payload };
+    return {
+      queued: true,
+      deliveryId: delivery.id,
+      payload,
+    };
   }
 
   async retryDelivery(merchantId: string, deliveryId: string) {
@@ -176,7 +179,11 @@ export class WebhooksService {
       select: { id: true },
     });
     if (!delivery) throw new NotFoundException('Webhook delivery not found');
-    return this.deliveryService.deliver(delivery.id);
+    await this.prisma.webhookDelivery.updateMany({
+      where: { id: delivery.id, status: { in: ['FAILED', 'PENDING'] } },
+      data: { status: 'PENDING', deliveredAt: null },
+    });
+    return { queued: true, deliveryId: delivery.id };
   }
 
   async forwardToUrl(url: string, eventType: string, payload: Record<string, unknown>) {
@@ -193,7 +200,20 @@ export class WebhooksService {
     );
 
     try {
-      const delivery = await this.claimProviderDelivery(provider, eventId, eventType, payload);
+      const result = await this.prisma.$transaction(async (tx) => {
+        const delivery = await this.claimProviderDelivery(tx, provider, eventId, eventType, payload);
+        if (delivery.duplicate) return { delivery, jobId: undefined };
+
+        const job = await tx.backgroundJob.create({
+          data: {
+            type: 'provider.webhook.process',
+            payload: { provider, payload } as Prisma.InputJsonValue,
+          },
+        });
+        return { delivery, jobId: job.id };
+      });
+
+      const delivery = result.delivery;
       if (delivery.duplicate) {
         this.logger.log(
           `[Webhook receive] DUPLICATE provider=${provider} eventId=${eventId} deliveryId=${delivery.deliveryId} correlationId=${correlationId}`,
@@ -201,11 +221,11 @@ export class WebhooksService {
         return { received: true, deliveryId: delivery.deliveryId, duplicate: true };
       }
 
-      await this.processProviderPaymentEvent(provider, payload);
+      const jobId = result.jobId;
       this.logger.log(
-        `[Webhook receive] STORED provider=${provider} eventType=${eventType} eventId=${eventId} deliveryId=${delivery.deliveryId} correlationId=${correlationId}`,
+        `[Webhook receive] QUEUED provider=${provider} eventType=${eventType} eventId=${eventId} deliveryId=${delivery.deliveryId} jobId=${jobId} correlationId=${correlationId}`,
       );
-      return { received: true, deliveryId: delivery.deliveryId };
+      return { received: true, deliveryId: delivery.deliveryId, jobId };
     } catch (error) {
       this.logger.error(
         `[Webhook receive] FAILED provider=${provider} eventType=${eventType} eventId=${eventId} correlationId=${correlationId}`,
@@ -254,12 +274,13 @@ export class WebhooksService {
   }
 
   private async claimProviderDelivery(
+    db: PrismaService | Prisma.TransactionClient,
     provider: Provider,
     eventId: string,
     eventType: string,
     payload: Record<string, unknown>,
   ): Promise<{ deliveryId: string; duplicate: boolean }> {
-    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+    const rows = await db.$queryRaw<Array<{ id: string }>>`
       INSERT INTO "webhook_deliveries"
         ("id", "provider", "provider_event_id", "event_type", "payload", "status")
       VALUES
@@ -269,7 +290,7 @@ export class WebhooksService {
     `;
     if (rows[0]) return { deliveryId: rows[0].id, duplicate: false };
 
-    const existing = await this.prisma.$queryRaw<Array<{ id: string }>>`
+    const existing = await db.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "webhook_deliveries"
       WHERE "provider" = ${provider}::"Provider" AND "provider_event_id" = ${eventId}
       LIMIT 1
@@ -278,7 +299,7 @@ export class WebhooksService {
     return { deliveryId: existing[0].id, duplicate: true };
   }
 
-  private async processProviderPaymentEvent(provider: Provider, payload: Record<string, unknown>): Promise<void> {
+  async processProviderPaymentEvent(provider: Provider, payload: Record<string, unknown>): Promise<void> {
     const merchantId = typeof payload._merchantId === 'string' ? payload._merchantId : undefined;
     if (!merchantId) return;
     const eventType = String(payload.type || payload.event || '');

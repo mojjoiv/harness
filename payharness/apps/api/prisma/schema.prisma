@@ -58,6 +58,7 @@ enum Status {
   INACTIVE
   REVOKED
   PENDING
+  PROCESSING
   FAILED
   SUCCEEDED
 }
@@ -463,6 +464,24 @@ model WebhookDelivery {
   endpoint          WebhookEndpoint? @relation(fields: [webhookEndpointId], references: [id])
 
   @@map("webhook_deliveries")
+}
+
+model BackgroundJob {
+  id          String   @id @default(uuid())
+  type        String
+  payload     Json
+  status      Status   @default(PENDING)
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(5) @map("max_attempts")
+  runAt       DateTime @default(now()) @map("run_at")
+  lockedAt    DateTime? @map("locked_at")
+  lastError   String?  @map("last_error")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([status, runAt])
+  @@index([status, lockedAt])
+  @@map("background_jobs")
 }
 
 model AuditLog {
