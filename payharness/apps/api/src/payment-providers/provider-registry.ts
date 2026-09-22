@@ -1,5 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { Environment, Provider } from '@prisma/client';
+import { ProviderAdapter } from './adapters/provider-adapter';
+import { MpesaPaymentAdapter } from './adapters/mpesa-payment.adapter';
+import { StripePaymentAdapter } from './adapters/stripe-payment.adapter';
+import { PaypalPaymentAdapter } from './adapters/paypal-payment.adapter';
+import { PesapalPaymentAdapter } from './adapters/pesapal-payment.adapter';
 
 export interface ProviderDefinition {
   provider: Provider;
@@ -19,10 +24,33 @@ const PROVIDER_DEFINITIONS: Readonly<Record<Provider, ProviderDefinition>> = {
 
 @Injectable()
 export class ProviderRegistry {
+  private readonly adapters: ReadonlyMap<Provider, ProviderAdapter>;
+
+  constructor(
+    @Optional() mpesaAdapter?: MpesaPaymentAdapter,
+    @Optional() stripeAdapter?: StripePaymentAdapter,
+    @Optional() paypalAdapter?: PaypalPaymentAdapter,
+    @Optional() pesapalAdapter?: PesapalPaymentAdapter,
+  ) {
+    const adapters = new Map<Provider, ProviderAdapter>();
+    if (mpesaAdapter) adapters.set('MPESA', mpesaAdapter);
+    if (stripeAdapter) adapters.set('STRIPE', stripeAdapter);
+    if (paypalAdapter) adapters.set('PAYPAL', paypalAdapter);
+    if (pesapalAdapter) adapters.set('PESAPAL', pesapalAdapter);
+    this.adapters = adapters;
+  }
+
   get(provider: Provider): ProviderDefinition {
     const definition = PROVIDER_DEFINITIONS[provider];
     if (!definition) throw new BadRequestException(`Unsupported payment provider: ${provider}`);
     return definition;
+  }
+
+  getAdapter(provider: Provider): ProviderAdapter {
+    this.get(provider);
+    const adapter = this.adapters.get(provider);
+    if (!adapter) throw new BadRequestException(`No adapter registered for provider: ${provider}`);
+    return adapter;
   }
 
   supportsEnvironment(provider: Provider, environment: Environment): boolean {
