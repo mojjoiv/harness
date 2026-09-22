@@ -7,7 +7,7 @@ from .errors import PayHarnessError
 
 class PayHarnessClient:
     API_VERSION = "0.1.0"
-    DEFAULT_BASE_URL = "https://harness-1.onrender.com"
+    DEFAULT_BASE_URL = "https://harness-m6qs.onrender.com"
 
     def __init__(self, api_key, base_url=DEFAULT_BASE_URL, timeout=30):
         if not api_key:
@@ -26,7 +26,11 @@ class PayHarnessClient:
         return self._request("GET", f"/payments/{payment_id}/query", params=params)
 
     def create_refund(self, payload, idempotency_key=None):
-        return self._request("POST", "/refunds", payload, idempotency_key)
+        if "paymentId" not in payload:
+            raise ValueError("create_refund requires paymentId.")
+        payment_id = payload["paymentId"]
+        body = {key: value for key, value in payload.items() if key != "paymentId"}
+        return self._request("POST", f"/payments/{payment_id}/refund", body, idempotency_key)
 
     def create_payout(self, payload, idempotency_key=None):
         return self._request("POST", "/payouts", payload, idempotency_key)
