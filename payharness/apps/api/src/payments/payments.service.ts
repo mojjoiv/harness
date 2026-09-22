@@ -8,6 +8,7 @@ import { PrismaService } from '../common/prisma.service';
 import { MpesaProviderService } from '../payment-providers/mpesa/mpesa-provider.service';
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
 import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
+import { PesapalPaymentService } from './pesapal-payment.service';
 import { StripeProviderService } from '../payment-providers/stripe/stripe-provider.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -25,6 +26,7 @@ export class PaymentsService {
     private readonly mpesaVerification: MpesaVerificationService,
     private readonly stripe: StripeProviderService,
     private readonly paypalPaymentService: PaypalPaymentService,
+    private readonly pesapalPaymentService: PesapalPaymentService,
     private readonly auditLogs: AuditLogsService,
     private readonly webhooks: WebhooksService,
   ) {
@@ -64,6 +66,8 @@ export class PaymentsService {
         return this.createStripeIntent(merchantId, userId, providerDto);
       case 'PAYPAL':
         return this.createPaypalOrder(merchantId, userId, providerDto);
+      case 'PESAPAL':
+        return this.createPesapalOrder(merchantId, userId, providerDto);
       default:
         throw new BadRequestException(`Unsupported payment provider: ${dto.provider}`);
     }
@@ -205,6 +209,11 @@ export class PaymentsService {
     return this.paypalPaymentService.createOrder(merchantId, userId, dto);
   }
 
+  async createPesapalOrder(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+    if (dto.simulateOutcome) throw new BadRequestException('Pesapal does not support simulated outcomes; use the Pesapal sandbox flow');
+    return this.pesapalPaymentService.createOrder(merchantId, userId, dto);
+  }
+
   async capturePaypalOrder(merchantId: string, userId: string | undefined, paymentId: string) {
     return this.paypalPaymentService.captureOrder(merchantId, userId, paymentId);
   }
@@ -221,6 +230,7 @@ export class PaymentsService {
       if (!payment) throw new NotFoundException('Payment not found');
       if (payment.provider === 'PAYPAL') return this.queryPaypalOrder(merchantId, userId, paymentId);
       if (payment.provider === 'STRIPE') return this.queryStripePayment(merchantId, userId, payment, correlationId);
+      if (payment.provider === 'PESAPAL') return this.pesapalPaymentService.queryOrder(merchantId, userId, paymentId);
       if (payment.provider !== 'MPESA')
         throw new BadRequestException(`Unsupported payment provider: ${payment.provider}`);
       if (payment.status !== 'PENDING') return { paymentId: payment.id, status: payment.status };
@@ -584,7 +594,7 @@ export class PaymentsService {
     },
   ) {
     if (environment !== 'LIVE') return;
-    if (provider !== 'MPESA' && provider !== 'STRIPE') {
+    if (!['MPESA', 'STRIPE', 'PESAPAL'].includes(provider)) {
       throw new BadRequestException(
         `Live ${provider} processing is not enabled yet because the ${provider} adapter is still sandbox/mock-only.`,
       );
