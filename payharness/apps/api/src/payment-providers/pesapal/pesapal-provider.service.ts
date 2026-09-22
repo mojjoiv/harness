@@ -92,6 +92,31 @@ export class PesapalProviderService {
     };
   }
 
+  async refundRequest(input: {
+    credentials: PesapalCredentials;
+    environment: 'SANDBOX' | 'LIVE';
+    confirmationCode: string;
+    amountCents: number;
+    username: string;
+    remarks: string;
+  }) {
+    const token = await this.getAccessToken(input.credentials, input.environment);
+    return this.request<{ status?: string; message?: string }>(
+      input.environment,
+      '/api/Transactions/RefundRequest',
+      {
+        method: 'POST',
+        headers: this.headers(token),
+        body: JSON.stringify({
+          confirmation_code: input.confirmationCode,
+          amount: (input.amountCents / 100).toFixed(2),
+          username: input.username,
+          remarks: input.remarks,
+        }),
+      },
+    );
+  }
+
   async getTransactionStatus(input: {
     credentials: PesapalCredentials;
     environment: 'SANDBOX' | 'LIVE';
