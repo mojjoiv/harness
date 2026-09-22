@@ -61,7 +61,7 @@ export class PesapalProviderService {
     };
   }) {
     const token = await this.getAccessToken(input.credentials, input.environment);
-    const nameParts = (input.customer?.name || '').trim().split(/\\s+/).filter(Boolean);
+    const nameParts = (input.customer?.name || '').trim().split(/\s+/).filter(Boolean);
     const response = await this.request<{
       order_tracking_id?: string;
       merchant_reference?: string;
