@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { ProviderRegistry } from './provider-registry';
+import type { ProviderAdapter } from './adapters/provider-adapter';
 import { MpesaPaymentAdapter } from './adapters/mpesa-payment.adapter';
 import { StripePaymentAdapter } from './adapters/stripe-payment.adapter';
 import { PaypalPaymentAdapter } from './adapters/paypal-payment.adapter';
