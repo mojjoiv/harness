@@ -1,33 +1,70 @@
 import { BadRequestException } from '@nestjs/common';
 import { ProviderRegistry } from './provider-registry';
 import type { ProviderAdapter } from './adapters/provider-adapter';
-import { MpesaPaymentAdapter } from './adapters/mpesa-payment.adapter';
-import { StripePaymentAdapter } from './adapters/stripe-payment.adapter';
-import { PaypalPaymentAdapter } from './adapters/paypal-payment.adapter';
-import { PesapalPaymentAdapter } from './adapters/pesapal-payment.adapter';
 
 describe('ProviderRegistry', () => {
-  const registry = new ProviderRegistry();
+  const adapters: ProviderAdapter[] = [
+    {
+      provider: 'MPESA',
+      definition: {
+        provider: 'MPESA',
+        displayName: 'M-Pesa',
+        supportsLivePayments: true,
+        supportsSandboxPayments: true,
+        supportsRefunds: false,
+        supportsQuery: true,
+      },
+      createPayment: jest.fn(),
+      queryPayment: jest.fn(),
+    },
+    {
+      provider: 'STRIPE',
+      definition: {
+        provider: 'STRIPE',
+        displayName: 'Stripe',
+        supportsLivePayments: true,
+        supportsSandboxPayments: true,
+        supportsRefunds: true,
+        supportsQuery: true,
+      },
+      createPayment: jest.fn(),
+      queryPayment: jest.fn(),
+    },
+    {
+      provider: 'PAYPAL',
+      definition: {
+        provider: 'PAYPAL',
+        displayName: 'PayPal',
+        supportsLivePayments: false,
+        supportsSandboxPayments: true,
+        supportsRefunds: true,
+        supportsQuery: true,
+      },
+      createPayment: jest.fn(),
+      queryPayment: jest.fn(),
+    },
+    {
+      provider: 'PESAPAL',
+      definition: {
+        provider: 'PESAPAL',
+        displayName: 'Pesapal',
+        supportsLivePayments: true,
+        supportsSandboxPayments: true,
+        supportsRefunds: false,
+        supportsQuery: true,
+      },
+      createPayment: jest.fn(),
+      queryPayment: jest.fn(),
+    },
+  ];
+  const registry = new ProviderRegistry(adapters);
 
   it('defines every persisted provider exactly once', () => {
     expect(registry.list().map((item) => item.provider).sort()).toEqual(['MPESA', 'PAYPAL', 'PESAPAL', 'STRIPE']);
   });
 
   it('resolves the registered adapter for each provider', () => {
-    const adapters = (['MPESA', 'STRIPE', 'PAYPAL', 'PESAPAL'] as const).map(
-      (provider) =>
-        ({
-          provider,
-          createPayment: jest.fn(),
-          queryPayment: jest.fn(),
-        }) as unknown as ProviderAdapter,
-    );
-    const adapterRegistry = new ProviderRegistry(
-      adapters[0] as unknown as MpesaPaymentAdapter,
-      adapters[1] as unknown as StripePaymentAdapter,
-      adapters[2] as unknown as PaypalPaymentAdapter,
-      adapters[3] as unknown as PesapalPaymentAdapter,
-    );
+    const adapterRegistry = new ProviderRegistry(adapters);
 
     for (const adapter of adapters) {
       expect(adapterRegistry.getAdapter(adapter.provider)).toBe(adapter);
