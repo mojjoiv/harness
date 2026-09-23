@@ -58,23 +58,26 @@ export class PaymentsService {
     createRealMpesaStk instrumentation enabled ✅`);
   }
 
+  private readonly createHandlers: ReadonlyMap<
+    Provider,
+    (merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) => Promise<unknown>
+  > = new Map([
+    ['MPESA', (merchantId, userId, dto) => this.createMpesaStk(merchantId, userId, dto)],
+    ['STRIPE', (merchantId, userId, dto) => this.createStripeIntent(merchantId, userId, dto)],
+    ['PAYPAL', (merchantId, userId, dto) => this.createPaypalOrder(merchantId, userId, dto)],
+    ['PESAPAL', (merchantId, userId, dto) => this.createPesapalOrder(merchantId, userId, dto)],
+  ]);
+
   async createPayment(merchantId: string, userId: string | undefined, dto: CreatePaymentDto) {
     const providerDto: CreateProviderPaymentDto = dto;
     this.providers.get(dto.provider);
     this.providers.assertPaymentSupported(dto.provider, dto.environment);
 
-    switch (dto.provider) {
-      case 'MPESA':
-        return this.createMpesaStk(merchantId, userId, providerDto);
-      case 'STRIPE':
-        return this.createStripeIntent(merchantId, userId, providerDto);
-      case 'PAYPAL':
-        return this.createPaypalOrder(merchantId, userId, providerDto);
-      case 'PESAPAL':
-        return this.createPesapalOrder(merchantId, userId, providerDto);
-      default:
-        throw new BadRequestException(`Unsupported payment provider: ${dto.provider}`);
+    const handler = this.createHandlers.get(dto.provider);
+    if (!handler) {
+      throw new BadRequestException(`No payment handler registered for provider: ${dto.provider}`);
     }
+    return handler(merchantId, userId, providerDto);
   }
 
   async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
@@ -233,45 +236,12 @@ export class PaymentsService {
     try {
       const payment = await this.prisma.payment.findFirst({ where: { id: paymentId, merchantId } });
       if (!payment) throw new NotFoundException('Payment not found');
-      if (payment.provider === 'PAYPAL') return this.queryPaypalOrder(merchantId, userId, paymentId);
-      if (payment.provider === 'STRIPE') return this.queryStripePayment(merchantId, userId, payment, correlationId);
-      if (payment.provider === 'PESAPAL') return this.pesapalPaymentService.queryOrder(merchantId, userId, paymentId);
-      if (payment.provider !== 'MPESA')
-        throw new BadRequestException(`Unsupported payment provider: ${payment.provider}`);
-      if (payment.status !== 'PENDING') return { paymentId: payment.id, status: payment.status };
-      if (!payment.providerReference)
-        throw new BadRequestException('This payment has no Safaricom CheckoutRequestID to query');
-      const credential = await this.getActiveCredential(merchantId, 'MPESA', payment.environment);
-      const secrets = this.decryptSecrets<{
-        consumerKey: string;
-        consumerSecret: string;
-        passkey: string;
-      }>(credential);
-      const publicConfig = credential.publicConfig as { shortcode: string };
-      const result = await this.providers.getAdapter('MPESA').queryPayment({
-        environment: payment.environment,
-        credentials: {
-          consumerKey: secrets.consumerKey,
-          consumerSecret: secrets.consumerSecret,
-          passkey: secrets.passkey,
-        },
-        shortcode: publicConfig.shortcode,
-        providerReference: payment.providerReference,
-      });
-      const finalStatus = result.status;
-      if (finalStatus === 'PENDING') return { paymentId: payment.id, status: 'PENDING' as const };
-      if (finalStatus !== 'SUCCEEDED' && finalStatus !== 'FAILED') {
-        throw new BadRequestException('M-Pesa adapter returned an unsupported payment status');
-      }
-      await this.settlePendingPayment(
+      return this.getQueryHandler(payment.provider)(
         merchantId,
         userId,
         payment,
-        finalStatus,
-        result.resultDesc,
         correlationId,
       );
-      return { paymentId: payment.id, status: finalStatus };
     } catch (error) {
       this.logger.error(
         `[correlationId=${correlationId}] queryPayment failed:`,
@@ -307,6 +277,71 @@ export class PaymentsService {
       transactions: refreshedPayment.transactions,
       providerStatus: 'providerStatus' in status ? status.providerStatus : undefined,
     };
+  }
+
+  private getQueryHandler(
+    provider: Provider,
+  ): (
+    merchantId: string,
+    userId: string | undefined,
+    payment: Payment,
+    correlationId: string,
+  ) => Promise<unknown> {
+    const handlers: ReadonlyMap<Provider, (
+      merchantId: string,
+      userId: string | undefined,
+      payment: Payment,
+      correlationId: string,
+    ) => Promise<unknown>> = new Map([
+      ['PAYPAL', (merchantId, userId, payment) => this.queryPaypalOrder(merchantId, userId, payment.id)],
+      ['STRIPE', (merchantId, userId, payment, correlationId) =>
+        this.queryStripePayment(merchantId, userId, payment, correlationId)],
+      ['PESAPAL', (merchantId, userId, payment) =>
+        this.pesapalPaymentService.queryOrder(merchantId, userId, payment.id)],
+      ['MPESA', (merchantId, userId, payment, correlationId) =>
+        this.queryMpesaPayment(merchantId, userId, payment, correlationId)],
+    ]);
+    const handler = handlers.get(provider);
+    if (!handler) throw new BadRequestException(`No query handler registered for provider: ${provider}`);
+    return handler;
+  }
+
+  private async queryMpesaPayment(
+    merchantId: string,
+    userId: string | undefined,
+    payment: Payment,
+    correlationId: string,
+  ) {
+    if (payment.status !== 'PENDING') return { paymentId: payment.id, status: payment.status };
+    if (!payment.providerReference)
+      throw new BadRequestException('This payment has no Safaricom CheckoutRequestID to query');
+    const credential = await this.getActiveCredential(merchantId, 'MPESA', payment.environment);
+    const secrets = this.decryptSecrets<{ consumerKey: string; consumerSecret: string; passkey: string }>(credential);
+    const publicConfig = credential.publicConfig as { shortcode: string };
+    const result = await this.providers.getAdapter('MPESA').queryPayment({
+      environment: payment.environment,
+      credentials: {
+        consumerKey: secrets.consumerKey,
+        consumerSecret: secrets.consumerSecret,
+        passkey: secrets.passkey,
+      },
+      shortcode: publicConfig.shortcode,
+      providerReference: payment.providerReference,
+    });
+    const finalStatus = result.status;
+    if (finalStatus === 'PENDING') return { paymentId: payment.id, status: 'PENDING' as const };
+    if (finalStatus !== 'SUCCEEDED' && finalStatus !== 'FAILED') {
+      throw new BadRequestException('M-Pesa adapter returned an unsupported payment status');
+    }
+    await this.settlePendingPayment(
+      merchantId,
+      userId,
+      payment,
+      finalStatus,
+      result.resultDesc,
+      correlationId,
+    );
+    return { paymentId: payment.id, status: finalStatus };
   }
 
   private async queryStripePayment(
