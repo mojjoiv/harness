@@ -8,6 +8,7 @@ import { CredentialCryptoService } from '../common/crypto/credential-crypto.serv
 import { PrismaService } from '../common/prisma.service';
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
 import { PesapalProviderService } from '../payment-providers/pesapal/pesapal-provider.service';
+import { FlutterwaveProviderService } from '../payment-providers/flutterwave/flutterwave-provider.service';
 import {
   computeOverallStatus,
   ProviderVerificationResult,
@@ -49,6 +50,7 @@ export class ProviderCredentialsService {
     private readonly config: ConfigService,
     private readonly mpesaVerification: MpesaVerificationService,
     private readonly pesapal: PesapalProviderService,
+    private readonly flutterwave: FlutterwaveProviderService,
   ) {
     this.verifiers = {
       MPESA: async (ctx) => {
@@ -98,6 +100,29 @@ export class ProviderCredentialsService {
       // future phase can wire real Stripe/PayPal API calls in here without
       // anything downstream (health endpoint, dashboard, verification log)
       // needing to change.
+      FLUTTERWAVE: async ({ secretConfig }) => {
+        const secretKey = String(secretConfig.secretKey || '');
+        if (!secretKey) {
+          return this.shapeFailure('FLUTTERWAVE', [
+            'Flutterwave secret key is missing',
+          ]);
+        }
+        try {
+          await this.flutterwave.verifyCredentials(secretKey);
+          return this.shapeResult('FLUTTERWAVE', {
+            oauthVerified: true,
+            accountVerified: true,
+            environmentVerified: true,
+            errors: [],
+          });
+        } catch (error) {
+          return this.shapeFailure('FLUTTERWAVE', [
+            error instanceof Error
+              ? error.message
+              : 'Flutterwave credential verification failed',
+          ]);
+        }
+      },
       STRIPE: async ({ secretConfig }) => {
         const accountVerified = Boolean(secretConfig.secretKey);
         return this.shapeResult('STRIPE', {
