@@ -278,7 +278,7 @@ export class WebhooksService {
     return { deliveryId: existing[0].id, duplicate: true };
   }
 
-  private async processProviderPaymentEvent(provider: Provider, payload: Record<string, unknown>): Promise<void> {
+  async processProviderPaymentEvent(provider: Provider, payload: Record<string, unknown>): Promise<void> {
     const merchantId = typeof payload._merchantId === 'string' ? payload._merchantId : undefined;
     if (!merchantId) return;
     const eventType = String(payload.type || payload.event || '');
