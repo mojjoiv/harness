@@ -115,19 +115,25 @@ export class FlutterwaveProviderService {
   ): Promise<FlutterwaveQueryPaymentResult> {
     this.assertSecretKey(input.secretKey);
 
-    const query = new URLSearchParams({
-      tx_ref: input.txRef,
-      from: input.from,
-      to: input.to,
-      page: '1',
-    });
-    const response = await this.request<
-      FlutterwaveResponse<FlutterwaveTransaction[]>
-    >('/transactions?' + query.toString(), 'GET', input.secretKey);
+    const findTransaction = async (status?: 'successful' | 'failed') => {
+      const query = new URLSearchParams({
+        tx_ref: input.txRef,
+        from: input.from,
+        to: input.to,
+        page: '1',
+      });
+      if (status) query.set('status', status);
 
-    const transaction = response.data?.find(
-      (item) => item.tx_ref === input.txRef,
-    );
+      const response = await this.request<
+        FlutterwaveResponse<FlutterwaveTransaction[]>
+      >('/transactions?' + query.toString(), 'GET', input.secretKey);
+
+      return response.data?.find((item) => item.tx_ref === input.txRef);
+    };
+
+    const transaction =
+      (await findTransaction('successful')) ||
+      (await findTransaction('failed'));
     if (!transaction) {
       return { txRef: input.txRef, status: 'pending' };
     }
