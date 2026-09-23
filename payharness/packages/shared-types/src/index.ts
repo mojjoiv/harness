@@ -1,5 +1,5 @@
 export type PayHarnessEnvironment = 'SANDBOX' | 'LIVE';
-export type PayHarnessProvider = 'MPESA' | 'STRIPE' | 'PAYPAL';
+export type PayHarnessProvider = 'MPESA' | 'STRIPE' | 'PAYPAL' | 'PESAPAL' | 'FLUTTERWAVE';
 export type PayHarnessPaymentStatus = 'PENDING' | 'REQUIRES_ACTION' | 'SUCCEEDED' | 'FAILED' | 'CANCELED';
 
 export interface CheckoutSession {
