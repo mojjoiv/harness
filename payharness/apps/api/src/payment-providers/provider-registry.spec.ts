@@ -72,7 +72,9 @@ describe('ProviderRegistry', () => {
   });
 
   it('fails closed when a provider has no adapter', () => {
-    expect(() => registry.getAdapter('MPESA')).toThrow(
+    const registryWithoutAdapters = new ProviderRegistry();
+
+    expect(() => registryWithoutAdapters.getAdapter('MPESA')).toThrow(
       'No adapter registered for provider: MPESA',
     );
   });
