@@ -1,6 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 import { ProviderRegistry } from './provider-registry';
-import { ProviderAdapter } from './adapters/provider-adapter';
+import { MpesaPaymentAdapter } from './adapters/mpesa-payment.adapter';
+import { StripePaymentAdapter } from './adapters/stripe-payment.adapter';
+import { PaypalPaymentAdapter } from './adapters/paypal-payment.adapter';
+import { PesapalPaymentAdapter } from './adapters/pesapal-payment.adapter';
 
 describe('ProviderRegistry', () => {
   const registry = new ProviderRegistry();
@@ -18,7 +21,12 @@ describe('ProviderRegistry', () => {
           queryPayment: jest.fn(),
         }) as unknown as ProviderAdapter,
     );
-    const adapterRegistry = new ProviderRegistry(...adapters);
+    const adapterRegistry = new ProviderRegistry(
+      adapters[0] as unknown as MpesaPaymentAdapter,
+      adapters[1] as unknown as StripePaymentAdapter,
+      adapters[2] as unknown as PaypalPaymentAdapter,
+      adapters[3] as unknown as PesapalPaymentAdapter,
+    );
 
     for (const adapter of adapters) {
       expect(adapterRegistry.getAdapter(adapter.provider)).toBe(adapter);
