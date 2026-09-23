@@ -51,6 +51,7 @@ enum Provider {
   STRIPE
   PAYPAL
   PESAPAL
+  FLUTTERWAVE
 }
 
 enum Status {
