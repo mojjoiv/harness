@@ -9,6 +9,7 @@ import {
   SavePaypalCredentialDto,
   SavePesapalCredentialDto,
   SaveStripeCredentialDto,
+  SaveFlutterwaveCredentialDto,
 } from './dto/provider-credential.dto';
 import { ProviderCredentialsService } from './provider-credentials.service';
 
@@ -33,6 +34,12 @@ export class ProviderCredentialsController {
   @Roles(UserRole.OWNER)
   savePesapal(@CurrentUser() user: AuthUser, @Body() dto: SavePesapalCredentialDto) {
     return this.credentialsService.save(user.merchantId, user.userId, 'PESAPAL', dto);
+  }
+
+  @Post('flutterwave')
+  @Roles(UserRole.OWNER)
+  saveFlutterwave(@CurrentUser() user: AuthUser, @Body() dto: SaveFlutterwaveCredentialDto) {
+    return this.credentialsService.save(user.merchantId, user.userId, 'FLUTTERWAVE', dto);
   }
 
   @Post('paypal')

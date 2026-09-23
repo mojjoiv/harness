@@ -39,6 +39,14 @@ const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     supportsRefunds: false,
     supportsQuery: true,
   },
+  {
+    provider: 'FLUTTERWAVE',
+    displayName: 'Flutterwave',
+    supportsLivePayments: true,
+    supportsSandboxPayments: true,
+    supportsRefunds: false,
+    supportsQuery: true,
+  },
 ];
 
 @Injectable()

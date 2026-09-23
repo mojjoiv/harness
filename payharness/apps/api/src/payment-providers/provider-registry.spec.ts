@@ -56,11 +56,24 @@ describe('ProviderRegistry', () => {
       createPayment: jest.fn(),
       queryPayment: jest.fn(),
     },
+    {
+      provider: 'FLUTTERWAVE',
+      definition: {
+        provider: 'FLUTTERWAVE',
+        displayName: 'Flutterwave',
+        supportsLivePayments: true,
+        supportsSandboxPayments: true,
+        supportsRefunds: false,
+        supportsQuery: true,
+      },
+      createPayment: jest.fn(),
+      queryPayment: jest.fn(),
+    },
   ];
   const registry = new ProviderRegistry(adapters);
 
   it('defines every persisted provider exactly once', () => {
-    expect(registry.list().map((item) => item.provider).sort()).toEqual(['MPESA', 'PAYPAL', 'PESAPAL', 'STRIPE']);
+    expect(registry.list().map((item) => item.provider).sort()).toEqual(['FLUTTERWAVE', 'MPESA', 'PAYPAL', 'PESAPAL', 'STRIPE']);
   });
 
   it('resolves the registered adapter for each provider', () => {
@@ -84,6 +97,7 @@ describe('ProviderRegistry', () => {
     expect(registry.supportsEnvironment('STRIPE', 'LIVE')).toBe(true);
     expect(registry.supportsEnvironment('PESAPAL', 'LIVE')).toBe(true);
     expect(registry.supportsEnvironment('PAYPAL', 'SANDBOX')).toBe(true);
+    expect(registry.supportsEnvironment('FLUTTERWAVE', 'LIVE')).toBe(true);
   });
 
   it('blocks providers intentionally sandbox-only', () => {
@@ -96,6 +110,7 @@ describe('ProviderRegistry', () => {
     expect(registry.supportsRefunds('PAYPAL')).toBe(true);
     expect(registry.supportsRefunds('MPESA')).toBe(false);
     expect(registry.supportsRefunds('PESAPAL')).toBe(false);
+    expect(registry.supportsRefunds('FLUTTERWAVE')).toBe(false);
   });
 
   it('fails closed for an unknown provider', () => {

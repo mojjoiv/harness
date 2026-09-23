@@ -21,6 +21,7 @@ import { CreateWebhookEndpointDto } from './dto/create-webhook-endpoint.dto';
 import { PaypalWebhookService } from './paypal-webhook.service';
 import { WebhooksService } from './webhooks.service';
 import { PesapalWebhookService } from './pesapal-webhook.service';
+import { ProviderCredentialsService } from '../provider-credentials/provider-credentials.service';
 
 @Controller('webhooks')
 export class WebhooksController {
@@ -31,6 +32,7 @@ export class WebhooksController {
     private readonly paypalWebhookService: PaypalWebhookService,
     private readonly pesapalWebhookService: PesapalWebhookService,
     private readonly config: ConfigService,
+    private readonly providerCredentialsService: ProviderCredentialsService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -162,6 +164,30 @@ export class WebhooksController {
     @Req() request: Request & { rawBody?: Buffer },
   ) {
     const normalizedProvider = provider.toUpperCase();
+
+    if (normalizedProvider === 'FLUTTERWAVE') {
+      const signatureHeader = request.headers['verif-hash'];
+      const signature =
+        typeof signatureHeader === 'string'
+          ? signatureHeader
+          : Array.isArray(signatureHeader)
+            ? signatureHeader[0]
+            : undefined;
+
+      const valid = await this.providerCredentialsService.verifyFlutterwaveWebhook(
+        merchantId,
+        signature,
+      );
+      if (!valid) {
+        throw new BadRequestException('Invalid Flutterwave webhook signature');
+      }
+
+      return this.webhooksService.receiveForMerchant(
+        provider,
+        merchantId,
+        payload,
+      );
+    }
 
     if (normalizedProvider === 'STRIPE') {
       const eventType = String(payload.type || payload.event || 'unknown');

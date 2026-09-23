@@ -5,7 +5,7 @@ export const DEFAULT_BASE_URL = 'https://harness-m6qs.onrender.com';
 export const WEBHOOK_SIGNATURE_TOLERANCE_SECONDS = 300;
 
 export type Environment = 'SANDBOX' | 'LIVE';
-export type Provider = 'MPESA' | 'STRIPE' | 'PAYPAL' | 'PESAPAL';
+export type Provider = 'MPESA' | 'STRIPE' | 'PAYPAL' | 'PESAPAL' | 'FLUTTERWAVE';
 
 export interface PayHarnessClientOptions { apiKey: string; baseUrl?: string; fetch?: typeof globalThis.fetch }
 export interface PayHarnessResponse<T> { success: boolean; data: T; meta?: { apiVersion?: string; requestId?: string; [key: string]: unknown }; timestamp?: string }

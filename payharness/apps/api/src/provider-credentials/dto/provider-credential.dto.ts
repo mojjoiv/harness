@@ -104,11 +104,43 @@ export class SavePaypalCredentialDto {
   secretConfig: PaypalSecretConfigDto;
 }
 
+export class FlutterwavePublicConfigDto {
+  @IsString()
+  publicKey: string;
+}
+
+export class FlutterwaveSecretConfigDto {
+  @IsString()
+  secretKey: string;
+
+  @IsOptional()
+  @IsString()
+  secretHash?: string;
+}
+
+export class SaveFlutterwaveCredentialDto {
+  @IsEnum(Environment)
+  environment: Environment;
+
+  @IsOptional()
+  @IsString()
+  label?: string;
+
+  @ValidateNested()
+  @Type(() => FlutterwavePublicConfigDto)
+  publicConfig: FlutterwavePublicConfigDto;
+
+  @ValidateNested()
+  @Type(() => FlutterwaveSecretConfigDto)
+  secretConfig: FlutterwaveSecretConfigDto;
+}
+
 export type SaveProviderCredentialDto =
   | SaveMpesaCredentialDto
   | SaveStripeCredentialDto
   | SavePaypalCredentialDto
-  | SavePesapalCredentialDto;
+  | SavePesapalCredentialDto
+  | SaveFlutterwaveCredentialDto;
 
 
 export class PesapalPublicConfigDto {

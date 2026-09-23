@@ -53,6 +53,7 @@ describe('ProviderCredentialsService', () => {
   const config = { get: jest.fn() };
   const mpesaVerification = { verify: jest.fn() };
   const pesapal = { verifyCredentials: jest.fn() };
+  const flutterwave = { verifyCredentials: jest.fn() };
 
   const service = new ProviderCredentialsService(
     prisma as never,
@@ -63,6 +64,7 @@ describe('ProviderCredentialsService', () => {
     config as never,
     mpesaVerification as never,
     pesapal as never,
+    flutterwave as never,
   );
 
   beforeEach(() => {

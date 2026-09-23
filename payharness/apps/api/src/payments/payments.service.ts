@@ -84,6 +84,7 @@ export class PaymentsService {
     ['STRIPE', (merchantId, userId, dto) => this.createStripeIntent(merchantId, userId, dto)],
     ['PAYPAL', (merchantId, userId, dto) => this.createPaypalOrder(merchantId, userId, dto)],
     ['PESAPAL', (merchantId, userId, dto) => this.createPesapalOrder(merchantId, userId, dto)],
+    ['FLUTTERWAVE', (merchantId, userId, dto) => this.createFlutterwaveOrder(merchantId, userId, dto)],
   ]);
 
   async createPayment(merchantId: string, userId: string | undefined, dto: CreatePaymentDto): Promise<PaymentCreateResult> {
@@ -240,6 +241,114 @@ export class PaymentsService {
     return this.pesapalPaymentService.createOrder(merchantId, userId, dto);
   }
 
+  async createFlutterwaveOrder(
+    merchantId: string,
+    userId: string | undefined,
+    dto: CreateProviderPaymentDto,
+  ): Promise<PaymentCreateResult> {
+    if (dto.simulateOutcome) {
+      throw new BadRequestException(
+        'Flutterwave does not support simulated outcomes; use the Flutterwave sandbox flow',
+      );
+    }
+
+    const credential = await this.getActiveCredential(
+      merchantId,
+      'FLUTTERWAVE',
+      dto.environment,
+    );
+    this.assertLiveSupported('FLUTTERWAVE', dto.environment, credential);
+    const session = await this.getAndValidateSession(
+      merchantId,
+      dto.checkoutSessionId,
+    );
+    const customer = dto.customerId
+      ? await this.prisma.customer.findFirst({
+          where: { id: dto.customerId, merchantId },
+        })
+      : null;
+
+    if (!customer?.email) {
+      throw new BadRequestException(
+        'Flutterwave payments require a customer with an email address',
+      );
+    }
+
+    const secrets = this.decryptSecrets<{ secretKey: string }>(credential);
+    const txRef = 'ph_' + randomUUID();
+    const redirectUrl =
+      typeof dto.metadata?.redirectUrl === 'string'
+        ? dto.metadata.redirectUrl
+        : session?.successUrl ||
+          this.config.get<string>('CHECKOUT_URL') ||
+          this.config.get<string>('APP_URL') ||
+          'http://localhost:3000';
+
+    const result = await this.providers.getAdapter('FLUTTERWAVE').createPayment({
+      environment: dto.environment,
+      credentials: { secretKey: secrets.secretKey },
+      amountCents: dto.amountCents,
+      currency: dto.currency,
+      txRef,
+      redirectUrl,
+      customer: {
+        email: customer.email,
+        name: customer.name || undefined,
+        phone: customer.phone || undefined,
+      },
+      metadata: dto.metadata,
+    });
+
+    const payment = await this.prisma.payment.create({
+      data: {
+        merchantId,
+        provider: 'FLUTTERWAVE',
+        environment: dto.environment,
+        amountCents: dto.amountCents,
+        currency: dto.currency,
+        status: 'PENDING',
+        customerId: dto.customerId,
+        checkoutSessionId: session?.id,
+        providerReference: result.providerReference,
+        metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+        transactions: {
+          create: {
+            merchantId,
+            type: 'PAYMENT',
+            amountCents: dto.amountCents,
+            currency: dto.currency,
+            status: 'PENDING',
+            reference: result.providerReference,
+            metadata: (dto.metadata || {}) as Prisma.InputJsonValue,
+          },
+        },
+      },
+    });
+
+    await this.auditLogs.create({
+      merchantId,
+      userId,
+      action: 'payment.created',
+      entity: 'payment',
+      entityId: payment.id,
+      metadata: {
+        provider: 'FLUTTERWAVE',
+        environment: dto.environment,
+        status: 'PENDING',
+        flutterwaveTransactionReference: result.providerReference,
+      },
+    });
+
+    return {
+      paymentId: payment.id,
+      provider: 'FLUTTERWAVE',
+      environment: dto.environment,
+      status: 'PENDING',
+      providerReference: result.providerReference,
+      redirectUrl: result.approvalUrl,
+    };
+  }
+
   async capturePaypalOrder(merchantId: string, userId: string | undefined, paymentId: string) {
     return this.paypalPaymentService.captureOrder(merchantId, userId, paymentId);
   }
@@ -316,12 +425,76 @@ export class PaymentsService {
         this.queryStripePayment(merchantId, userId, payment, correlationId)],
       ['PESAPAL', (merchantId, userId, payment) =>
         this.pesapalPaymentService.queryOrder(merchantId, userId, payment.id)],
+      ['FLUTTERWAVE', (merchantId, userId, payment, correlationId) =>
+        this.queryFlutterwavePayment(merchantId, userId, payment, correlationId)],
       ['MPESA', (merchantId, userId, payment, correlationId) =>
         this.queryMpesaPayment(merchantId, userId, payment, correlationId)],
     ]);
     const handler = handlers.get(provider);
     if (!handler) throw new BadRequestException(`No query handler registered for provider: ${provider}`);
     return handler;
+  }
+
+  private async queryFlutterwavePayment(
+    merchantId: string,
+    userId: string | undefined,
+    payment: Payment,
+    correlationId: string,
+  ): Promise<PaymentQueryResult> {
+    if (payment.status !== 'PENDING') {
+      return { paymentId: payment.id, status: payment.status };
+    }
+    if (!payment.providerReference) {
+      throw new BadRequestException(
+        'This payment has no Flutterwave transaction reference to query',
+      );
+    }
+
+    const credential = await this.getActiveCredential(
+      merchantId,
+      'FLUTTERWAVE',
+      payment.environment,
+    );
+    const secrets = this.decryptSecrets<{ secretKey: string }>(credential);
+    const from = payment.createdAt.toISOString().slice(0, 10);
+    const to = new Date().toISOString().slice(0, 10);
+
+    const result = await this.providers.getAdapter('FLUTTERWAVE').queryPayment({
+      environment: payment.environment,
+      credentials: { secretKey: secrets.secretKey },
+      providerReference: payment.providerReference,
+      from,
+      to,
+    });
+
+    if (result.status === 'PENDING') {
+      return {
+        paymentId: payment.id,
+        status: 'PENDING',
+        providerStatus: result.providerStatus,
+      };
+    }
+
+    if (result.status !== 'SUCCEEDED' && result.status !== 'FAILED') {
+      throw new BadRequestException(
+        'Flutterwave adapter returned an unsupported payment status',
+      );
+    }
+
+    await this.settlePendingPayment(
+      merchantId,
+      userId,
+      payment,
+      result.status,
+      'Flutterwave transaction status: ' + result.providerStatus,
+      correlationId,
+    );
+
+    return {
+      paymentId: payment.id,
+      status: result.status,
+      providerStatus: result.providerStatus,
+    };
   }
 
   private async queryMpesaPayment(

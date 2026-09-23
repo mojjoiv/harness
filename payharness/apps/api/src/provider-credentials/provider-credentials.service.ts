@@ -3,11 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, Provider, ProviderVerificationStatus } from '@prisma/client';
 import * as http from 'http';
 import * as https from 'https';
+import { timingSafeEqual } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
 import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
 import { PesapalProviderService } from '../payment-providers/pesapal/pesapal-provider.service';
+import { FlutterwaveProviderService } from '../payment-providers/flutterwave/flutterwave-provider.service';
 import {
   computeOverallStatus,
   ProviderVerificationResult,
@@ -49,6 +51,7 @@ export class ProviderCredentialsService {
     private readonly config: ConfigService,
     private readonly mpesaVerification: MpesaVerificationService,
     private readonly pesapal: PesapalProviderService,
+    private readonly flutterwave: FlutterwaveProviderService,
   ) {
     this.verifiers = {
       MPESA: async (ctx) => {
@@ -98,6 +101,29 @@ export class ProviderCredentialsService {
       // future phase can wire real Stripe/PayPal API calls in here without
       // anything downstream (health endpoint, dashboard, verification log)
       // needing to change.
+      FLUTTERWAVE: async ({ secretConfig }) => {
+        const secretKey = String(secretConfig.secretKey || '');
+        if (!secretKey) {
+          return this.shapeFailure('FLUTTERWAVE', [
+            'Flutterwave secret key is missing',
+          ]);
+        }
+        try {
+          await this.flutterwave.verifyCredentials(secretKey);
+          return this.shapeResult('FLUTTERWAVE', {
+            oauthVerified: true,
+            accountVerified: true,
+            environmentVerified: true,
+            errors: [],
+          });
+        } catch (error) {
+          return this.shapeFailure('FLUTTERWAVE', [
+            error instanceof Error
+              ? error.message
+              : 'Flutterwave credential verification failed',
+          ]);
+        }
+      },
       STRIPE: async ({ secretConfig }) => {
         const accountVerified = Boolean(secretConfig.secretKey);
         return this.shapeResult('STRIPE', {
@@ -151,6 +177,42 @@ export class ProviderCredentialsService {
       environmentVerified: false,
       errors,
     });
+  }
+
+  async verifyFlutterwaveWebhook(merchantId: string, signature: string | undefined): Promise<boolean> {
+    if (!signature) return false;
+
+    const credentials = await this.prisma.providerCredential.findMany({
+      where: {
+        merchantId,
+        provider: 'FLUTTERWAVE',
+        status: 'ACTIVE',
+      },
+      select: { encryptedSecretConfig: true },
+    });
+
+    for (const credential of credentials) {
+      try {
+        const secretConfig = this.crypto.decrypt(
+          credential.encryptedSecretConfig as any,
+        ) as Record<string, unknown>;
+        const secretHash = String(secretConfig.secretHash || '');
+        if (!secretHash) continue;
+
+        const expected = Buffer.from(secretHash);
+        const actual = Buffer.from(signature);
+        if (
+          expected.length === actual.length &&
+          timingSafeEqual(expected, actual)
+        ) {
+          return true;
+        }
+      } catch {
+        // Ignore malformed credentials and continue checking other active keys.
+      }
+    }
+
+    return false;
   }
 
   async save(
