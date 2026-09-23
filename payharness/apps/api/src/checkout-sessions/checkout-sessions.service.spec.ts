@@ -32,6 +32,7 @@ describe('CheckoutSessionsService', () => {
           successUrl: 'https://example.com/success',
           cancelUrl: 'https://example.com/cancel',
         }),
+        findUnique: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
