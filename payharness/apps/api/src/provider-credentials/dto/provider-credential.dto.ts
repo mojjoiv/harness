@@ -112,6 +112,10 @@ export class FlutterwavePublicConfigDto {
 export class FlutterwaveSecretConfigDto {
   @IsString()
   secretKey: string;
+
+  @IsOptional()
+  @IsString()
+  secretHash?: string;
 }
 
 export class SaveFlutterwaveCredentialDto {
