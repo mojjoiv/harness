@@ -1,11 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { Provider } from '@prisma/client';
 import { MpesaVerificationService } from '../mpesa/mpesa-verification.service';
-import { ProviderAdapter, ProviderAdapterContext, ProviderAdapterResult } from './provider-adapter';
+import { ProviderAdapter, ProviderAdapterContext, ProviderAdapterResult, ProviderDefinition } from './provider-adapter';
 
 @Injectable()
 export class MpesaPaymentAdapter implements ProviderAdapter {
   readonly provider: Provider = 'MPESA';
+  readonly definition: ProviderDefinition = {
+    provider: 'MPESA',
+    displayName: 'M-Pesa',
+    supportsLivePayments: true,
+    supportsSandboxPayments: true,
+    supportsRefunds: false,
+    supportsQuery: true,
+  };
 
   constructor(private readonly mpesa: MpesaVerificationService) {}
 

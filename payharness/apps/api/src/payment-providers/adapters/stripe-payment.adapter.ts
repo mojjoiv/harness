@@ -1,11 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { Provider } from '@prisma/client';
 import { StripeProviderService } from '../stripe/stripe-provider.service';
-import { ProviderAdapter, ProviderAdapterContext, ProviderAdapterResult } from './provider-adapter';
+import { ProviderAdapter, ProviderAdapterContext, ProviderAdapterResult, ProviderDefinition } from './provider-adapter';
 
 @Injectable()
 export class StripePaymentAdapter implements ProviderAdapter {
   readonly provider: Provider = 'STRIPE';
+  readonly definition: ProviderDefinition = {
+    provider: 'STRIPE',
+    displayName: 'Stripe',
+    supportsLivePayments: true,
+    supportsSandboxPayments: true,
+    supportsRefunds: true,
+    supportsQuery: true,
+  };
 
   constructor(private readonly stripe: StripeProviderService) {}
 

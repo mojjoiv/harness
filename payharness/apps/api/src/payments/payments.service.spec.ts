@@ -45,6 +45,7 @@ describe('PaymentsService', () => {
     });
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
     webhooks.forwardToUrl.mockResolvedValue({ delivered: true });
+    jest.spyOn(providers, 'supportsEnvironment').mockReturnValue(true);
     jest.spyOn(providers, 'getAdapter').mockImplementation((provider: any) => {
       if (provider === 'MPESA') {
         return {

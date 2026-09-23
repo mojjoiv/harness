@@ -1,11 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { Provider } from '@prisma/client';
 import { PaypalProviderService } from '../paypal/paypal-provider.service';
-import { ProviderAdapter, ProviderAdapterContext, ProviderAdapterResult } from './provider-adapter';
+import { ProviderAdapter, ProviderAdapterContext, ProviderAdapterResult, ProviderDefinition } from './provider-adapter';
 
 @Injectable()
 export class PaypalPaymentAdapter implements ProviderAdapter {
   readonly provider: Provider = 'PAYPAL';
+  readonly definition: ProviderDefinition = {
+    provider: 'PAYPAL',
+    displayName: 'PayPal',
+    supportsLivePayments: false,
+    supportsSandboxPayments: true,
+    supportsRefunds: true,
+    supportsQuery: true,
+  };
 
   constructor(private readonly paypal: PaypalProviderService) {}
 

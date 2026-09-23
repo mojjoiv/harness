@@ -1,11 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { Provider } from '@prisma/client';
 import { PesapalProviderService } from '../pesapal/pesapal-provider.service';
-import { ProviderAdapter, ProviderAdapterContext, ProviderAdapterResult } from './provider-adapter';
+import { ProviderAdapter, ProviderAdapterContext, ProviderAdapterResult, ProviderDefinition } from './provider-adapter';
 
 @Injectable()
 export class PesapalPaymentAdapter implements ProviderAdapter {
   readonly provider: Provider = 'PESAPAL';
+  readonly definition: ProviderDefinition = {
+    provider: 'PESAPAL',
+    displayName: 'Pesapal',
+    supportsLivePayments: true,
+    supportsSandboxPayments: true,
+    supportsRefunds: false,
+    supportsQuery: true,
+  };
 
   constructor(private readonly pesapal: PesapalProviderService) {}
 
