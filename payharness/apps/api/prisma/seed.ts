@@ -82,7 +82,7 @@ async function main() {
   ];
   const STRIPE_COUNTRIES = [
     'US', 'CA', 'GB', 'DE', 'FR', 'ES', 'IT', 'NL', 'IE', 'CH', 'SE', 'NO', 'DK', 'PL',
-    'AE', 'SG', 'MY', 'AU', 'NZ', 'JP', 'ZA',
+    'AE', 'SG', 'MY', 'AU', 'NZ', 'JP', 'ZA', 'KE',
   ];
   const MPESA_COUNTRIES = ['KE', 'TZ', 'UG', 'RW'];
 
