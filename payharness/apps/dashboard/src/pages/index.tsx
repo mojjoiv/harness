@@ -13,7 +13,7 @@ export default function IndexPage() {
           name="description"
           content="Accept payments through one integration. PayHarness gives growing businesses a unified payment API, checkout, webhooks and transaction infrastructure."
         />
-        <link rel="icon" href="https://raw.githubusercontent.com/mojjoiv/harness/main/logo_transparent.png" />
+        <link rel="icon" href="/logo_transparent.png" />
       </Head>
       <div className="min-h-screen bg-white text-slate-900">
         <Navbar />
