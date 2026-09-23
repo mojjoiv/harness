@@ -5,6 +5,14 @@ import { ProviderRegistry } from './provider-registry';
 describe('ProviderRegistry adapter routing', () => {
   const adapter = (provider: Provider): ProviderAdapter => ({
     provider,
+    definition: {
+      provider,
+      displayName: provider,
+      supportsLivePayments: true,
+      supportsSandboxPayments: true,
+      supportsRefunds: false,
+      supportsQuery: true,
+    },
     createPayment: jest.fn(),
     queryPayment: jest.fn(),
   });
@@ -14,12 +22,12 @@ describe('ProviderRegistry adapter routing', () => {
     const stripe = adapter('STRIPE');
     const paypal = adapter('PAYPAL');
     const pesapal = adapter('PESAPAL');
-    const registry = new ProviderRegistry(
-      mpesa as any,
-      stripe as any,
-      paypal as any,
-      pesapal as any,
-    );
+    const registry = new ProviderRegistry([
+      mpesa,
+      stripe,
+      paypal,
+      pesapal,
+    ]);
 
     expect(registry.getAdapter('MPESA')).toBe(mpesa);
     expect(registry.getAdapter('STRIPE')).toBe(stripe);
