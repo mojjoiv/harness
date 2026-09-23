@@ -302,6 +302,16 @@ export class WebhooksService {
       if (['FAILED', 'INVALID'].includes(providerStatus)) status = PaymentStatus.FAILED;
     }
 
+    if (provider === Provider.FLUTTERWAVE) {
+      const data = payload.data as Record<string, unknown> | undefined;
+      providerReference =
+        typeof data?.tx_ref === 'string' ? data.tx_ref : undefined;
+      const providerStatus =
+        typeof data?.status === 'string' ? data.status.toLowerCase() : '';
+      if (providerStatus === 'successful') status = PaymentStatus.SUCCEEDED;
+      if (providerStatus === 'failed') status = PaymentStatus.FAILED;
+    }
+
     if (provider === Provider.MPESA) {
       const body = payload.Body as Record<string, unknown> | undefined;
       const callback = body?.stkCallback as Record<string, unknown> | undefined;
