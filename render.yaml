@@ -9,3 +9,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20.11.1
+      - key: CHECKOUT_URL
+        value: https://harness-1.onrender.com
+      - key: FRONTEND_URL
+        value: https://harness-1.onrender.com
+      - key: APP_URL
+        value: https://harness-m6qs.onrender.com
