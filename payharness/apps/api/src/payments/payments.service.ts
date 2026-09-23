@@ -308,13 +308,13 @@ export class PaymentsService {
     userId: string | undefined,
     payment: Payment,
     correlationId: string,
-  ) => Promise<unknown> {
+  ) => Promise<PaymentQueryResult> {
     const handlers: ReadonlyMap<Provider, (
       merchantId: string,
       userId: string | undefined,
       payment: Payment,
       correlationId: string,
-    ) => Promise<unknown>> = new Map([
+    ) => Promise<PaymentQueryResult>> = new Map([
       ['PAYPAL', (merchantId, userId, payment) => this.queryPaypalOrder(merchantId, userId, payment.id)],
       ['STRIPE', (merchantId, userId, payment, correlationId) =>
         this.queryStripePayment(merchantId, userId, payment, correlationId)],
