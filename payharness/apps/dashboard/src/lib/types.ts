@@ -57,7 +57,7 @@ export interface MerchantSettings {
 }
 
 export interface ProviderStatus {
-  provider: 'MPESA' | 'STRIPE' | 'PAYPAL' | 'PESAPAL';
+  provider: 'MPESA' | 'STRIPE' | 'PAYPAL' | 'PESAPAL' | 'FLUTTERWAVE';
   connected: boolean;
   sandboxConnected: boolean;
   liveConnected: boolean;
