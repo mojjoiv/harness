@@ -1,55 +1,43 @@
-import { BadRequestException, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import { Environment, Provider } from '@prisma/client';
-import { ProviderAdapter } from './adapters/provider-adapter';
-import { MpesaPaymentAdapter } from './adapters/mpesa-payment.adapter';
-import { StripePaymentAdapter } from './adapters/stripe-payment.adapter';
-import { PaypalPaymentAdapter } from './adapters/paypal-payment.adapter';
-import { PesapalPaymentAdapter } from './adapters/pesapal-payment.adapter';
-
-export interface ProviderDefinition {
-  provider: Provider;
-  displayName: string;
-  supportsLivePayments: boolean;
-  supportsSandboxPayments: boolean;
-  supportsRefunds: boolean;
-  supportsQuery: boolean;
-}
-
-const PROVIDER_DEFINITIONS: Readonly<Record<Provider, ProviderDefinition>> = {
-  MPESA: { provider: 'MPESA', displayName: 'M-Pesa', supportsLivePayments: true, supportsSandboxPayments: true, supportsRefunds: false, supportsQuery: true },
-  STRIPE: { provider: 'STRIPE', displayName: 'Stripe', supportsLivePayments: true, supportsSandboxPayments: true, supportsRefunds: true, supportsQuery: true },
-  PAYPAL: { provider: 'PAYPAL', displayName: 'PayPal', supportsLivePayments: false, supportsSandboxPayments: true, supportsRefunds: true, supportsQuery: true },
-  PESAPAL: { provider: 'PESAPAL', displayName: 'Pesapal', supportsLivePayments: true, supportsSandboxPayments: true, supportsRefunds: false, supportsQuery: true },
-};
+import { ProviderAdapter, PROVIDER_ADAPTERS, ProviderDefinition } from './adapters/provider-adapter';
 
 @Injectable()
 export class ProviderRegistry {
   private readonly adapters: ReadonlyMap<Provider, ProviderAdapter>;
+  private readonly definitions: ReadonlyMap<Provider, ProviderDefinition>;
 
   constructor(
-    @Optional() mpesaAdapter?: MpesaPaymentAdapter,
-    @Optional() stripeAdapter?: StripePaymentAdapter,
-    @Optional() paypalAdapter?: PaypalPaymentAdapter,
-    @Optional() pesapalAdapter?: PesapalPaymentAdapter,
+    @Optional() @Inject(PROVIDER_ADAPTERS) adapters: ProviderAdapter[] = [],
   ) {
-    const adapters = new Map<Provider, ProviderAdapter>();
-    if (mpesaAdapter) adapters.set('MPESA', mpesaAdapter);
-    if (stripeAdapter) adapters.set('STRIPE', stripeAdapter);
-    if (paypalAdapter) adapters.set('PAYPAL', paypalAdapter);
-    if (pesapalAdapter) adapters.set('PESAPAL', pesapalAdapter);
-    this.adapters = adapters;
+    const adapterMap = new Map<Provider, ProviderAdapter>();
+    const definitionMap = new Map<Provider, ProviderDefinition>();
+
+    for (const adapter of adapters) {
+      if (adapterMap.has(adapter.provider)) {
+        throw new Error('Duplicate provider adapter registered: ' + adapter.provider);
+      }
+      if (adapter.definition.provider !== adapter.provider) {
+        throw new Error('Provider adapter definition mismatch: ' + adapter.provider);
+      }
+      adapterMap.set(adapter.provider, adapter);
+      definitionMap.set(adapter.provider, adapter.definition);
+    }
+
+    this.adapters = adapterMap;
+    this.definitions = definitionMap;
   }
 
   get(provider: Provider): ProviderDefinition {
-    const definition = PROVIDER_DEFINITIONS[provider];
-    if (!definition) throw new BadRequestException(`Unsupported payment provider: ${provider}`);
+    const definition = this.definitions.get(provider);
+    if (!definition) throw new BadRequestException('Unsupported payment provider: ' + provider);
     return definition;
   }
 
   getAdapter(provider: Provider): ProviderAdapter {
     this.get(provider);
     const adapter = this.adapters.get(provider);
-    if (!adapter) throw new BadRequestException(`No adapter registered for provider: ${provider}`);
+    if (!adapter) throw new BadRequestException('No adapter registered for provider: ' + provider);
     return adapter;
   }
 
@@ -62,11 +50,21 @@ export class ProviderRegistry {
     const definition = this.get(provider);
     if (!this.supportsEnvironment(provider, environment)) {
       const mode = environment === 'LIVE' ? 'live' : 'sandbox';
-      throw new BadRequestException(`${definition.displayName} ${mode} payments are not enabled by PayHarness.`);
+      throw new BadRequestException(
+        definition.displayName + ' ' + mode + ' payments are not enabled by PayHarness.',
+      );
     }
   }
 
-  supportsRefunds(provider: Provider): boolean { return this.get(provider).supportsRefunds; }
-  supportsQuery(provider: Provider): boolean { return this.get(provider).supportsQuery; }
-  list(): ProviderDefinition[] { return Object.values(PROVIDER_DEFINITIONS); }
+  supportsRefunds(provider: Provider): boolean {
+    return this.get(provider).supportsRefunds;
+  }
+
+  supportsQuery(provider: Provider): boolean {
+    return this.get(provider).supportsQuery;
+  }
+
+  list(): ProviderDefinition[] {
+    return Array.from(this.definitions.values());
+  }
 }
