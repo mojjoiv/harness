@@ -1,11 +1,34 @@
 import { BadRequestException } from '@nestjs/common';
 import { ProviderRegistry } from './provider-registry';
+import { ProviderAdapter } from './adapters/provider-adapter';
 
 describe('ProviderRegistry', () => {
   const registry = new ProviderRegistry();
 
   it('defines every persisted provider exactly once', () => {
     expect(registry.list().map((item) => item.provider).sort()).toEqual(['MPESA', 'PAYPAL', 'PESAPAL', 'STRIPE']);
+  });
+
+  it('resolves the registered adapter for each provider', () => {
+    const adapters = (['MPESA', 'STRIPE', 'PAYPAL', 'PESAPAL'] as const).map(
+      (provider) =>
+        ({
+          provider,
+          createPayment: jest.fn(),
+          queryPayment: jest.fn(),
+        }) as unknown as ProviderAdapter,
+    );
+    const adapterRegistry = new ProviderRegistry(...adapters);
+
+    for (const adapter of adapters) {
+      expect(adapterRegistry.getAdapter(adapter.provider)).toBe(adapter);
+    }
+  });
+
+  it('fails closed when a provider has no adapter', () => {
+    expect(() => registry.getAdapter('MPESA')).toThrow(
+      'No adapter registered for provider: MPESA',
+    );
   });
 
   it('allows supported environments', () => {
