@@ -58,6 +58,16 @@ interface FlutterwaveTransaction {
 export class FlutterwaveProviderService {
   private readonly baseUrl = 'https://api.flutterwave.com/v3';
 
+  async verifyCredentials(secretKey: string): Promise<void> {
+    this.assertSecretKey(secretKey);
+    const today = new Date().toISOString().slice(0, 10);
+    await this.request<FlutterwaveResponse<FlutterwaveTransaction[]>>(
+      '/transactions?from=2020-01-01&to=' + today + '&page=1',
+      'GET',
+      secretKey,
+    );
+  }
+
   async createPayment(
     input: FlutterwaveCreatePaymentInput,
   ): Promise<FlutterwaveCreatePaymentResult> {
