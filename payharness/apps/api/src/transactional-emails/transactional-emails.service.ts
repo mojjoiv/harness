@@ -7,7 +7,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { timingSafeEqual } from 'crypto';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { MailerService } from '../mailer/mailer.service';
 import { PrismaService } from '../common/prisma.service';
@@ -97,6 +97,27 @@ export class TransactionalEmailsService implements OnModuleInit, OnModuleDestroy
       }
 
       throw error;
+    }
+  }
+
+  async queue(
+    merchantId: string,
+    dto: SendTransactionalEmailDto,
+    idempotencyKey?: string,
+    _environment?: string,
+  ) {
+    const key = idempotencyKey?.trim() || randomUUID();
+    return this.create(merchantId, dto, key);
+  }
+
+  onModuleInit(): void {
+    // Background jobs are consumed by the durable worker.
+  }
+
+  onModuleDestroy(): void {
+    if (this.worker) {
+      clearInterval(this.worker);
+      this.worker = undefined;
     }
   }
 
