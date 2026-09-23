@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Payment, PaymentStatus, Prisma, Provider } from '@prisma/client';
+import { Environment, Payment, PaymentStatus, Prisma, Provider } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
@@ -14,6 +14,28 @@ import { StripeProviderService } from '../payment-providers/stripe/stripe-provid
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
+
+
+type CreatePaymentResult = {
+  paymentId: string;
+  provider: Provider;
+  environment: Environment;
+  status: PaymentStatus;
+  providerReference: string;
+  redirectUrl?: string;
+  checkoutRequestId?: string;
+  approvalUrl?: string;
+  clientSecret?: string;
+  providerStatus?: string;
+  message?: string;
+};
+
+type QueryPaymentResult = {
+  paymentId: string;
+  status: PaymentStatus;
+  providerStatus?: string;
+  clientSecret?: string;
+};
 
 @Injectable()
 export class PaymentsService {
@@ -58,7 +80,7 @@ export class PaymentsService {
     createRealMpesaStk instrumentation enabled ✅`);
   }
 
-  async createPayment(merchantId: string, userId: string | undefined, dto: CreatePaymentDto) {
+  async createPayment(merchantId: string, userId: string | undefined, dto: CreatePaymentDto): Promise<CreatePaymentResult> {
     const providerDto: CreateProviderPaymentDto = dto;
     this.providers.get(dto.provider);
     this.providers.assertPaymentSupported(dto.provider, dto.environment);
@@ -77,7 +99,7 @@ export class PaymentsService {
     }
   }
 
-  async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+  async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto): Promise<CreatePaymentResult> {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] Entering createMpesaStk`, {
       merchantId,
@@ -113,7 +135,7 @@ export class PaymentsService {
     }
   }
 
-  async createStripeIntent(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+  async createStripeIntent(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto): Promise<CreatePaymentResult> {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] Entering createStripeIntent`, {
       merchantId,
@@ -203,7 +225,7 @@ export class PaymentsService {
     }
   }
 
-  async createPaypalOrder(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+  async createPaypalOrder(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto): Promise<CreatePaymentResult> {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] createPaypalOrder`, { merchantId });
     if (dto.simulateOutcome) {
@@ -214,7 +236,7 @@ export class PaymentsService {
     return this.paypalPaymentService.createOrder(merchantId, userId, dto);
   }
 
-  async createPesapalOrder(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+  async createPesapalOrder(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto): Promise<CreatePaymentResult> {
     if (dto.simulateOutcome) throw new BadRequestException('Pesapal does not support simulated outcomes; use the Pesapal sandbox flow');
     return this.pesapalPaymentService.createOrder(merchantId, userId, dto);
   }
@@ -223,11 +245,11 @@ export class PaymentsService {
     return this.paypalPaymentService.captureOrder(merchantId, userId, paymentId);
   }
 
-  async queryPaypalOrder(merchantId: string, userId: string | undefined, paymentId: string) {
+  async queryPaypalOrder(merchantId: string, userId: string | undefined, paymentId: string): Promise<QueryPaymentResult> {
     return this.paypalPaymentService.queryOrder(merchantId, userId, paymentId);
   }
 
-  async queryPayment(merchantId: string, userId: string | undefined, paymentId: string) {
+  async queryPayment(merchantId: string, userId: string | undefined, paymentId: string): Promise<QueryPaymentResult> {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] queryPayment`, { merchantId, paymentId });
     try {
@@ -287,7 +309,7 @@ export class PaymentsService {
       include: { transactions: true },
     });
     if (!payment) throw new NotFoundException('Payment not found');
-    const status = await this.queryPayment(merchantId, userId, paymentId);
+    const queryResult = await this.queryPayment(merchantId, userId, paymentId);
     const refreshedPayment = await this.prisma.payment.findFirst({
       where: { id: paymentId, merchantId },
       include: { transactions: true },
@@ -305,7 +327,7 @@ export class PaymentsService {
       providerReference: refreshedPayment.providerReference,
       metadata: refreshedPayment.metadata,
       transactions: refreshedPayment.transactions,
-      providerStatus: 'providerStatus' in status ? status.providerStatus : undefined,
+      providerStatus: queryResult.providerStatus,
     };
   }
 
@@ -428,7 +450,7 @@ export class PaymentsService {
           entity: 'payment',
           entityId: payment.id,
           metadata: {
-            checkoutRequestId: pushResult.providerReference,
+            providerReference: pushResult.providerReference,\n        checkoutRequestId: pushResult.providerReference,
             phoneNumber: this.maskPhone(dto.phoneNumber!),
           },
         });
