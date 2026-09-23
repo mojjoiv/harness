@@ -56,6 +56,34 @@ describe('WebhookDeliveriesService', () => {
     );
   });
 
+  it('processes transactional email jobs through the durable worker', async () => {
+    const { service, prisma } = createService();
+    prisma.$queryRaw.mockResolvedValueOnce([
+      {
+        id: 'job-email-1',
+        type: 'transactional.email.send',
+        payload: { transactionalEmailId: 'email-1' },
+        attempts: 1,
+        max_attempts: 5,
+      },
+    ]);
+    prisma.$queryRaw.mockResolvedValueOnce([]);
+    prisma.webhookDelivery.findMany.mockResolvedValue([]);
+    prisma.backgroundJob.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.retryPending();
+
+    expect((service as any).transactionalEmailsService.processBackgroundJob).toHaveBeenCalledWith({
+      transactionalEmailId: 'email-1',
+    });
+    expect(prisma.backgroundJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-email-1', status: 'PROCESSING', attempts: 1 },
+        data: expect.objectContaining({ status: 'SUCCEEDED' }),
+      }),
+    );
+  });
+
   it('requeues a failed provider webhook job with backoff', async () => {
     const { service, prisma, webhooksService } = createService();
     prisma.$queryRaw.mockResolvedValueOnce([
