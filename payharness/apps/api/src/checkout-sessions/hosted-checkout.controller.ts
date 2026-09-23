@@ -24,6 +24,11 @@ export class HostedCheckoutController {
     return this.sessions.getPublicStatus(id);
   }
 
+  @Post(':id/reconcile')
+  reconcile(@Param('id') id: string) {
+    return this.sessions.reconcilePublicPayment(id);
+  }
+
   @Post(':id/payments')
   async pay(@Param('id') id: string, @Body() dto: CreateHostedPaymentDto) {
     const session = await this.prisma.checkoutSession.findUnique({

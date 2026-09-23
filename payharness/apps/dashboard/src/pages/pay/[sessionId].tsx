@@ -91,6 +91,9 @@ export default function HostedCheckoutPage() {
         if (!payment.clientSecret) throw new Error('PayHarness did not return a Stripe client secret');
         const result = await stripeRef.current.confirmCardPayment(payment.clientSecret, { payment_method: { card: cardRef.current } });
         if (result.error) throw new Error(result.error.message || 'Card payment failed');
+        // Stripe can confirm the PaymentIntent before its webhook reaches PayHarness.
+        // Reconcile once immediately so hosted checkout does not wait for the webhook to settle the session.
+        await apiRequest<{ status: string }>(`/public/checkout-sessions/${sessionId}/reconcile`, { method: 'POST' });
         await pollUntilFinished(); return;
       }
       const payment = await apiRequest<{ approvalUrl?: string }>(`/public/checkout-sessions/${sessionId}/payments`, { method: 'POST', body: JSON.stringify({ provider: selectedProvider, ...(selectedProvider === 'MPESA' ? { phoneNumber: phone } : {}) }) });

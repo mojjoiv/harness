@@ -69,7 +69,17 @@ describe('CheckoutSessionsService hosted checkout', () => {
     const config = { get: jest.fn((key: string) => key === 'NODE_ENV' ? 'test' : 'https://checkout.example.com') };
     const auditLogs = { create: jest.fn() };
     const brandingService = { get: jest.fn().mockResolvedValue(branding) };
-    return new CheckoutSessionsService(prisma as any, config as any, auditLogs as any, brandingService as any);
+    return new CheckoutSessionsService(
+      prisma as any,
+      config as any,
+      auditLogs as any,
+      brandingService as any,
+      {
+        queryPayment: jest.fn().mockResolvedValue({
+          status: 'SUCCEEDED',
+        }),
+      } as any,
+    );
   };
 
   it('shows only the configured provider when one is configured', async () => {

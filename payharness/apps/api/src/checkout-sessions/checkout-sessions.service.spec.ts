@@ -32,9 +32,13 @@ describe('CheckoutSessionsService', () => {
           successUrl: 'https://example.com/success',
           cancelUrl: 'https://example.com/cancel',
         }),
+        findUnique: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
+      },
+      payment: {
+        findFirst: jest.fn(),
       },
     };
     const config = {
@@ -48,11 +52,44 @@ describe('CheckoutSessionsService', () => {
     const brandingService = { get: jest.fn().mockResolvedValue(branding) };
 
     return {
-      service: new CheckoutSessionsService(prisma as any, config as any, auditLogs as any, brandingService as any),
+      service: new CheckoutSessionsService(prisma as any, config as any, auditLogs as any, brandingService as any, { queryPayment: jest.fn().mockResolvedValue({ status: 'SUCCEEDED' }) } as any),
       prisma,
       auditLogs,
     };
   };
+
+  it('reconciles a pending hosted payment through the provider query before returning status', async () => {
+    const { service, prisma } = buildService();
+    prisma.checkoutSession.findUnique = jest.fn()
+      .mockResolvedValueOnce({
+        id: 'session-1',
+        merchantId: 'merchant-1',
+        status: 'PENDING',
+        successUrl: 'https://example.com/success',
+        cancelUrl: 'https://example.com/cancel',
+      })
+      .mockResolvedValueOnce({
+        id: 'session-1',
+        merchantId: 'merchant-1',
+        status: 'SUCCEEDED',
+        successUrl: 'https://example.com/success',
+        cancelUrl: 'https://example.com/cancel',
+      });
+    prisma.payment.findFirst.mockResolvedValue({
+      id: 'payment-1',
+      merchantId: 'merchant-1',
+      checkoutSessionId: 'session-1',
+      status: 'PENDING',
+    });
+
+    const result = await service.reconcilePublicPayment('session-1');
+
+    expect(prisma.payment.findFirst).toHaveBeenCalledWith({
+      where: { checkoutSessionId: 'session-1', merchantId: 'merchant-1', status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(result.status).toBe('SUCCEEDED');
+  });
 
   it('uses per-session success and cancel URLs when supplied', async () => {
     const { service, prisma } = buildService({

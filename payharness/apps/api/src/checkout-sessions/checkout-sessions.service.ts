@@ -6,6 +6,7 @@ import { PrismaService } from '../common/prisma.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, paginated } from '../common/pagination/pagination';
 import { MerchantBrandingService } from '../merchant-branding/merchant-branding.service';
+import { PaymentsService } from '../payments/payments.service';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 
 const ALL_PROVIDERS: Provider[] = ['MPESA', 'STRIPE', 'PAYPAL', 'PESAPAL'];
@@ -17,6 +18,7 @@ export class CheckoutSessionsService {
     private readonly config: ConfigService,
     private readonly auditLogs: AuditLogsService,
     private readonly brandingService: MerchantBrandingService,
+    private readonly payments: PaymentsService,
   ) {}
 
   async create(
@@ -184,6 +186,29 @@ export class CheckoutSessionsService {
         buttonColor: branding.buttonColor,
       },
     };
+  }
+
+  async reconcilePublicPayment(id: string) {
+    const session = await this.prisma.checkoutSession.findUnique({ where: { id } });
+    if (!session) throw new NotFoundException('Checkout session not found');
+    if (session.status !== 'PENDING') {
+      return { status: session.status, successUrl: session.successUrl, cancelUrl: session.cancelUrl };
+    }
+
+    const payment = await this.prisma.payment.findFirst({
+      where: { checkoutSessionId: id, merchantId: session.merchantId, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!payment) {
+      return { status: session.status, successUrl: session.successUrl, cancelUrl: session.cancelUrl };
+    }
+
+    await this.payments.queryPayment(session.merchantId, undefined, payment.id);
+
+    const refreshed = await this.prisma.checkoutSession.findUnique({ where: { id } });
+    if (!refreshed) throw new NotFoundException('Checkout session not found');
+    return { status: refreshed.status, successUrl: refreshed.successUrl, cancelUrl: refreshed.cancelUrl };
   }
 
   async getPublicStatus(id: string) {
