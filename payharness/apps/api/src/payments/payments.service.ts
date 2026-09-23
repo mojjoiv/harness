@@ -6,11 +6,9 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
 import { MpesaProviderService } from '../payment-providers/mpesa/mpesa-provider.service';
-import { MpesaVerificationService } from '../payment-providers/mpesa/mpesa-verification.service';
 import { ProviderRegistry } from '../payment-providers/provider-registry';
 import { PaypalPaymentService } from '../payment-providers/paypal/paypal-payment.service';
 import { PesapalPaymentService } from './pesapal-payment.service';
-import { StripeProviderService } from '../payment-providers/stripe/stripe-provider.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
@@ -42,8 +40,6 @@ export class PaymentsService {
     private readonly config: ConfigService,
     private readonly crypto: CredentialCryptoService,
     private readonly mpesa: MpesaProviderService,
-    private readonly mpesaVerification: MpesaVerificationService,
-    private readonly stripe: StripeProviderService,
     private readonly paypalPaymentService: PaypalPaymentService,
     private readonly pesapalPaymentService: PesapalPaymentService,
     private readonly auditLogs: AuditLogsService,
