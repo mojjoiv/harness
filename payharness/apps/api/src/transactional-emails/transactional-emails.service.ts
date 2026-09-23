@@ -383,3 +383,4 @@ export class TransactionalEmailsService implements OnModuleInit, OnModuleDestroy
     })[char] as string);
   }
 
+}
