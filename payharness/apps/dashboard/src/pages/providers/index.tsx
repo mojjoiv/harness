@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { api, ApiError } from '@/lib/api';
 import { ProviderCredentialRecord, ProviderVerificationLogRecord } from '@/lib/types';
-import { Badge, Button, CopyButton, Input, Panel, SectionTitle, Select } from '@/components/ui';
+import { Badge, Button, Input, Panel, SectionTitle, Select } from '@/components/ui';
 import { FieldRow, FormGrid, SimpleTable } from '@/components/blocks';
 import { dateTime } from '@/lib/format';
 import { ProviderDetailsModal } from '@/components/ProviderDetailsModal';
