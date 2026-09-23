@@ -28,7 +28,7 @@ function asStringArray(value: unknown): string[] {
   return [];
 }
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+const displayProviderName = (provider: string) => provider === 'MPESA' ? 'M-Pesa' : provider === 'FLUTTERWAVE' ? 'Flutterwave' : provider;\n\nfunction DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex min-w-0 items-start justify-between gap-6 border-b border-border py-3 last:border-b-0">
       <span className="shrink-0 text-sm text-muted">{label}</span>
@@ -68,11 +68,11 @@ export function ProviderDetailsModal({ credential, history, historyLoading, onCl
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-border bg-panel px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-panelAlt text-lg font-semibold text-ink">
-              {credential.provider === 'MPESA' ? 'M' : credential.provider === 'STRIPE' ? 'S' : 'P'}
+              {credential.provider === 'MPESA' ? 'M' : credential.provider === 'STRIPE' ? 'S' : credential.provider === 'PAYPAL' ? 'P' : credential.provider === 'PESAPAL' ? 'PS' : 'FW'}
             </div>
             <div>
               <h2 id="provider-details-title" className="text-xl font-semibold text-ink">
-                {credential.provider === 'MPESA' ? 'M-Pesa' : credential.provider}
+                {displayProviderName(credential.provider)}
               </h2>
               <p className="text-sm text-muted">{credential.label}</p>
             </div>
