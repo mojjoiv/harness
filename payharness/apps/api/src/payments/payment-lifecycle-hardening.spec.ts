@@ -14,8 +14,6 @@ describe('PaymentsService payment lifecycle hardening', () => {
   const config = { get: jest.fn() } as any;
   const crypto = { decrypt: jest.fn() } as any;
   const mpesa = {} as any;
-  const mpesaVerification = {} as any;
-  const stripe = {} as any;
   const paypalPaymentService = {} as any;
   const pesapalPaymentService = {} as any;
   const auditLogs = { create: jest.fn() } as any;
@@ -31,8 +29,6 @@ describe('PaymentsService payment lifecycle hardening', () => {
       config,
       crypto,
       mpesa,
-      mpesaVerification,
-      stripe,
       paypalPaymentService,
       pesapalPaymentService,
       auditLogs,

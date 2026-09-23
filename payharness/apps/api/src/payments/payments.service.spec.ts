@@ -78,8 +78,6 @@ describe('PaymentsService', () => {
       config,
       crypto,
       mpesa,
-      mpesaVerification,
-      stripe,
       paypalPaymentService,
       pesapalPaymentService,
       auditLogs,
