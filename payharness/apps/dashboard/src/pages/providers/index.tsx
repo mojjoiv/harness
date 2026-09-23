@@ -31,14 +31,23 @@ type PaypalForm = {
   webhookId?: string;
 };
 
-type FlutterwaveForm = {\n  environment: 'SANDBOX' | 'LIVE';\n  publicKey: string;\n  secretKey: string;\n  secretHash?: string;\n};\n\ntype PesapalForm = {
+type FlutterwaveForm = {
+  environment: 'SANDBOX' | 'LIVE';
+  publicKey: string;
+  secretKey: string;
+  secretHash?: string;
+};
+
+type PesapalForm = {
   environment: 'SANDBOX' | 'LIVE';
   branch?: string;
   consumerKey: string;
   consumerSecret: string;
 };
 
-const displayProviderName = (provider) => provider === 'MPESA' ? 'M-Pesa' : provider === 'FLUTTERWAVE' ? 'Flutterwave' : provider;\n\nconst HEALTH_META: Record<string, { emoji: string; label: string; tone: 'neutral' | 'green' | 'red' | 'blue' }> = {
+const displayProviderName = (provider: string) => provider === 'MPESA' ? 'M-Pesa' : provider === 'FLUTTERWAVE' ? 'Flutterwave' : provider;
+
+const HEALTH_META: Record<string, { emoji: string; label: string; tone: 'neutral' | 'green' | 'red' | 'blue' }> = {
   VERIFIED: { emoji: '🟢', label: 'Healthy', tone: 'green' },
   PARTIALLY_VERIFIED: { emoji: '🟡', label: 'Partially Verified', tone: 'neutral' },
   PENDING: { emoji: '🟡', label: 'Pending Verification', tone: 'neutral' },
@@ -72,7 +81,8 @@ export default function ProvidersPage() {
   const mpesa = useForm<MpesaForm>({ defaultValues: { environment: 'SANDBOX', businessType: 'PAYBILL', shortcode: '', accountReference: '', consumerKey: '', consumerSecret: '', passkey: '' } });
   const stripe = useForm<StripeForm>({ defaultValues: { environment: 'SANDBOX', publishableKey: '', secretKey: '', webhookSecret: '' } });
   const paypal = useForm<PaypalForm>({ defaultValues: { environment: 'SANDBOX', clientId: '', clientSecret: '', webhookId: '' } });
-  const flutterwave = useForm<FlutterwaveForm>({ defaultValues: { environment: 'SANDBOX', publicKey: '', secretKey: '', secretHash: '' } });\n  const pesapal = useForm<PesapalForm>({ defaultValues: { environment: 'SANDBOX', branch: '', consumerKey: '', consumerSecret: '' } });
+  const flutterwave = useForm<FlutterwaveForm>({ defaultValues: { environment: 'SANDBOX', publicKey: '', secretKey: '', secretHash: '' } });
+  const pesapal = useForm<PesapalForm>({ defaultValues: { environment: 'SANDBOX', branch: '', consumerKey: '', consumerSecret: '' } });
 
   const refresh = () => {
     api
@@ -186,7 +196,18 @@ export default function ProvidersPage() {
     refresh();
   };
 
-  const saveFlutterwave = async (values: FlutterwaveForm) => {\n    const { data } = await api.post('/provider-credentials/flutterwave', {\n      environment: values.environment,\n      publicConfig: { publicKey: values.publicKey },\n      secretConfig: { secretKey: values.secretKey, secretHash: values.secretHash || undefined },\n    });\n    setLastSaved({ provider: 'Flutterwave', payload: data });\n    setMessage('Flutterwave credentials saved');\n    refresh();\n  };\n\n  const savePesapal = async (values: PesapalForm) => {
+  const saveFlutterwave = async (values: FlutterwaveForm) => {
+    const { data } = await api.post('/provider-credentials/flutterwave', {
+      environment: values.environment,
+      publicConfig: { publicKey: values.publicKey },
+      secretConfig: { secretKey: values.secretKey, secretHash: values.secretHash || undefined },
+    });
+    setLastSaved({ provider: 'Flutterwave', payload: data });
+    setMessage('Flutterwave credentials saved');
+    refresh();
+  };
+
+  const savePesapal = async (values: PesapalForm) => {
     const { data } = await api.post('/provider-credentials/pesapal', {
       environment: values.environment,
       publicConfig: { branch: values.branch || undefined },
@@ -198,7 +219,7 @@ export default function ProvidersPage() {
   };
 
   const credentialRows = credentials.map((credential) => [
-    displayProviderName(credential.provider) === 'PESAPAL' ? 'Pesapal' : credential.provider,
+    displayProviderName(credential.provider),
     credential.environment,
     <StatusBadge key={`${credential.id}-health`} healthStatus={credential.healthStatus} />,
     credential.isDefault ? <Badge key={`${credential.id}-default`} tone="blue">Default</Badge> : '—',
@@ -206,7 +227,7 @@ export default function ProvidersPage() {
     <button
       key={`${credential.id}-view`}
       type="button"
-      aria-label={`View ${credential.provider === 'MPESA' ? 'M-Pesa' : credential.provider} details`}
+      aria-label={`View ${displayProviderName(credential.provider)} details`}
       title="View provider details"
       onClick={() => openProviderDetails(credential)}
       className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted transition hover:bg-panelAlt hover:text-ink"
