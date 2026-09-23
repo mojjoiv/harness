@@ -14,10 +14,12 @@ describe('WebhookDeliveriesService', () => {
     };
     const deliveryService = { deliver: jest.fn() };
     const webhooksService = { processProviderPaymentEvent: jest.fn() };
+    const transactionalEmailsService = { processBackgroundJob: jest.fn() };
     const service = new WebhookDeliveriesService(
       prisma,
       deliveryService as any,
       webhooksService as any,
+      transactionalEmailsService as any,
     );
     return { service, prisma, deliveryService, webhooksService };
   }
@@ -49,6 +51,34 @@ describe('WebhookDeliveriesService', () => {
     expect(prisma.backgroundJob.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'job-1', status: 'PROCESSING', attempts: 1 },
+        data: expect.objectContaining({ status: 'SUCCEEDED' }),
+      }),
+    );
+  });
+
+  it('processes transactional email jobs through the durable worker', async () => {
+    const { service, prisma } = createService();
+    prisma.$queryRaw.mockResolvedValueOnce([
+      {
+        id: 'job-email-1',
+        type: 'transactional.email.send',
+        payload: { transactionalEmailId: 'email-1' },
+        attempts: 1,
+        max_attempts: 5,
+      },
+    ]);
+    prisma.$queryRaw.mockResolvedValueOnce([]);
+    prisma.webhookDelivery.findMany.mockResolvedValue([]);
+    prisma.backgroundJob.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.retryPending();
+
+    expect((service as any).transactionalEmailsService.processBackgroundJob).toHaveBeenCalledWith({
+      transactionalEmailId: 'email-1',
+    });
+    expect(prisma.backgroundJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-email-1', status: 'PROCESSING', attempts: 1 },
         data: expect.objectContaining({ status: 'SUCCEEDED' }),
       }),
     );

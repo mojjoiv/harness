@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma.service';
 import { WebhookDeliveryService } from '../webhooks/webhook-delivery.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { Provider } from '@prisma/client';
+import { TransactionalEmailsService } from '../transactional-emails/transactional-emails.service';
 
 const RETRY_SWEEP_INTERVAL_MS = 10_000;
 const JOB_LEASE_MS = 120_000;
@@ -18,6 +19,7 @@ export class WebhookDeliveriesService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly deliveryService: WebhookDeliveryService,
     private readonly webhooksService: WebhooksService,
+    private readonly transactionalEmailsService: TransactionalEmailsService,
   ) {}
 
   onModuleInit() {
@@ -124,6 +126,11 @@ export class WebhookDeliveriesService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async handleJob(type: string, payload: unknown) {
+    if (type === 'transactional.email.send') {
+      await this.transactionalEmailsService.processBackgroundJob(payload);
+      return;
+    }
+
     if (type !== 'provider.webhook.process') {
       throw new Error(`Unknown background job type: ${type}`);
     }

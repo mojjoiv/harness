@@ -7,7 +7,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { timingSafeEqual } from 'crypto';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { MailerService } from '../mailer/mailer.service';
 import { PrismaService } from '../common/prisma.service';
@@ -16,9 +16,6 @@ import {
   TRANSACTIONAL_EMAIL_TEMPLATES,
   TransactionalEmailTemplate,
 } from './dto/send-transactional-email.dto';
-
-const MAX_ATTEMPTS = 5;
-const RETRY_MS = 30_000;
 
 @Injectable()
 export class TransactionalEmailsService implements OnModuleInit, OnModuleDestroy {
@@ -31,75 +28,96 @@ export class TransactionalEmailsService implements OnModuleInit, OnModuleDestroy
     private readonly config: ConfigService,
   ) {}
 
-  onModuleInit(): void {
-    this.worker = setInterval(() => void this.processPending(), 5_000);
-    void this.processPending();
-  }
-
-  onModuleDestroy(): void {
-    if (this.worker) clearInterval(this.worker);
-  }
-
-  async queue(
+  async create(
     merchantId: string,
     dto: SendTransactionalEmailDto,
-    headerIdempotencyKey?: string,
-    apiEnvironment?: 'SANDBOX' | 'LIVE',
+    idempotencyKey: string,
   ) {
     const payment = await this.prisma.payment.findFirst({
       where: { id: dto.paymentId, merchantId },
       include: { customer: true },
     });
 
-    if (!payment) throw new NotFoundException('Payment not found');
-    if (apiEnvironment && payment.environment !== apiEnvironment) {
-      throw new BadRequestException('Payment environment does not match the API key environment');
-    }
-
-    const recipient = payment.customer?.email;
-    if (!recipient) {
-      throw new BadRequestException('Transactional payment emails require a verified customer email on the payment');
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
     }
 
     await this.assertTemplateMatchesPayment(dto.template, payment);
 
-    const idempotencyKey = headerIdempotencyKey || dto.idempotencyKey ||
-      `payment:${payment.id}:transactional:${dto.template}`;
-
-    if (idempotencyKey.length > 255) {
-      throw new BadRequestException('Idempotency key is too long');
-    }
-
-    const existing = await this.prisma.transactionalEmail.findUnique({
-      where: { merchantId_idempotencyKey: { merchantId, idempotencyKey } },
-    });
-
-    if (existing) {
-      return this.publicEmail(existing);
+    const recipient = payment.customer?.email;
+    if (!recipient) {
+      throw new BadRequestException('Recipient email is required');
     }
 
     const template = this.renderTemplate(dto.template, payment);
+
     try {
-      const email = await this.prisma.transactionalEmail.create({
-        data: {
-          merchantId,
-          paymentId: payment.id,
-          templateKey: dto.template,
-          recipient,
-          subject: template.subject,
-          idempotencyKey,
-          status: 'QUEUED',
-        },
+      const email = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.transactionalEmail.create({
+          data: {
+            merchantId,
+            paymentId: payment.id,
+            templateKey: dto.template,
+            recipient,
+            subject: template.subject,
+            idempotencyKey,
+            status: 'QUEUED',
+          },
+        });
+
+        await tx.backgroundJob.create({
+          data: {
+            type: 'transactional.email.send',
+            payload: { transactionalEmailId: created.id },
+            maxAttempts: 5,
+          },
+        });
+
+        return created;
       });
+
       return this.publicEmail(email);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        const concurrent = await this.prisma.transactionalEmail.findUnique({
-          where: { merchantId_idempotencyKey: { merchantId, idempotencyKey } },
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.prisma.transactionalEmail.findUnique({
+          where: {
+            merchantId_idempotencyKey: {
+              merchantId,
+              idempotencyKey,
+            },
+          },
         });
-        if (concurrent) return this.publicEmail(concurrent);
+
+        if (existing) {
+          return this.publicEmail(existing);
+        }
       }
+
       throw error;
+    }
+  }
+
+  async queue(
+    merchantId: string,
+    dto: SendTransactionalEmailDto,
+    idempotencyKey?: string,
+    _environment?: string,
+  ) {
+    const key = idempotencyKey?.trim() || randomUUID();
+    return this.create(merchantId, dto, key);
+  }
+
+  onModuleInit(): void {
+    // Background jobs are consumed by the durable worker.
+  }
+
+  onModuleDestroy(): void {
+    if (this.worker) {
+      clearInterval(this.worker);
+      this.worker = undefined;
     }
   }
 
@@ -200,24 +218,27 @@ export class TransactionalEmailsService implements OnModuleInit, OnModuleDestroy
     return { received: true };
   }
 
-  private async processPending(): Promise<void> {
-    const candidates = await this.prisma.transactionalEmail.findMany({
-      where: {
-        status: 'QUEUED',
-        OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: new Date() } }],
-      },
-      orderBy: { createdAt: 'asc' },
-      take: 10,
-    });
-
-    for (const candidate of candidates) {
-      const claimed = await this.prisma.transactionalEmail.updateMany({
-        where: { id: candidate.id, status: 'QUEUED' },
-        data: { status: 'PROCESSING', attempts: { increment: 1 } },
-      });
-      if (claimed.count !== 1) continue;
-      await this.sendClaimed(candidate.id);
+  async processBackgroundJob(payload: unknown): Promise<void> {
+    if (!payload || typeof payload !== 'object') throw new Error('Transactional email job payload is invalid');
+    const data = payload as { transactionalEmailId?: unknown };
+    if (typeof data.transactionalEmailId !== 'string' || !data.transactionalEmailId) {
+      throw new Error('Transactional email job payload is incomplete');
     }
+
+    const candidate = await this.prisma.transactionalEmail.findUnique({
+      where: { id: data.transactionalEmailId },
+    });
+    if (!candidate || candidate.status === 'SENT') return;
+    if (candidate.status !== 'QUEUED') {
+      throw new Error(`Transactional email ${candidate.id} is not queueable in status ${candidate.status}`);
+    }
+
+    const claimed = await this.prisma.transactionalEmail.updateMany({
+      where: { id: candidate.id, status: 'QUEUED' },
+      data: { status: 'PROCESSING', attempts: { increment: 1 } },
+    });
+    if (claimed.count !== 1) return;
+    await this.sendClaimed(candidate.id);
   }
 
   private async sendClaimed(id: string): Promise<void> {
@@ -230,48 +251,30 @@ export class TransactionalEmailsService implements OnModuleInit, OnModuleDestroy
     try {
       const template = this.renderTemplate(email.templateKey as TransactionalEmailTemplate, email.payment);
       const result = await this.mailer.sendTransactional({
-        to: email.recipient,
-        subject: template.subject,
-        text: template.text,
-        html: template.html,
-        metadata: {
-          payharnessEmailId: email.id,
-          paymentId: email.payment.id,
-          template: email.templateKey,
-        },
+        to: email.recipient, subject: template.subject, text: template.text, html: template.html,
+        metadata: { payharnessEmailId: email.id, paymentId: email.payment.id, template: email.templateKey },
       });
 
-      await this.prisma.transactionalEmail.update({
-        where: { id },
-        data: {
-          status: 'SENT',
-          providerMessageId: result.providerMessageId,
-          sentAt: new Date(),
-          lastError: null,
-        },
-      });
-      await this.prisma.transactionalEmailEvent.create({
-        data: {
-          merchantId: email.merchantId,
-          transactionalEmailId: email.id,
-          providerEventId: `local:${email.id}:sent`,
-          type: 'SENT',
-          payload: { provider: result.provider, providerMessageId: result.providerMessageId },
-        },
-      });
+      await this.prisma.$transaction([
+        this.prisma.transactionalEmail.update({
+          where: { id },
+          data: { status: 'SENT', providerMessageId: result.providerMessageId, sentAt: new Date(), lastError: null },
+        }),
+        this.prisma.transactionalEmailEvent.create({
+          data: {
+            merchantId: email.merchantId, transactionalEmailId: email.id,
+            providerEventId: `local:${email.id}:sent`, type: 'SENT',
+            payload: { provider: result.provider, providerMessageId: result.providerMessageId },
+          },
+        }),
+      ]);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown email delivery error';
-      const attempts = email.attempts;
-      const terminal = attempts >= MAX_ATTEMPTS;
       await this.prisma.transactionalEmail.update({
         where: { id },
-        data: {
-          status: terminal ? 'FAILED' : 'QUEUED',
-          nextAttemptAt: terminal ? null : new Date(Date.now() + RETRY_MS * 2 ** Math.min(attempts - 1, 4)),
-          lastError: message.slice(0, 1000),
-        },
+        data: { status: 'QUEUED', lastError: message.slice(0, 1000) },
       });
-      this.logger.error(`Transactional email ${id} failed (attempt ${attempts}): ${message}`);
+      throw error;
     }
   }
 
@@ -400,4 +403,5 @@ export class TransactionalEmailsService implements OnModuleInit, OnModuleDestroy
       "'": '&#39;',
     })[char] as string);
   }
+
 }
