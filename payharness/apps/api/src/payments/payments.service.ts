@@ -336,7 +336,7 @@ export class PaymentsService {
     userId: string | undefined,
     payment: Payment,
     correlationId: string,
-  ) {
+  ): Promise<QueryPaymentResult> {
     if (!payment.providerReference)
       throw new BadRequestException('This payment has no Stripe PaymentIntent id');
     if (payment.status === 'SUCCEEDED' || payment.status === 'FAILED')
