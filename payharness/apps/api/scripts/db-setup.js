@@ -1,4 +1,4 @@
-const { spawnSync } = require("node:child_process");
+import { spawnSync } from "node:child_process";
 
 const databaseUrl = process.env.DATABASE_URL;
 
