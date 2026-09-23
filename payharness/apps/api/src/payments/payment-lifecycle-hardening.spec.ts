@@ -31,8 +31,6 @@ describe('PaymentsService payment lifecycle hardening', () => {
       config,
       crypto,
       mpesa,
-      mpesaVerification,
-      stripe,
       paypalPaymentService,
       pesapalPaymentService,
       auditLogs,
