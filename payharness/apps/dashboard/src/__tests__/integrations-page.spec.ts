@@ -26,7 +26,7 @@ describe('Ecommerce integrations UI certification', () => {
   it('keeps the certified ecommerce capabilities visible', () => {
     const page = readPage('integrations.tsx');
 
-    expect(page).toContain('M-Pesa');
+    expect(page).toContain('M-Pesa');\n    expect(page).toContain('Flutterwave');\n    expect(page).toContain('/provider-credentials/flutterwave');
     expect(page).toContain('PayPal');
     expect(page).toContain('Signed webhooks');
     expect(page).toContain('Sandbox / Live');
