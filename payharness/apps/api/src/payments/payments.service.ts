@@ -333,7 +333,7 @@ export class PaymentsService {
     userId: string | undefined,
     payment: Payment,
     correlationId: string,
-  ) {
+  ): Promise<PaymentQueryResult> {
     if (payment.status !== 'PENDING') return { paymentId: payment.id, status: payment.status };
     if (!payment.providerReference)
       throw new BadRequestException('This payment has no Safaricom CheckoutRequestID to query');
@@ -371,7 +371,7 @@ export class PaymentsService {
     userId: string | undefined,
     payment: Payment,
     correlationId: string,
-  ) {
+  ): Promise<PaymentQueryResult> {
     if (!payment.providerReference)
       throw new BadRequestException('This payment has no Stripe PaymentIntent id');
     if (payment.status === 'SUCCEEDED' || payment.status === 'FAILED')
