@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, Provider, ProviderVerificationStatus } from '@prisma/client';
 import * as http from 'http';
 import * as https from 'https';
+import { timingSafeEqual } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
@@ -176,6 +177,42 @@ export class ProviderCredentialsService {
       environmentVerified: false,
       errors,
     });
+  }
+
+  async verifyFlutterwaveWebhook(merchantId: string, signature: string | undefined): Promise<boolean> {
+    if (!signature) return false;
+
+    const credentials = await this.prisma.providerCredential.findMany({
+      where: {
+        merchantId,
+        provider: 'FLUTTERWAVE',
+        status: 'ACTIVE',
+      },
+      select: { encryptedSecretConfig: true },
+    });
+
+    for (const credential of credentials) {
+      try {
+        const secretConfig = this.crypto.decrypt(
+          credential.encryptedSecretConfig as any,
+        ) as Record<string, unknown>;
+        const secretHash = String(secretConfig.secretHash || '');
+        if (!secretHash) continue;
+
+        const expected = Buffer.from(secretHash);
+        const actual = Buffer.from(signature);
+        if (
+          expected.length === actual.length &&
+          timingSafeEqual(expected, actual)
+        ) {
+          return true;
+        }
+      } catch {
+        // Ignore malformed credentials and continue checking other active keys.
+      }
+    }
+
+    return false;
   }
 
   async save(
