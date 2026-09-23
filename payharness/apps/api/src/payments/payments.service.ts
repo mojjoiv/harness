@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Payment, PaymentStatus, Prisma, Provider } from '@prisma/client';
+import { Environment, Payment, PaymentStatus, Prisma, Provider } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
@@ -14,6 +14,24 @@ import { StripeProviderService } from '../payment-providers/stripe/stripe-provid
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
+
+
+type PaymentQueryResult = {
+  paymentId: string;
+  status: PaymentStatus;
+  providerStatus?: string;
+  [key: string]: unknown;
+};
+
+type PaymentCreateResult = {
+  paymentId: string;
+  provider: Provider;
+  environment: Environment;
+  status: PaymentStatus;
+  providerReference?: string;
+  redirectUrl?: string;
+  [key: string]: unknown;
+};
 
 @Injectable()
 export class PaymentsService {
@@ -60,7 +78,11 @@ export class PaymentsService {
 
   private readonly createHandlers: ReadonlyMap<
     Provider,
-    (merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) => Promise<unknown>
+    (
+      merchantId: string,
+      userId: string | undefined,
+      dto: CreateProviderPaymentDto,
+    ) => Promise<PaymentCreateResult>
   > = new Map([
     ['MPESA', (merchantId, userId, dto) => this.createMpesaStk(merchantId, userId, dto)],
     ['STRIPE', (merchantId, userId, dto) => this.createStripeIntent(merchantId, userId, dto)],
@@ -68,7 +90,7 @@ export class PaymentsService {
     ['PESAPAL', (merchantId, userId, dto) => this.createPesapalOrder(merchantId, userId, dto)],
   ]);
 
-  async createPayment(merchantId: string, userId: string | undefined, dto: CreatePaymentDto) {
+  async createPayment(merchantId: string, userId: string | undefined, dto: CreatePaymentDto): Promise<PaymentCreateResult> {
     const providerDto: CreateProviderPaymentDto = dto;
     this.providers.get(dto.provider);
     this.providers.assertPaymentSupported(dto.provider, dto.environment);
@@ -80,7 +102,7 @@ export class PaymentsService {
     return handler(merchantId, userId, providerDto);
   }
 
-  async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+  async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto): Promise<PaymentCreateResult> {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] Entering createMpesaStk`, {
       merchantId,
@@ -116,7 +138,7 @@ export class PaymentsService {
     }
   }
 
-  async createStripeIntent(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+  async createStripeIntent(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto): Promise<PaymentCreateResult> {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] Entering createStripeIntent`, {
       merchantId,
@@ -206,7 +228,7 @@ export class PaymentsService {
     }
   }
 
-  async createPaypalOrder(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+  async createPaypalOrder(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto): Promise<PaymentCreateResult> {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] createPaypalOrder`, { merchantId });
     if (dto.simulateOutcome) {
@@ -217,7 +239,7 @@ export class PaymentsService {
     return this.paypalPaymentService.createOrder(merchantId, userId, dto);
   }
 
-  async createPesapalOrder(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto) {
+  async createPesapalOrder(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto): Promise<PaymentCreateResult> {
     if (dto.simulateOutcome) throw new BadRequestException('Pesapal does not support simulated outcomes; use the Pesapal sandbox flow');
     return this.pesapalPaymentService.createOrder(merchantId, userId, dto);
   }
@@ -226,11 +248,11 @@ export class PaymentsService {
     return this.paypalPaymentService.captureOrder(merchantId, userId, paymentId);
   }
 
-  async queryPaypalOrder(merchantId: string, userId: string | undefined, paymentId: string) {
+  async queryPaypalOrder(merchantId: string, userId: string | undefined, paymentId: string): Promise<PaymentQueryResult> {
     return this.paypalPaymentService.queryOrder(merchantId, userId, paymentId);
   }
 
-  async queryPayment(merchantId: string, userId: string | undefined, paymentId: string) {
+  async queryPayment(merchantId: string, userId: string | undefined, paymentId: string): Promise<PaymentQueryResult> {
     const correlationId = randomUUID();
     this.logger.log(`[correlationId=${correlationId}] queryPayment`, { merchantId, paymentId });
     try {
@@ -275,7 +297,7 @@ export class PaymentsService {
       providerReference: refreshedPayment.providerReference,
       metadata: refreshedPayment.metadata,
       transactions: refreshedPayment.transactions,
-      providerStatus: 'providerStatus' in status ? status.providerStatus : undefined,
+      providerStatus: status.providerStatus,
     };
   }
 
