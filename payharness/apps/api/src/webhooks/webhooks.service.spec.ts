@@ -3,32 +3,27 @@ import { WebhooksService } from './webhooks.service';
 
 describe('WebhooksService', () => {
   function mocks() {
-    const prisma: any = {
-      webhookEndpoint: {
-        create: jest.fn(),
-        findMany: jest.fn(),
-        count: jest.fn(),
-        findFirst: jest.fn(),
-        update: jest.fn(),
-      },
-      webhookDelivery: {
-        create: jest.fn(),
-        findFirst: jest.fn(),
-        findMany: jest.fn(),
-        count: jest.fn(),
-        updateMany: jest.fn(),
-      },
-      merchant: { findUnique: jest.fn() },
-      payment: { findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
-      transaction: { updateMany: jest.fn() },
-      checkoutSession: { update: jest.fn(), updateMany: jest.fn() },
-      $queryRaw: jest.fn(),
-      backgroundJob: { create: jest.fn() },
-    };
-    prisma.$transaction = jest.fn(async (callback: any) => callback(prisma));
-
     return {
-      prisma,
+      prisma: {
+        webhookEndpoint: {
+          create: jest.fn(),
+          findMany: jest.fn(),
+          count: jest.fn(),
+          findFirst: jest.fn(),
+          update: jest.fn(),
+        },
+        webhookDelivery: {
+          create: jest.fn(),
+          findFirst: jest.fn(),
+          findMany: jest.fn(),
+          count: jest.fn(),
+        },
+        merchant: { findUnique: jest.fn() },
+        payment: { findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+        transaction: { updateMany: jest.fn() },
+        checkoutSession: { update: jest.fn(), updateMany: jest.fn() },
+        $queryRaw: jest.fn(),
+      },
       auditLogs: { create: jest.fn() },
       deliveryService: { deliver: jest.fn(), deliverToUrl: jest.fn() },
     };
@@ -140,19 +135,20 @@ describe('WebhooksService', () => {
     const { prisma, auditLogs, deliveryService } = mocks();
     prisma.webhookEndpoint.findFirst.mockResolvedValue({ id: 'endpoint-1' });
     prisma.webhookDelivery.create.mockResolvedValue({ id: 'delivery-1' });
+    deliveryService.deliver.mockResolvedValue({ delivered: true, deliveryId: 'delivery-1' });
     const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
     await expect(service.testEndpoint('merchant-1', 'endpoint-1')).resolves.toEqual(
-      expect.objectContaining({ queued: true, deliveryId: 'delivery-1' }),
+      expect.objectContaining({ delivered: true, deliveryId: 'delivery-1' }),
     );
   });
 
   it('retries an existing delivery', async () => {
     const { prisma, auditLogs, deliveryService } = mocks();
     prisma.webhookDelivery.findFirst.mockResolvedValue({ id: 'delivery-1' });
-    prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+    deliveryService.deliver.mockResolvedValue({ delivered: true, deliveryId: 'delivery-1' });
     const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
     await expect(service.retryDelivery('merchant-1', 'delivery-1')).resolves.toEqual({
-      queued: true,
+      delivered: true,
       deliveryId: 'delivery-1',
     });
   });
@@ -171,14 +167,12 @@ describe('WebhooksService', () => {
   it('records a provider webhook and derives a stable event id when the provider has no id', async () => {
     const { prisma, auditLogs, deliveryService } = mocks();
     prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
-    prisma.backgroundJob.create.mockResolvedValue({ id: 'job-1' });
     const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
     await expect(service.receive(Provider.MPESA, { type: 'payment.succeeded' })).resolves.toEqual({
       received: true,
       deliveryId: 'delivery-1',
-      jobId: 'job-1',
     });
-    expect(prisma.backgroundJob.create).toHaveBeenCalledTimes(1);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
   });
 
   it('returns the existing delivery for a duplicate provider event', async () => {
@@ -193,9 +187,9 @@ describe('WebhooksService', () => {
 
   it('settles a Stripe payment from a first-seen webhook event', async () => {
     const { prisma, auditLogs, deliveryService } = mocks();
+    prisma.payment.updateMany.mockResolvedValue({ count: 1 });
     prisma.merchant.findUnique.mockResolvedValue({ id: 'merchant-1' });
     prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
-    prisma.backgroundJob.create.mockResolvedValue({ id: 'job-1' });
     prisma.payment.findFirst.mockResolvedValue({
       id: 'payment-1',
       status: PaymentStatus.PENDING,
@@ -208,19 +202,44 @@ describe('WebhooksService', () => {
       data: { object: { id: 'pi_123' } },
     });
 
-    expect(result).toEqual({ received: true, deliveryId: 'delivery-1', jobId: 'job-1' });
-    expect(prisma.payment.update).not.toHaveBeenCalled();
+    expect(result).toEqual({ received: true, deliveryId: 'delivery-1' });
+    expect(prisma.payment.updateMany).toHaveBeenCalledWith({
+      where: { id: 'payment-1', status: PaymentStatus.PENDING },
+      data: { status: PaymentStatus.SUCCEEDED },
+    });
+  });
+
+  it('does not overwrite a payment that became terminal before the webhook update', async () => {
+    const { prisma, auditLogs, deliveryService } = mocks();
+    prisma.merchant.findUnique.mockResolvedValue({ id: 'merchant-1' });
+    prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
+    prisma.payment.findFirst.mockResolvedValue({
+      id: 'payment-1',
+      status: PaymentStatus.PENDING,
+      checkoutSessionId: 'checkout-1',
+    });
+    prisma.payment.updateMany.mockResolvedValue({ count: 0 });
+    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+
+    await expect(service.receiveForMerchant('stripe', 'merchant-1', {
+      id: 'evt_late',
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_123' } },
+    })).resolves.toEqual({ received: true, deliveryId: 'delivery-1' });
+
+    expect(prisma.transaction.updateMany).not.toHaveBeenCalled();
+    expect(prisma.checkoutSession.updateMany).not.toHaveBeenCalled();
+    expect(auditLogs.create).not.toHaveBeenCalled();
   });
 
   it('receives a merchant webhook after validating the merchant', async () => {
     const { prisma, auditLogs, deliveryService } = mocks();
     prisma.merchant.findUnique.mockResolvedValue({ id: 'merchant-1' });
     prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
-    prisma.backgroundJob.create.mockResolvedValue({ id: 'job-1' });
     const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
     await expect(
       service.receiveForMerchant('stripe', 'merchant-1', { event: 'payment.succeeded' }),
-    ).resolves.toEqual({ received: true, deliveryId: 'delivery-1', jobId: 'job-1' });
+    ).resolves.toEqual({ received: true, deliveryId: 'delivery-1' });
   });
 
   it('rejects a webhook for an unknown merchant', async () => {
