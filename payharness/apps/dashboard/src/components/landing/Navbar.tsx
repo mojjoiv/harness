@@ -16,7 +16,7 @@ export function Navbar() {
     <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur">
       <div className="mx-auto flex min-h-20 w-full max-w-[1400px] items-center px-4 py-3 sm:px-6 sm:py-4 lg:px-10">
         <Link href="/" className="flex min-w-0 shrink-0 items-center" aria-label="PayHarness home" onClick={() => setIsMenuOpen(false)}>
-          <img src="https://raw.githubusercontent.com/mojjoiv/harness/main/logo_transparent.png" alt="PayHarness" className="block h-9 w-auto object-contain sm:h-11" />
+          <img src="/logo_transparent.png" alt="PayHarness" className="block h-9 w-auto object-contain sm:h-11" />
           <span className="ml-2 hidden whitespace-nowrap text-lg font-bold tracking-tight text-[#0B1F3A] sm:block sm:text-xl">PayHarness</span>
         </Link>
 
