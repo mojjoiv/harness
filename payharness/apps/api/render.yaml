@@ -4,7 +4,8 @@ services:
     runtime: node
     rootDir: payharness
     buildCommand: npm install && npm run build:api
-    startCommand: npm run db:setup && npm run start:prod
+    preDeployCommand: npm run db:setup
+    startCommand: npm run start:prod
     envVars:
       - key: NODE_VERSION
         value: 16.20.2
