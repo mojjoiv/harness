@@ -14,10 +14,12 @@ describe('WebhookDeliveriesService', () => {
     };
     const deliveryService = { deliver: jest.fn() };
     const webhooksService = { processProviderPaymentEvent: jest.fn() };
+    const transactionalEmailsService = { processBackgroundJob: jest.fn() };
     const service = new WebhookDeliveriesService(
       prisma,
       deliveryService as any,
       webhooksService as any,
+      transactionalEmailsService as any,
     );
     return { service, prisma, deliveryService, webhooksService };
   }
