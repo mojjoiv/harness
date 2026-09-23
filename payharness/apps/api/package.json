@@ -16,7 +16,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:seed": "ts-node prisma/seed.ts",
-    "db:setup": "prisma generate && prisma migrate deploy && ts-node prisma/seed.ts",
+    "db:setup": "DIRECT_DATABASE_URL=\"${DATABASE_URL/-pooler/}\" prisma generate && DIRECT_DATABASE_URL=\"${DATABASE_URL/-pooler/}\" prisma migrate deploy && ts-node prisma/seed.ts",
     "seed": "ts-node prisma/seed.ts",
     "generate-gmail-token": "ts-node scripts/generate-gmail-refresh-token.ts"
   },
