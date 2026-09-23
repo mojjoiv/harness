@@ -94,11 +94,17 @@ describe('PaymentsService payment lifecycle hardening', () => {
       data: { status: 'SUCCEEDED' },
     });
     expect(prisma.transaction.updateMany).toHaveBeenCalledWith({
-      where: { paymentId: 'payment-2' },
+      where: {
+        paymentId: 'payment-2',
+        status: 'PENDING',
+      },
       data: { status: 'SUCCEEDED' },
     });
     expect(prisma.checkoutSession.update).toHaveBeenCalledWith({
-      where: { id: 'session-2' },
+      where: {
+        id: 'session-2',
+        status: 'PENDING',
+      },
       data: { status: 'SUCCEEDED' },
     });
   });

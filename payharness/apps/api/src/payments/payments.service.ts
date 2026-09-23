@@ -476,7 +476,7 @@ export class PaymentsService {
       if (result.count === 0) return;
 
       await this.prisma.transaction.updateMany({
-        where: { paymentId: payment.id },
+        where: { paymentId: payment.id, status: 'PENDING' },
         data: { status: finalStatus },
       });
       await this.auditLogs.create({
@@ -489,7 +489,7 @@ export class PaymentsService {
       });
       if (payment.checkoutSessionId) {
         const session = await this.prisma.checkoutSession.update({
-          where: { id: payment.checkoutSessionId },
+          where: { id: payment.checkoutSessionId, status: 'PENDING' },
           data: { status: finalStatus },
         });
         await this.forwardWebhook(merchantId, {

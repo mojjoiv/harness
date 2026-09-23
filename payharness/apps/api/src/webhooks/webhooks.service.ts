@@ -166,11 +166,8 @@ export class WebhooksService {
       },
     });
 
-    return {
-      queued: true,
-      deliveryId: delivery.id,
-      payload,
-    };
+    const result = await this.deliveryService.deliver(delivery.id);
+    return { ...result, payload };
   }
 
   async retryDelivery(merchantId: string, deliveryId: string) {
@@ -179,11 +176,7 @@ export class WebhooksService {
       select: { id: true },
     });
     if (!delivery) throw new NotFoundException('Webhook delivery not found');
-    await this.prisma.webhookDelivery.updateMany({
-      where: { id: delivery.id, status: { in: ['FAILED', 'PENDING'] } },
-      data: { status: 'PENDING', deliveredAt: null },
-    });
-    return { queued: true, deliveryId: delivery.id };
+    return this.deliveryService.deliver(delivery.id);
   }
 
   async forwardToUrl(url: string, eventType: string, payload: Record<string, unknown>) {
@@ -200,20 +193,7 @@ export class WebhooksService {
     );
 
     try {
-      const result = await this.prisma.$transaction(async (tx) => {
-        const delivery = await this.claimProviderDelivery(tx, provider, eventId, eventType, payload);
-        if (delivery.duplicate) return { delivery, jobId: undefined };
-
-        const job = await tx.backgroundJob.create({
-          data: {
-            type: 'provider.webhook.process',
-            payload: { provider, payload } as Prisma.InputJsonValue,
-          },
-        });
-        return { delivery, jobId: job.id };
-      });
-
-      const delivery = result.delivery;
+      const delivery = await this.claimProviderDelivery(provider, eventId, eventType, payload);
       if (delivery.duplicate) {
         this.logger.log(
           `[Webhook receive] DUPLICATE provider=${provider} eventId=${eventId} deliveryId=${delivery.deliveryId} correlationId=${correlationId}`,
@@ -221,11 +201,11 @@ export class WebhooksService {
         return { received: true, deliveryId: delivery.deliveryId, duplicate: true };
       }
 
-      const jobId = result.jobId;
+      await this.processProviderPaymentEvent(provider, payload);
       this.logger.log(
-        `[Webhook receive] QUEUED provider=${provider} eventType=${eventType} eventId=${eventId} deliveryId=${delivery.deliveryId} jobId=${jobId} correlationId=${correlationId}`,
+        `[Webhook receive] STORED provider=${provider} eventType=${eventType} eventId=${eventId} deliveryId=${delivery.deliveryId} correlationId=${correlationId}`,
       );
-      return { received: true, deliveryId: delivery.deliveryId, jobId };
+      return { received: true, deliveryId: delivery.deliveryId };
     } catch (error) {
       this.logger.error(
         `[Webhook receive] FAILED provider=${provider} eventType=${eventType} eventId=${eventId} correlationId=${correlationId}`,
@@ -274,13 +254,12 @@ export class WebhooksService {
   }
 
   private async claimProviderDelivery(
-    db: PrismaService | Prisma.TransactionClient,
     provider: Provider,
     eventId: string,
     eventType: string,
     payload: Record<string, unknown>,
   ): Promise<{ deliveryId: string; duplicate: boolean }> {
-    const rows = await db.$queryRaw<Array<{ id: string }>>`
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
       INSERT INTO "webhook_deliveries"
         ("id", "provider", "provider_event_id", "event_type", "payload", "status")
       VALUES
@@ -290,7 +269,7 @@ export class WebhooksService {
     `;
     if (rows[0]) return { deliveryId: rows[0].id, duplicate: false };
 
-    const existing = await db.$queryRaw<Array<{ id: string }>>`
+    const existing = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "webhook_deliveries"
       WHERE "provider" = ${provider}::"Provider" AND "provider_event_id" = ${eventId}
       LIMIT 1
@@ -337,10 +316,20 @@ export class WebhooksService {
     if (!payment) return;
     if (payment.status === PaymentStatus.SUCCEEDED || payment.status === PaymentStatus.FAILED || payment.status === status) return;
 
-    await this.prisma.payment.update({ where: { id: payment.id }, data: { status } });
-    await this.prisma.transaction.updateMany({ where: { paymentId: payment.id }, data: { status } });
+    const paymentResult = await this.prisma.payment.updateMany({
+      where: { id: payment.id, status: PaymentStatus.PENDING },
+      data: { status },
+    });
+    if (paymentResult.count === 0) return;
+    await this.prisma.transaction.updateMany({
+      where: { paymentId: payment.id, status: PaymentStatus.PENDING },
+      data: { status },
+    });
     if (payment.checkoutSessionId) {
-      await this.prisma.checkoutSession.update({ where: { id: payment.checkoutSessionId }, data: { status } });
+      await this.prisma.checkoutSession.updateMany({
+        where: { id: payment.checkoutSessionId, status: PaymentStatus.PENDING },
+        data: { status },
+      });
     }
     await this.auditLogs.create({
       merchantId,
