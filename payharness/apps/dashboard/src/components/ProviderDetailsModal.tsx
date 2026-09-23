@@ -28,7 +28,9 @@ function asStringArray(value: unknown): string[] {
   return [];
 }
 
-const displayProviderName = (provider: string) => provider === 'MPESA' ? 'M-Pesa' : provider === 'FLUTTERWAVE' ? 'Flutterwave' : provider;\n\nfunction DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+const displayProviderName = (provider: string) => provider === 'MPESA' ? 'M-Pesa' : provider === 'FLUTTERWAVE' ? 'Flutterwave' : provider;
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex min-w-0 items-start justify-between gap-6 border-b border-border py-3 last:border-b-0">
       <span className="shrink-0 text-sm text-muted">{label}</span>
@@ -93,7 +95,7 @@ export function ProviderDetailsModal({ credential, history, historyLoading, onCl
 
           <Panel className="p-5">
             <h3 className="mb-2 text-base font-semibold text-ink">Provider Details</h3>
-            <DetailRow label="Provider" value={credential.provider === 'MPESA' ? 'M-Pesa' : credential.provider} />
+            <DetailRow label="Provider" value={displayProviderName(credential.provider)} />
             <DetailRow label="Environment" value={credential.environment} />
             <DetailRow label="Status" value={credential.status} />
             <DetailRow label="Verification" value={credential.verificationStatus} />
