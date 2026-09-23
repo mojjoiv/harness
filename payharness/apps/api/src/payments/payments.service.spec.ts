@@ -20,7 +20,7 @@ describe('PaymentsService', () => {
     queryStkStatus: jest.fn(),
     initiateStkPush: jest.fn(),
   } as any;
-  const stripe = { createPaymentIntent: jest.fn() } as any;
+
   const paypalPaymentService = {
     createOrder: jest.fn(),
     captureOrder: jest.fn(),

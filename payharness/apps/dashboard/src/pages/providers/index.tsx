@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { api, ApiError } from '@/lib/api';
 import { ProviderCredentialRecord, ProviderVerificationLogRecord } from '@/lib/types';
-import { Badge, Button, CopyButton, Input, Panel, SectionTitle, Select } from '@/components/ui';
+import { Badge, Button, Input, Panel, SectionTitle, Select } from '@/components/ui';
 import { FieldRow, FormGrid, SimpleTable } from '@/components/blocks';
 import { dateTime } from '@/lib/format';
 import { ProviderDetailsModal } from '@/components/ProviderDetailsModal';
@@ -31,12 +31,21 @@ type PaypalForm = {
   webhookId?: string;
 };
 
+type FlutterwaveForm = {
+  environment: 'SANDBOX' | 'LIVE';
+  publicKey: string;
+  secretKey: string;
+  secretHash?: string;
+};
+
 type PesapalForm = {
   environment: 'SANDBOX' | 'LIVE';
   branch?: string;
   consumerKey: string;
   consumerSecret: string;
 };
+
+const displayProviderName = (provider: string) => provider === 'MPESA' ? 'M-Pesa' : provider === 'FLUTTERWAVE' ? 'Flutterwave' : provider;
 
 const HEALTH_META: Record<string, { emoji: string; label: string; tone: 'neutral' | 'green' | 'red' | 'blue' }> = {
   VERIFIED: { emoji: '🟢', label: 'Healthy', tone: 'green' },
@@ -72,6 +81,7 @@ export default function ProvidersPage() {
   const mpesa = useForm<MpesaForm>({ defaultValues: { environment: 'SANDBOX', businessType: 'PAYBILL', shortcode: '', accountReference: '', consumerKey: '', consumerSecret: '', passkey: '' } });
   const stripe = useForm<StripeForm>({ defaultValues: { environment: 'SANDBOX', publishableKey: '', secretKey: '', webhookSecret: '' } });
   const paypal = useForm<PaypalForm>({ defaultValues: { environment: 'SANDBOX', clientId: '', clientSecret: '', webhookId: '' } });
+  const flutterwave = useForm<FlutterwaveForm>({ defaultValues: { environment: 'SANDBOX', publicKey: '', secretKey: '', secretHash: '' } });
   const pesapal = useForm<PesapalForm>({ defaultValues: { environment: 'SANDBOX', branch: '', consumerKey: '', consumerSecret: '' } });
 
   const refresh = () => {
@@ -186,6 +196,17 @@ export default function ProvidersPage() {
     refresh();
   };
 
+  const saveFlutterwave = async (values: FlutterwaveForm) => {
+    const { data } = await api.post('/provider-credentials/flutterwave', {
+      environment: values.environment,
+      publicConfig: { publicKey: values.publicKey },
+      secretConfig: { secretKey: values.secretKey, secretHash: values.secretHash || undefined },
+    });
+    setLastSaved({ provider: 'Flutterwave', payload: data });
+    setMessage('Flutterwave credentials saved');
+    refresh();
+  };
+
   const savePesapal = async (values: PesapalForm) => {
     const { data } = await api.post('/provider-credentials/pesapal', {
       environment: values.environment,
@@ -198,7 +219,7 @@ export default function ProvidersPage() {
   };
 
   const credentialRows = credentials.map((credential) => [
-    credential.provider === 'MPESA' ? 'M-Pesa' : credential.provider === 'PESAPAL' ? 'Pesapal' : credential.provider,
+    displayProviderName(credential.provider),
     credential.environment,
     <StatusBadge key={`${credential.id}-health`} healthStatus={credential.healthStatus} />,
     credential.isDefault ? <Badge key={`${credential.id}-default`} tone="blue">Default</Badge> : '—',
@@ -206,7 +227,7 @@ export default function ProvidersPage() {
     <button
       key={`${credential.id}-view`}
       type="button"
-      aria-label={`View ${credential.provider === 'MPESA' ? 'M-Pesa' : credential.provider} details`}
+      aria-label={`View ${displayProviderName(credential.provider)} details`}
       title="View provider details"
       onClick={() => openProviderDetails(credential)}
       className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted transition hover:bg-panelAlt hover:text-ink"
@@ -276,6 +297,17 @@ export default function ProvidersPage() {
             <FieldRow label="Client secret"><Input type="password" {...paypal.register('clientSecret')} /></FieldRow>
             <FieldRow label="Webhook ID"><Input {...paypal.register('webhookId')} /></FieldRow>
             <Button type="submit">Save PayPal</Button>
+          </form>
+        </Panel>
+
+        <Panel className="p-6">
+          <div className="mb-4 text-lg font-semibold">Flutterwave</div>
+          <form className="space-y-4" onSubmit={flutterwave.handleSubmit(saveFlutterwave)}>
+            <FieldRow label="Environment"><Select {...flutterwave.register('environment')}><option value="SANDBOX">SANDBOX</option><option value="LIVE">LIVE</option></Select></FieldRow>
+            <FieldRow label="Public key"><Input {...flutterwave.register('publicKey')} /></FieldRow>
+            <FieldRow label="Secret key"><Input type="password" {...flutterwave.register('secretKey')} /></FieldRow>
+            <FieldRow label="Secret hash (optional)"><Input type="password" {...flutterwave.register('secretHash')} /></FieldRow>
+            <Button type="submit">Save Flutterwave</Button>
           </form>
         </Panel>
 
