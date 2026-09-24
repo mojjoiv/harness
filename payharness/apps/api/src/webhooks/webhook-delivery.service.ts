@@ -152,6 +152,7 @@ export class WebhookDeliveryService {
             status: 'SUCCEEDED',
             responseCode: result.statusCode,
             responseBody: result.body,
+            failureReason: null,
             deliveredAt: new Date(),
           },
         });
@@ -171,7 +172,7 @@ export class WebhookDeliveryService {
         if (!retryable || attempt === maxAttempts) {
           await this.prisma.webhookDelivery.update({
             where: { id: delivery.id },
-            data: { status: 'FAILED', responseBody: lastError.slice(0, MAX_RESPONSE_BODY) },
+            data: { status: 'FAILED', failureReason: lastError.slice(0, MAX_RESPONSE_BODY) },
           });
           break;
         }
