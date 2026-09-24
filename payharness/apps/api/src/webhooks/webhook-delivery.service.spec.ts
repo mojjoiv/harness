@@ -106,6 +106,33 @@ describe('WebhookDeliveryService', () => {
     expect(prisma.webhookDelivery.update).toHaveBeenLastCalledWith({ where: { id: 'delivery-recovery' }, data: expect.objectContaining({ status: 'SUCCEEDED', responseCode: 200 }) });
   });
 
+  it('retries a 429 rate-limit response', async () => {
+    const prisma = prismaMock();
+    prisma.webhookDelivery.findUnique.mockResolvedValue({
+      id: 'delivery-429', status: 'PENDING', attempts: 0,
+      endpoint: { id: 'endpoint-1', url: 'https://merchant.example/webhook', status: 'ACTIVE', secretHash: 'secret-hash' },
+      eventType: 'webhook.test', payload: { type: 'webhook.test' },
+    });
+    prisma.webhookDelivery.update.mockResolvedValue({});
+    const service = new WebhookDeliveryService(prisma as any, configMock() as any);
+    const postJson = jest.spyOn(service as any, 'postJson')
+      .mockRejectedValueOnce(new Error('Webhook endpoint responded with 429'))
+      .mockResolvedValueOnce({ statusCode: 200, body: 'ok' });
+    jest.spyOn(service as any, 'isRetryableError').mockReturnValueOnce(true).mockReturnValueOnce(false);
+    jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+
+    const result = await service.deliver('delivery-429');
+
+    expect(result).toEqual({
+      delivered: true,
+      deliveryId: 'delivery-429',
+      attempts: 2,
+      responseCode: 200,
+      signatureAlgorithm: 'HMAC-SHA256',
+    });
+    expect(postJson).toHaveBeenCalledTimes(2);
+  });
+
   it('does not retry a permanent 4xx response', async () => {
     const prisma = prismaMock();
     prisma.webhookDelivery.findUnique.mockResolvedValue({
