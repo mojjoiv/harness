@@ -290,20 +290,25 @@ export default function WebhooksPage() {
         <div className="mb-5"><h2 className="text-lg font-semibold">Delivery history</h2><p className="mt-1 text-sm text-muted">Inspect attempts, provider responses, and failed deliveries.</p></div>
         <div className="mb-5 grid gap-4 md:grid-cols-2"><FieldRow label="Status"><Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="">All statuses</option><option value="PENDING">Pending</option><option value="SUCCEEDED">Succeeded</option><option value="FAILED">Failed</option></Select></FieldRow><FieldRow label="Event type"><Input value={eventFilter} onChange={(e) => setEventFilter(e.target.value)} placeholder="payment.succeeded" /></FieldRow></div>
         {deliveryError ? <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{deliveryError}</div> : null}
-        {deliveryLoading ? <div className="text-sm text-muted">Loading deliveries…</div> : <SimpleTable headers={['Delivery', 'Event', 'Status', 'Attempts', 'Response', 'Created', 'Delivered']} rows={filteredDeliveries.map((delivery) => [
-          <button key={delivery.id} type="button" className="font-medium text-brand hover:underline" onClick={() => void selectDelivery(delivery.id)} disabled={detailLoading}>{compact(delivery.id)}</button>,
+        {deliveryLoading ? <div className="text-sm text-muted">Loading deliveries…</div> : <SimpleTable headers={['Delivery', 'Event', 'Status', 'Attempts', 'Response', 'Created', 'Actions']} rows={filteredDeliveries.map((delivery) => [
+          <div key={delivery.id} className="flex items-center gap-2">
+            <span className="font-mono text-xs text-muted">{compact(delivery.id)}</span>
+            {delivery.status === 'FAILED' ? <Badge tone="red">Failure</Badge> : null}
+          </div>,
           delivery.eventType,
           <Badge key={`${delivery.id}-status`} tone={tone(delivery.status)}>{delivery.status}</Badge>,
           delivery.attempts,
           delivery.responseCode ? `${delivery.responseCode}${delivery.responseBody ? ` — ${delivery.responseBody.slice(0, 60)}` : ''}` : '—',
           dateTime(delivery.createdAt),
-          delivery.deliveredAt ? dateTime(delivery.deliveredAt) : '—',
+          <Button variant="secondary" onClick={() => void selectDelivery(delivery.id)} disabled={detailLoading}>
+            {detailLoading ? 'Loading…' : 'View'}
+          </Button>,
         ])} emptyText="No webhook deliveries match the selected filters." />}
         <Paginator page={deliveryMeta.page || deliveryPage} totalPages={deliveryMeta.totalPages || 1} onPrev={() => setDeliveryPage((current) => Math.max(1, current - 1))} onNext={() => setDeliveryPage((current) => Math.min(deliveryMeta.totalPages || 1, current + 1))} />
       </Panel>
 
       {selected ? <Panel className="p-6">
-        <div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Delivery details</h2><p className="mt-1 text-sm text-muted">{compact(selected.id)}</p></div><Button variant="ghost" onClick={() => setSelected(null)} disabled={actionLoading}>Close</Button></div>
+        <div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">{selected.status === 'FAILED' ? 'Failed delivery details' : 'Delivery details'}</h2><p className="mt-1 text-sm text-muted">{compact(selected.id)}</p></div><Button variant="ghost" onClick={() => setSelected(null)} disabled={actionLoading}>Close</Button></div>
         {detailLoading ? <div className="mt-5 text-sm text-muted">Loading…</div> : null}
         {!detailLoading ? <>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><div className="text-xs uppercase tracking-wide text-muted">Event</div><div className="mt-1 font-semibold">{selected.eventType}</div></div><div><div className="text-xs uppercase tracking-wide text-muted">Status</div><div className="mt-1"><Badge tone={tone(selected.status)}>{selected.status}</Badge></div></div><div><div className="text-xs uppercase tracking-wide text-muted">Attempts</div><div className="mt-1 font-semibold">{selected.attempts}</div></div><div><div className="text-xs uppercase tracking-wide text-muted">Response</div><div className="mt-1">{selected.responseCode || '—'}</div></div></div>
