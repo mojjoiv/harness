@@ -138,7 +138,16 @@ describe('WebhooksService', () => {
     deliveryService.deliver.mockResolvedValue({ delivered: true, deliveryId: 'delivery-1' });
     const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
     await expect(service.testEndpoint('merchant-1', 'endpoint-1')).resolves.toEqual(
-      expect.objectContaining({ delivered: true, deliveryId: 'delivery-1' }),
+      expect.objectContaining({
+        delivered: true,
+        deliveryId: 'delivery-1',
+        payload: expect.objectContaining({
+          type: 'webhook.test',
+          id: expect.any(String),
+          endpointId: 'endpoint-1',
+          createdAt: expect.any(String),
+        }),
+      }),
     );
   });
 
