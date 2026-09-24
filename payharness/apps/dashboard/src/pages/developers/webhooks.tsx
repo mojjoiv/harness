@@ -13,6 +13,7 @@ type Delivery = {
   attempts: number;
   responseCode: number | null;
   responseBody: string | null;
+  failureReason: string | null;
   createdAt: string;
   deliveredAt: string | null;
 };
@@ -298,7 +299,7 @@ export default function WebhooksPage() {
           delivery.eventType,
           <Badge key={`${delivery.id}-status`} tone={tone(delivery.status)}>{delivery.status}</Badge>,
           delivery.attempts,
-          delivery.responseCode ? `${delivery.responseCode}${delivery.responseBody ? ` — ${delivery.responseBody.slice(0, 60)}` : ''}` : '—',
+          delivery.responseCode ? `${delivery.responseCode}${delivery.responseBody ? ` — ${delivery.responseBody.slice(0, 60)}` : ''}` : (delivery.failureReason ? delivery.failureReason.slice(0, 60) : '—'),
           dateTime(delivery.createdAt),
           <Button variant="secondary" onClick={() => void selectDelivery(delivery.id)} disabled={detailLoading}>
             {detailLoading ? 'Loading…' : 'View'}
@@ -311,8 +312,8 @@ export default function WebhooksPage() {
         <div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">{selected.status === 'FAILED' ? 'Failed delivery details' : 'Delivery details'}</h2><p className="mt-1 text-sm text-muted">{compact(selected.id)}</p></div><Button variant="ghost" onClick={() => setSelected(null)} disabled={actionLoading}>Close</Button></div>
         {detailLoading ? <div className="mt-5 text-sm text-muted">Loading…</div> : null}
         {!detailLoading ? <>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><div className="text-xs uppercase tracking-wide text-muted">Event</div><div className="mt-1 font-semibold">{selected.eventType}</div></div><div><div className="text-xs uppercase tracking-wide text-muted">Status</div><div className="mt-1"><Badge tone={tone(selected.status)}>{selected.status}</Badge></div></div><div><div className="text-xs uppercase tracking-wide text-muted">Attempts</div><div className="mt-1 font-semibold">{selected.attempts}</div></div><div><div className="text-xs uppercase tracking-wide text-muted">Response</div><div className="mt-1">{selected.responseCode || '—'}</div></div></div>
-          <div className="mt-6 grid gap-6 lg:grid-cols-2"><div><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Payload</div><pre className="max-h-96 overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(selected.payload, null, 2)}</pre></div><div><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Response body</div><pre className="max-h-96 overflow-auto rounded-xl bg-slate-50 p-4 text-xs text-ink">{selected.responseBody || 'No response body recorded.'}</pre></div></div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><div><div className="text-xs uppercase tracking-wide text-muted">Event</div><div className="mt-1 font-semibold">{selected.eventType}</div></div><div><div className="text-xs uppercase tracking-wide text-muted">Status</div><div className="mt-1"><Badge tone={tone(selected.status)}>{selected.status}</Badge></div></div><div><div className="text-xs uppercase tracking-wide text-muted">Attempts</div><div className="mt-1 font-semibold">{selected.attempts}</div></div><div><div className="text-xs uppercase tracking-wide text-muted">Response</div><div className="mt-1">{selected.responseCode || '—'}</div></div><div><div className="text-xs uppercase tracking-wide text-muted">Failure reason</div><div className="mt-1 break-words text-sm">{selected.failureReason || '—'}</div></div></div>
+          <div className="mt-6 grid gap-6 lg:grid-cols-2"><div><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Payload</div><pre className="max-h-96 overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-100">{JSON.stringify(selected.payload, null, 2)}</pre></div><div><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Failure reason</div><pre className="max-h-40 overflow-auto rounded-xl bg-rose-50 p-4 text-xs text-rose-800">{selected.failureReason || 'No transport or delivery error recorded.'}</pre><div className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Response body</div><pre className="max-h-96 overflow-auto rounded-xl bg-slate-50 p-4 text-xs text-ink">{selected.responseBody || 'No response body recorded.'}</pre></div></div>
           <div className="mt-6 flex justify-end">{selected.status !== 'SUCCEEDED' ? <Button onClick={() => void retryDelivery()} disabled={actionLoading}>{actionLoading && actionId === selected.id ? 'Retrying…' : 'Retry delivery'}</Button> : null}</div>
         </> : null}
       </Panel> : null}
