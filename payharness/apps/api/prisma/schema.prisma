@@ -461,6 +461,7 @@ model WebhookDelivery {
   attempts          Int              @default(0)
   responseCode      Int?             @map("response_code")
   responseBody      String?          @map("response_body")
+  failureReason     String?          @map("failure_reason")
   createdAt         DateTime         @default(now()) @map("created_at")
   deliveredAt       DateTime?        @map("delivered_at")
   endpoint          WebhookEndpoint? @relation(fields: [webhookEndpointId], references: [id])
