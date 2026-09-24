@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { buildApiUrl } from '@/lib/api';
 
+const API_HEARTBEAT_INTERVAL_MS = 10 * 60 * 1000;
+
 export function ApiWakeup() {
   useEffect(() => {
     let cancelled = false;
@@ -10,6 +12,7 @@ export function ApiWakeup() {
         const response = await fetch(buildApiUrl('/health'), {
           method: 'GET',
           cache: 'no-store',
+          keepalive: true,
         });
 
         if (!cancelled && response.ok) {
@@ -23,8 +26,13 @@ export function ApiWakeup() {
 
     void wakeApi();
 
+    const heartbeat = window.setInterval(() => {
+      void wakeApi();
+    }, API_HEARTBEAT_INTERVAL_MS);
+
     return () => {
       cancelled = true;
+      window.clearInterval(heartbeat);
     };
   }, []);
 
