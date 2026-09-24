@@ -222,7 +222,7 @@ export class WebhookDeliveryService {
             'Content-Length': Buffer.byteLength(body),
             ...(eventType ? { 'X-PayHarness-Event': eventType } : {}),
             ...(signature ? { 'X-PayHarness-Signature': signature } : {}),
-            ...(forwardingSignature ? { 'X-PayHarness-Signature': forwardingSignature } : {}),
+            ...(forwardingSignature ? { 'X-PayHarness-Forwarding-Signature': forwardingSignature } : {}),
           },
           timeout: REQUEST_TIMEOUT_MS,
         },
