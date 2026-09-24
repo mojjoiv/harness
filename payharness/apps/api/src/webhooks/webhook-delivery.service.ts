@@ -236,7 +236,9 @@ export class WebhookDeliveryService {
             const responseBody = Buffer.concat(chunks).toString('utf8');
             const statusCode = response.statusCode || 500;
             if (statusCode < 200 || statusCode >= 300) {
-              if (statusCode >= 400 && statusCode < 500) {
+              if (statusCode === 408 || statusCode === 425 || statusCode === 429 || statusCode >= 500) {
+                reject(new RetryableWebhookError(`Webhook endpoint responded with ${statusCode}`));
+              } else if (statusCode >= 400 && statusCode < 500) {
                 reject(new PermanentWebhookError(`Webhook endpoint responded with ${statusCode}`));
               } else {
                 reject(new RetryableWebhookError(`Webhook endpoint responded with ${statusCode}`));
