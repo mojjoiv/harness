@@ -204,6 +204,10 @@ export class WebhookDeliveryService {
     const body = JSON.stringify(payload);
     const timestamp = Math.floor(Date.now() / 1000);
     const signature = secretHash ? buildWebhookSignature(secretHash, timestamp, body) : undefined;
+    const forwardingSecret = this.config.get<string>('WEBHOOK_FORWARDING_SECRET');
+    const forwardingSignature = forwardingSecret
+      ? buildWebhookSignature(forwardingSecret, timestamp, body)
+      : undefined;
     const client = parsed.protocol === 'http:' ? http : https;
 
     return new Promise((resolve, reject) => {
@@ -218,6 +222,7 @@ export class WebhookDeliveryService {
             'Content-Length': Buffer.byteLength(body),
             ...(eventType ? { 'X-PayHarness-Event': eventType } : {}),
             ...(signature ? { 'X-PayHarness-Signature': signature } : {}),
+            ...(forwardingSignature ? { 'X-PayHarness-Signature': forwardingSignature } : {}),
           },
           timeout: REQUEST_TIMEOUT_MS,
         },
