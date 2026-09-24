@@ -375,6 +375,7 @@ export class WebhooksService {
       status,
       providerReference,
       providerEventId: this.providerEventId(payload),
+      metadata: payment.metadata,
     });
 
     await this.auditLogs.create({
