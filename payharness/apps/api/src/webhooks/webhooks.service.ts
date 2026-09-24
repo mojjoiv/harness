@@ -238,6 +238,30 @@ export class WebhooksService {
     }
   }
 
+  private async forwardMerchantPaymentEvent(
+    merchantId: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const settings = await this.prisma.merchantSettings.findUnique({
+      where: { merchantId },
+      select: { webhookForwardingUrl: true },
+    });
+    const url = settings?.webhookForwardingUrl;
+    if (!url) return;
+
+    const result = await this.deliveryService.deliverToUrl(
+      url,
+      String(payload.event || 'payment.event'),
+      payload,
+    );
+
+    if (!result.delivered) {
+      this.logger.warn(
+        `Merchant webhook forwarding exhausted retries merchantId=${merchantId} event=${String(payload.event || 'payment.event')}`,
+      );
+    }
+  }
+
   private providerEventId(payload: Record<string, unknown>): string {
     if (typeof payload.id === 'string' && payload.id.trim()) return payload.id;
     return createHash('sha256').update(this.stableStringify(payload)).digest('hex');
@@ -341,6 +365,18 @@ export class WebhooksService {
         data: { status },
       });
     }
+    await this.forwardMerchantPaymentEvent(merchantId, {
+      event: status === PaymentStatus.SUCCEEDED ? 'payment.succeeded' : 'payment.failed',
+      paymentId: payment.id,
+      provider,
+      environment: payment.environment,
+      amountCents: payment.amountCents,
+      currency: payment.currency,
+      status,
+      providerReference,
+      providerEventId: this.providerEventId(payload),
+    });
+
     await this.auditLogs.create({
       merchantId,
       action: 'payment.settled',
