@@ -4,7 +4,7 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { getPagination, paginated } from '../common/pagination/pagination';
 import { PrismaService } from '../common/prisma.service';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 import { CreateWebhookEndpointDto } from './dto/create-webhook-endpoint.dto';
 import { WebhookDeliveryService } from './webhook-delivery.service';
 
@@ -156,6 +156,7 @@ export class WebhooksService {
     if (!endpoint) throw new NotFoundException('Webhook endpoint not found');
     const payload = {
       type: 'webhook.test',
+      id: randomUUID(),
       endpointId: id,
       createdAt: new Date().toISOString(),
     };
