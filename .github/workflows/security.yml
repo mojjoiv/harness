@@ -1,0 +1,172 @@
+name: Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dast_target:
+        description: 'Deployed PayHarness API base URL for the OWASP ZAP baseline scan'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  codeql:
+    name: SAST — CodeQL
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}
+          upload: false
+
+      - name: Stage CodeQL SARIF
+        run: |
+          mkdir -p results
+          cp ../results/*.sarif results/
+
+      - name: Upload CodeQL SARIF
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-sarif-${{ matrix.language }}
+          path: results/*.sarif
+          if-no-files-found: error
+
+  trivy:
+    name: Container/filesystem security scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refresh dependency lockfile
+        working-directory: payharness
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Upload refreshed lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: payharness-lockfile
+          path: payharness/package-lock.json
+          if-no-files-found: error
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+  container:
+    name: Container image security scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refresh dependency lockfile
+        working-directory: payharness
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Build API container
+        run: docker build -f payharness/apps/api/Dockerfile -t payharness:security payharness
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: payharness:security
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+  sbom:
+    name: SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          artifact-name: payharness-sbom.cdx.json
+          output-file: payharness-sbom.cdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: payharness-sbom
+          path: payharness-sbom.cdx.json
+          if-no-files-found: error
+
+  dast:
+    name: DAST — OWASP ZAP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve DAST target
+        id: target
+        env:
+          INPUT_TARGET: ${{ inputs.dast_target }}
+        run: |
+          set -eu
+          target="${INPUT_TARGET:-https://harness-m6qs.onrender.com}"
+          case "$target" in
+            http://*|https://*) ;;
+            *) echo "DAST target must be an http:// or https:// URL"; exit 1 ;;
+          esac
+          echo "url=$target" >> "$GITHUB_OUTPUT"
+
+      - name: Wake and verify DAST target
+        env:
+          TARGET: ${{ steps.target.outputs.url }}
+        run: |
+          set -eu
+          echo "Waiting for $TARGET to become reachable..."
+          for attempt in $(seq 1 36); do
+            status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --connect-timeout 10 --max-time 30 "$TARGET" || true)"
+            if [ "$status" != "000" ]; then
+              echo "Target responded with HTTP $status on attempt $attempt."
+              exit 0
+            fi
+            echo "Attempt $attempt/36: target is not reachable yet; waiting 10s..."
+            sleep 10
+          done
+          echo "Target did not become reachable within 6 minutes."
+          exit 1
+
+      - name: OWASP ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: ${{ steps.target.outputs.url }}
+          fail_action: true
+          allow_issue_writing: false
+          cmd_options: '-T 10 -I'

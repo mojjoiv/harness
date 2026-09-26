@@ -7,10 +7,10 @@ set -eu
 : "${SUPERADMIN_NAME:?SUPERADMIN_NAME must be set}"
 
 echo "Applying Prisma migrations..."
-npx prisma migrate deploy
+./node_modules/.bin/prisma migrate deploy
 
 echo "Ensuring production superadmin exists..."
-npx ts-node prisma/seed.ts
+./node_modules/.bin/ts-node prisma/seed.ts
 
 echo "Starting PayHarness API..."
 exec node dist/main.js
