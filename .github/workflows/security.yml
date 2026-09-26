@@ -55,6 +55,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Refresh dependency lockfile
+        working-directory: payharness
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Upload refreshed lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: payharness-lockfile
+          path: payharness/package-lock.json
+          if-no-files-found: error
+
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -72,6 +83,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Refresh dependency lockfile
+        working-directory: payharness
+        run: npm install --package-lock-only --ignore-scripts
 
       - name: Build API container
         run: docker build -f payharness/apps/api/Dockerfile -t payharness:security payharness
