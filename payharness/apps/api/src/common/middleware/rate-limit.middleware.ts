@@ -46,37 +46,45 @@ export class RateLimitMiddleware {
     const now = Date.now();
     const key = this.getClientKey(req);
 
-    let count: number;
-    let resetAt: number;
+    try {
+      let count: number;
+      let resetAt: number;
 
-    if (this.redis) {
-      const result = await this.redis.increment(key, Math.ceil(this.windowMs / 1000), now);
-      count = result.count;
-      resetAt = result.resetAt;
-    } else {
-      const bucket = this.getMemoryBucket(key, now);
-      count = bucket.count;
-      resetAt = bucket.resetAt;
-    }
+      if (this.redis) {
+        const result = await this.redis.increment(key, Math.ceil(this.windowMs / 1000), now);
+        count = result.count;
+        resetAt = result.resetAt;
+      } else {
+        const bucket = this.getMemoryBucket(key, now);
+        count = bucket.count;
+        resetAt = bucket.resetAt;
+      }
 
-    const remaining = Math.max(this.maxRequests - count, 0);
-    const resetSeconds = Math.max(Math.ceil((resetAt - now) / 1000), 0);
+      const remaining = Math.max(this.maxRequests - count, 0);
+      const resetSeconds = Math.max(Math.ceil((resetAt - now) / 1000), 0);
 
-    res.setHeader('X-RateLimit-Limit', this.maxRequests.toString());
-    res.setHeader('X-RateLimit-Remaining', remaining.toString());
-    res.setHeader('X-RateLimit-Reset', Math.ceil(resetAt / 1000).toString());
+      res.setHeader('X-RateLimit-Limit', this.maxRequests.toString());
+      res.setHeader('X-RateLimit-Remaining', remaining.toString());
+      res.setHeader('X-RateLimit-Reset', Math.ceil(resetAt / 1000).toString());
 
-    if (count > this.maxRequests) {
-      res.setHeader('Retry-After', resetSeconds.toString());
-      res.status(429).json({
-        statusCode: 429,
-        message: 'Too many requests. Please retry later.',
-        retryAfterSeconds: resetSeconds,
+      if (count > this.maxRequests) {
+        res.setHeader('Retry-After', resetSeconds.toString());
+        res.status(429).json({
+          statusCode: 429,
+          message: 'Too many requests. Please retry later.',
+          retryAfterSeconds: resetSeconds,
+        });
+        return;
+      }
+
+      next();
+    } catch {
+      res.setHeader('Retry-After', '1');
+      res.status(503).json({
+        statusCode: 503,
+        message: 'Rate limiting service is temporarily unavailable.',
       });
-      return;
     }
-
-    next();
   }
 
   private getMemoryBucket(key: string, now: number): RateLimitBucket {
