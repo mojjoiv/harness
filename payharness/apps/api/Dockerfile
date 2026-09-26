@@ -3,10 +3,8 @@ FROM node:22.23.3-bookworm-slim AS build
 WORKDIR /app
 COPY package*.json ./
 COPY apps/api/package*.json ./apps/api/
-COPY packages/sdk-go/package*.json ./packages/sdk-go/
+COPY apps/dashboard/package*.json ./apps/dashboard/
 COPY packages/sdk-js/package*.json ./packages/sdk-js/
-COPY packages/sdk-php/package*.json ./packages/sdk-php/
-COPY packages/sdk-python/package*.json ./packages/sdk-python/
 COPY packages/shared-types/package*.json ./packages/shared-types/
 RUN npm ci
 
