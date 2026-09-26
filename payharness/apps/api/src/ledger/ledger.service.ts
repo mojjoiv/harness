@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 
 type LedgerSide = 'DEBIT' | 'CREDIT';
