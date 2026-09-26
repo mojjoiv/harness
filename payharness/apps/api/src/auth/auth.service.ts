@@ -116,12 +116,12 @@ export class AuthService {
       include: { merchantUsers: { include: { merchant: true } } },
     });
     if (!user) {
-      throw new UnauthorizedException('No account exists with that email address.');
+      throw new UnauthorizedException('Invalid email or password.');
     }
 
     const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordMatches) {
-      throw new UnauthorizedException('The password you entered is incorrect.');
+      throw new UnauthorizedException('Invalid email or password.');
     }
 
     const merchantUser = [...user.merchantUsers].sort((left, right) => compareRoles(right.role, left.role))[0];
