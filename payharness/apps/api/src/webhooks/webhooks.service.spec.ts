@@ -294,7 +294,13 @@ describe('WebhooksService', () => {
     prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
     prisma.payment.findFirst.mockResolvedValue({
       id: 'payment-1',
+      merchantId: 'merchant-1',
+      provider: Provider.STRIPE,
+      providerReference: 'pi_123',
+      environment: 'SANDBOX',
       status: PaymentStatus.PENDING,
+      amountCents: 1000,
+      currency: 'USD',
       checkoutSessionId: 'checkout-1',
     });
     prisma.payment.updateMany.mockResolvedValue({ count: 0 });
@@ -308,7 +314,7 @@ describe('WebhooksService', () => {
     await expect(service.receiveForMerchant('stripe', 'merchant-1', {
       id: 'evt_late',
       type: 'payment_intent.succeeded',
-      data: { object: { id: 'pi_123' } },
+      data: { object: { id: 'pi_123', amount_received: 1000, currency: 'usd' } },
     })).resolves.toEqual({ received: true, deliveryId: 'delivery-1' });
 
     expect(prisma.transaction.updateMany).not.toHaveBeenCalled();
