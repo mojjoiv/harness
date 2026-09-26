@@ -215,6 +215,44 @@ export class ProviderCredentialsService {
     return false;
   }
 
+  async verifyMpesaStkSuccess(
+    merchantId: string,
+    environment: 'SANDBOX' | 'LIVE',
+    checkoutRequestId: string,
+  ): Promise<boolean> {
+    const credentials = await this.prisma.providerCredential.findMany({
+      where: {
+        merchantId,
+        provider: 'MPESA',
+        environment,
+        status: 'ACTIVE',
+      },
+      select: { encryptedSecretConfig: true, publicConfig: true },
+    });
+
+    for (const credential of credentials) {
+      try {
+        const secretConfig = this.crypto.decrypt(
+          credential.encryptedSecretConfig as any,
+        ) as Record<string, unknown>;
+        const publicConfig = (credential.publicConfig || {}) as Record<string, unknown>;
+        const result = await this.mpesaVerification.queryStkStatus({
+          consumerKey: String(secretConfig.consumerKey || ''),
+          consumerSecret: String(secretConfig.consumerSecret || ''),
+          shortcode: String(publicConfig.shortcode || ''),
+          passkey: String(secretConfig.passkey || ''),
+          environment,
+          checkoutRequestId,
+        });
+        if (result.status === 'SUCCEEDED') return true;
+      } catch {
+        // Continue checking other active credentials for this merchant/environment.
+      }
+    }
+
+    return false;
+  }
+
   async verifyStripeWebhook(merchantId: string, signatureHeader: string | undefined, rawBody: Buffer): Promise<boolean> {
     if (!signatureHeader || !rawBody.length) return false;
 
