@@ -28,6 +28,7 @@ export class PlatformJwtAuthGuard implements CanActivate {
         email: payload.email,
         role: payload.role,
         type: payload.type,
+        sessionId: session.id,
       };
       return true;
     } catch {
