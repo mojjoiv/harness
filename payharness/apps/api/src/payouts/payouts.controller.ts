@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
