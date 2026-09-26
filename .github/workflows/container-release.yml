@@ -1,0 +1,86 @@
+name: Immutable container release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: container-release-\${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish immutable production images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            context: payharness
+            file: payharness/apps/api/Dockerfile
+            image: ghcr.io/mojjoiv/payharness-api
+          - name: dashboard
+            context: payharness
+            file: payharness/apps/dashboard/Dockerfile
+            image: ghcr.io/mojjoiv/payharness-dashboard
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: \${{ github.actor }}
+          password: \${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: \${{ matrix.image }}
+          tags: |
+            type=raw,value=sha-\${{ github.sha }}
+            type=raw,value=build-\${{ github.run_id }}
+          labels: |
+            org.opencontainers.image.revision=\${{ github.sha }}
+            org.opencontainers.image.source=\${{ github.server_url }}/\${{ github.repository }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and publish
+        uses: docker/build-push-action@v6
+        with:
+          context: \${{ matrix.context }}
+          file: \${{ matrix.file }}
+          push: true
+          tags: \${{ steps.meta.outputs.tags }}
+          labels: \${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=\${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=\${{ matrix.name }}
+
+      - name: Record immutable release metadata
+        run: |
+          mkdir -p release-metadata
+          cat > "release-metadata/\${{ matrix.name }}.txt" <<EOF
+          image=\${{ matrix.image }}
+          commit=\${{ github.sha }}
+          immutable_tag=sha-\${{ github.sha }}
+          build_id=\${{ github.run_id }}
+          EOF
+
+      - name: Upload release metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: immutable-container-release-\${{ matrix.name }}
+          path: release-metadata/\${{ matrix.name }}.txt
