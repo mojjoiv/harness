@@ -23,7 +23,7 @@ describe('LedgerService', () => {
       },
     };
     const prisma = {
-      $transaction: jest.fn(async (callback: (tx: typeof tx) => unknown) => callback(tx)),
+      $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     };
     const service = new LedgerService(prisma as never);
 
