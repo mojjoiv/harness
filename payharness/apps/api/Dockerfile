@@ -7,6 +7,7 @@ RUN npm install -g npm@11.19.1 && npm ci
 
 COPY apps/api ./apps/api
 RUN npm --workspace apps/api run build
+RUN npm prune --omit=dev
 
 FROM debian:bookworm-slim AS runtime
 ENV NODE_ENV=production
