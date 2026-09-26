@@ -58,3 +58,8 @@ Refunds require OWNER or ADMIN authorization.
 ## Compatibility
 
 The original unversioned endpoints remain available so existing integrations are not broken during the v1 rollout. New integrations should use `/api/v1`.
+
+
+## Complete reference
+
+For the complete integration reference, including environments, HTTP behavior, idempotency, webhooks, provider capability matrix, operational endpoints, and SDK links, see `docs/API_REFERENCE.md`.
