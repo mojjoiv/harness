@@ -31,6 +31,8 @@ export function Footer() {
             <h3 className="text-sm font-semibold">Developers</h3>
             <div className="mt-4 space-y-3 text-sm text-slate-400">
               <Link href="/developers/docs" className="block hover:text-white">Documentation</Link>
+              <Link href="/status" className="block hover:text-white">System status</Link>
+              <Link href="/security" className="block hover:text-white">Security</Link>
               <Link href="/developers/api-keys" className="block hover:text-white">API keys</Link>
               <Link href="/developers/webhooks" className="block hover:text-white">Webhooks</Link>
               <a href="#integrations" className="block hover:text-white">Integrations</a>
@@ -41,6 +43,8 @@ export function Footer() {
             <div className="mt-4 space-y-3 text-sm text-slate-400">
               <Link href="/login" className="block hover:text-white">Log in</Link>
               <Link href="/register" className="block hover:text-white">Create account</Link>
+              <Link href="/terms" className="block hover:text-white">Terms</Link>
+              <Link href="/privacy" className="block hover:text-white">Privacy</Link>
             </div>
           </div>
         </div>
