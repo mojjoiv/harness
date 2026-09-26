@@ -11,7 +11,7 @@ RUN npm --workspace apps/api run build
 FROM node:22.23.3-bookworm-slim AS runtime
 ENV NODE_ENV=production
 
-RUN npm install -g npm@11.19.1
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 WORKDIR /app
 
 COPY --from=build /app/node_modules ./node_modules
