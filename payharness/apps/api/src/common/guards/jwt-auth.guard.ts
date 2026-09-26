@@ -29,6 +29,7 @@ export class JwtAuthGuard implements CanActivate {
         merchantId: payload.merchantId,
         role: payload.role,
         type: 'merchant',
+        sessionId: session.id,
       };
       return true;
     } catch {
