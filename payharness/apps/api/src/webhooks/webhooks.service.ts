@@ -7,6 +7,7 @@ import { PrismaService } from '../common/prisma.service';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { CreateWebhookEndpointDto } from './dto/create-webhook-endpoint.dto';
 import { WebhookDeliveryService } from './webhook-delivery.service';
+import { ProviderCredentialsService } from '../provider-credentials/provider-credentials.service';
 
 @Injectable()
 export class WebhooksService {
@@ -16,6 +17,7 @@ export class WebhooksService {
     private readonly prisma: PrismaService,
     private readonly auditLogs: AuditLogsService,
     private readonly deliveryService: WebhookDeliveryService,
+    private readonly providerCredentialsService: ProviderCredentialsService,
   ) {}
 
   async createEndpoint(merchantId: string, userId: string, dto: CreateWebhookEndpointDto) {
@@ -385,6 +387,30 @@ export class WebhooksService {
       where: { merchantId, provider, providerReference },
     });
     if (!payment) return;
+
+    if (provider === Provider.MPESA && status === PaymentStatus.SUCCEEDED) {
+      const checkoutRequestId =
+        typeof providerReference === 'string' ? providerReference : '';
+      const verified = await this.providerCredentialsService.verifyMpesaStkSuccess(
+        merchantId,
+        payment.environment,
+        checkoutRequestId,
+      );
+      if (!verified) {
+        await this.auditLogs.create({
+          merchantId,
+          action: 'payment.webhook_rejected',
+          entity: 'payment',
+          entityId: payment.id,
+          metadata: {
+            provider,
+            providerReference,
+            reason: 'M-Pesa success callback could not be verified against Safaricom',
+          },
+        });
+        throw new BadRequestException('M-Pesa payment could not be verified with Safaricom');
+      }
+    }
 
     const amountValidation = this.validateProviderPaymentAmount(
       provider,
