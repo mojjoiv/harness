@@ -12,6 +12,7 @@ import { PesapalPaymentService } from './pesapal-payment.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
+import { LedgerService } from '../ledger/ledger.service';
 
 
 type PaymentQueryResult = {
@@ -45,6 +46,7 @@ export class PaymentsService {
     private readonly auditLogs: AuditLogsService,
     private readonly webhooks: WebhooksService,
     private readonly providers: ProviderRegistry,
+    private readonly ledger: LedgerService,
   ) {
     this.logStartupInfo();
   }
@@ -705,6 +707,14 @@ export class PaymentsService {
         where: { paymentId: payment.id, status: 'PENDING' },
         data: { status: finalStatus },
       });
+      if (finalStatus === 'SUCCEEDED') {
+        await this.ledger.postPaymentSettlement({
+          merchantId,
+          paymentId: payment.id,
+          amountCents: payment.amountCents,
+          currency: payment.currency,
+        });
+      }
       await this.auditLogs.create({
         merchantId,
         userId,

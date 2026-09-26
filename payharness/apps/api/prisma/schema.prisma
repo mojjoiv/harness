@@ -148,6 +148,7 @@ model Merchant {
   auditLogs           AuditLog[]
   apiUsage            ApiUsage[]
   transactionalEmails TransactionalEmail[]
+  ledgerJournals       LedgerJournal[]
   transactionalEmailEvents TransactionalEmailEvent[]
 
   @@map("merchants")
@@ -564,6 +565,38 @@ model TransactionalEmailEvent {
   @@map("transactional_email_events")
 }
 
+
+
+model LedgerJournal {
+  id          String        @id @default(uuid())
+  merchantId  String        @map("merchant_id")
+  sourceType  String        @map("source_type")
+  sourceId    String        @map("source_id")
+  currency    String
+  description String
+  createdAt   DateTime      @default(now()) @map("created_at")
+  merchant    Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  entries     LedgerEntry[]
+
+  @@unique([sourceType, sourceId])
+  @@index([merchantId, createdAt])
+  @@map("ledger_journals")
+}
+
+model LedgerEntry {
+  id          String       @id @default(uuid())
+  journalId   String       @map("journal_id")
+  merchantId  String       @map("merchant_id")
+  accountCode String       @map("account_code")
+  side        String
+  amountCents Int          @map("amount_cents")
+  currency    String
+  createdAt   DateTime     @default(now()) @map("created_at")
+  journal     LedgerJournal @relation(fields: [journalId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId, accountCode, currency, createdAt])
+  @@map("ledger_entries")
+}
 
 model Session {
   id                  String        @id @default(uuid())

@@ -14,9 +14,10 @@ import { PaymentIdempotencyInterceptor } from './payment-idempotency.interceptor
 import { PaymentReconciliationService } from './payment-reconciliation.service';
 import { RefundService } from './refund.service';
 import { PesapalPaymentService } from './pesapal-payment.service';
+import { LedgerModule } from '../ledger/ledger.module';
 
 @Module({
-  imports: [AuditLogsModule, CurrencyModule, PaymentProvidersModule, WebhooksModule],
+  imports: [AuditLogsModule, CurrencyModule, PaymentProvidersModule, WebhooksModule, LedgerModule],
   controllers: [
     PaymentReceiptController,
     PaymentsController,

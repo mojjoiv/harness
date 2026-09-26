@@ -35,7 +35,8 @@ describe('PayoutExecutionService', () => {
     const providers = {
       execute: jest.fn().mockResolvedValue({ providerReference: 'mpesa-123' }),
     };
-    const service = new PayoutExecutionService(prisma as never, providers as never);
+    const ledger = { postPayoutSettlement: jest.fn().mockResolvedValue({ id: 'journal-1' }) };
+    const service = new PayoutExecutionService(prisma as never, providers as never, ledger as never);
 
     await expect(service.executePayout('merchant-1', 'payout-1')).resolves.toMatchObject({
       status: 'SUCCEEDED',
@@ -43,6 +44,12 @@ describe('PayoutExecutionService', () => {
     });
 
     expect(prisma.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(ledger.postPayoutSettlement).toHaveBeenCalledWith({
+      merchantId: 'merchant-1',
+      payoutId: 'payout-1',
+      amountCents: 5000,
+      currency: 'KES',
+    });
     expect(providers.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         payoutId: 'payout-1',
@@ -61,7 +68,8 @@ describe('PayoutExecutionService', () => {
     const providers = {
       execute: jest.fn().mockRejectedValue(new Error('provider unavailable')),
     };
-    const service = new PayoutExecutionService(prisma as never, providers as never);
+    const ledger = { postPayoutSettlement: jest.fn() };
+    const service = new PayoutExecutionService(prisma as never, providers as never, ledger as never);
 
     await expect(service.executePayout('merchant-1', 'payout-1')).rejects.toThrow(
       'provider unavailable',
@@ -78,7 +86,8 @@ describe('PayoutExecutionService', () => {
       $executeRaw: jest.fn(),
     };
     const providers = { execute: jest.fn() };
-    const service = new PayoutExecutionService(prisma as never, providers as never);
+    const ledger = { postPayoutSettlement: jest.fn() };
+    const service = new PayoutExecutionService(prisma as never, providers as never, ledger as never);
 
     await expect(service.executePayout('merchant-1', 'payout-1')).rejects.toBeInstanceOf(
       BadRequestException,
@@ -93,7 +102,8 @@ describe('PayoutExecutionService', () => {
       $executeRaw: jest.fn(),
     };
     const providers = { execute: jest.fn() };
-    const service = new PayoutExecutionService(prisma as never, providers as never);
+    const ledger = { postPayoutSettlement: jest.fn() };
+    const service = new PayoutExecutionService(prisma as never, providers as never, ledger as never);
 
     await expect(service.executePayout('merchant-1', 'payout-1')).resolves.toEqual(succeeded);
     expect(providers.execute).not.toHaveBeenCalled();
@@ -106,7 +116,8 @@ describe('PayoutExecutionService', () => {
       $executeRaw: jest.fn(),
     };
     const providers = { execute: jest.fn() };
-    const service = new PayoutExecutionService(prisma as never, providers as never);
+    const ledger = { postPayoutSettlement: jest.fn() };
+    const service = new PayoutExecutionService(prisma as never, providers as never, ledger as never);
 
     await expect(service.executePayout('merchant-2', 'payout-1')).rejects.toBeInstanceOf(
       NotFoundException,
