@@ -1,10 +1,11 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
+import { PrismaService } from '../prisma.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(private readonly jwtService: JwtService, private readonly prisma: PrismaService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request & { user?: unknown }>();
@@ -15,8 +16,12 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync(token);
-      if ((payload.type && payload.type !== 'merchant') || !payload.merchantId) {
+      if ((payload.type && payload.type !== 'merchant') || !payload.merchantId || !payload.sid) {
         throw new UnauthorizedException('Merchant token required');
+      }
+      const session = await this.prisma.session.findUnique({ where: { id: payload.sid } });
+      if (!session || session.revokedAt || session.expiresAt <= new Date() || session.userId !== payload.sub || session.merchantId !== payload.merchantId) {
+        throw new UnauthorizedException('Session is no longer valid');
       }
       request.user = {
         userId: payload.sub,
