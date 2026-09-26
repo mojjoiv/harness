@@ -2,7 +2,10 @@ FROM node:20.11.1-bookworm-slim AS build
 
 WORKDIR /app
 COPY package*.json ./
+COPY apps/api/package*.json ./apps/api/
 COPY apps/dashboard/package*.json ./apps/dashboard/
+COPY packages/sdk-js/package*.json ./packages/sdk-js/
+COPY packages/shared-types/package*.json ./packages/shared-types/
 RUN npm ci
 
 COPY apps/dashboard ./apps/dashboard
@@ -23,7 +26,6 @@ USER node
 ENV PORT=3001
 EXPOSE 3001
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3001/').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3   CMD node -e "fetch('http://127.0.0.1:3001/').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
 
 CMD ["npm", "run", "start"]
