@@ -36,7 +36,12 @@ export class SessionService {
     const session = await this.prisma.session.findUnique({
       where: { refreshTokenHash: this.hash(refreshToken) },
     });
-    if (!session || session.revokedAt || session.expiresAt <= new Date()) {
+    if (!session) throw new UnauthorizedException('Invalid refresh token');
+    if (session.revokedAt || session.expiresAt <= new Date()) {
+      await this.prisma.session.updateMany({
+        where: { familyId: session.familyId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
       throw new UnauthorizedException('Invalid refresh token');
     }
 
