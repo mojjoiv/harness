@@ -74,7 +74,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build API container
-        run: docker build -f payharness/apps/api/Dockerfile -t payharness:security .
+        run: docker build -f payharness/apps/api/Dockerfile -t payharness:security payharness
 
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@v0.36.0
