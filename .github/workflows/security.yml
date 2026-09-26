@@ -39,6 +39,14 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: /language:${{ matrix.language }}
+          upload: false
+
+      - name: Upload CodeQL SARIF
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-sarif-${{ matrix.language }}
+          path: results/*.sarif
+          if-no-files-found: error
 
   trivy:
     name: Container/filesystem security scan
@@ -66,7 +74,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build API container
-        run: docker build -f payharness/apps/api/Dockerfile -t payharness:security payharness
+        run: docker build -f payharness/apps/api/Dockerfile -t payharness:security .
 
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@v0.36.0
@@ -102,12 +110,11 @@ jobs:
 
   dast:
     name: DAST — OWASP ZAP
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.dast_target != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: OWASP ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.14.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
-          target: ${{ inputs.dast_target }}
+          target: ${{ inputs.dast_target || 'https://harness-m6qs.onrender.com' }}
           fail_action: true
           allow_issue_writing: false
