@@ -256,7 +256,7 @@ export class ProviderCredentialsService {
   async verifyStripeWebhook(merchantId: string, signatureHeader: string | undefined, rawBody: Buffer): Promise<boolean> {
     if (!signatureHeader || !rawBody.length) return false;
 
-    const matchTimestamp = /(?:^|,)t=(\\d+)/.exec(signatureHeader);
+    const matchTimestamp = /(?:^|,)t=(\d+)/.exec(signatureHeader);
     const signatures = [...signatureHeader.matchAll(/(?:^|,)v1=([a-f0-9]+)/g)].map((match) => match[1]);
     if (!matchTimestamp || signatures.length === 0) return false;
 
