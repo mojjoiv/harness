@@ -17,12 +17,19 @@ import { PlatformJwtAuthGuard } from '../platform/common/platform-jwt-auth.guard
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'change-me',
-        signOptions: {
-          expiresIn: (config.get<string>('JWT_EXPIRES_IN') || '7d') as `${number}${'s' | 'm' | 'h' | 'd' | 'w' | 'y'}`,
-        },
-      }),
+      useFactory: (config: ConfigService) => {
+        const secret = config.get<string>('JWT_SECRET');
+        if (!secret) {
+          throw new Error('JWT_SECRET must be configured before PayHarness can start');
+        }
+
+        return {
+          secret,
+          signOptions: {
+            expiresIn: (config.get<string>('JWT_EXPIRES_IN') || '30m') as `${number}${'s' | 'm' | 'h' | 'd' | 'w' | 'y'}`,
+          },
+        };
+      },
     }),
   ],
   providers: [
