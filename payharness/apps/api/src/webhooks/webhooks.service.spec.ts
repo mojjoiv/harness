@@ -261,7 +261,12 @@ describe('WebhooksService', () => {
     prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
     prisma.payment.findFirst.mockResolvedValue({
       id: 'payment-1',
+      merchantId: 'merchant-1',
+      provider: Provider.STRIPE,
+      providerReference: 'pi_123',
       status: PaymentStatus.PENDING,
+      amountCents: 1000,
+      currency: 'USD',
       checkoutSessionId: 'checkout-1',
     });
     const service = new WebhooksService(
@@ -273,7 +278,7 @@ describe('WebhooksService', () => {
     const result = await service.receiveForMerchant('stripe', 'merchant-1', {
       id: 'evt_123',
       type: 'payment_intent.succeeded',
-      data: { object: { id: 'pi_123' } },
+      data: { object: { id: 'pi_123', amount_received: 1000, currency: 'usd' } },
     });
 
     expect(result).toEqual({ received: true, deliveryId: 'delivery-1' });
