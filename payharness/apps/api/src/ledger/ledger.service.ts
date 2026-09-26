@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma, TransactionType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 
 type LedgerSide = 'DEBIT' | 'CREDIT';
@@ -131,10 +131,7 @@ export class LedgerService {
       const debitTotal = Number(totals.find((row) => row.side === 'DEBIT')?._sum.amountCents ?? 0);
       const creditTotal = Number(totals.find((row) => row.side === 'CREDIT')?._sum.amountCents ?? 0);
       if (debitTotal !== creditTotal) {
-        throw new Prisma.PrismaClientKnownRequestError('Ledger journal is unbalanced', {
-          code: 'P2000',
-          clientVersion: 'ledger',
-        });
+        throw new BadRequestException('Ledger journal is unbalanced');
       }
 
       return journal;
