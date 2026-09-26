@@ -3,7 +3,10 @@ FROM node:22.23.3-bookworm-slim AS build
 WORKDIR /app
 COPY package*.json ./
 COPY apps/api/package*.json ./apps/api/
-RUN npm install -g npm@11.19.1 && npm ci
+COPY apps/dashboard/package*.json ./apps/dashboard/
+COPY packages/sdk-js/package*.json ./packages/sdk-js/
+COPY packages/shared-types/package*.json ./packages/shared-types/
+RUN npm ci
 
 COPY apps/api ./apps/api
 RUN npm --workspace apps/api run build

@@ -32,6 +32,7 @@ import { PlatformModule } from './platform/platform.module';
 import { SandboxModule } from './sandbox/sandbox.module';
 import { RateLimitMiddleware } from './common/middleware/rate-limit.middleware';
 import { MerchantOnboardingModule } from './merchant-onboarding/merchant-onboarding.module';
+import { ApiV1Module } from './api-v1/api-v1.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { MerchantOnboardingModule } from './merchant-onboarding/merchant-onboard
     TransactionalEmailsModule,
     PlatformModule,
     MerchantOnboardingModule,
+    ApiV1Module,
   ],
 })
 export class AppModule implements NestModule {
