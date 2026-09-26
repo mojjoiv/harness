@@ -30,7 +30,7 @@ export class PayoutsController {
   ) {}
 
   @Post()
-  @Roles('OWNER', 'ADMIN', 'DEVELOPER', 'API_KEY')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER, 'API_KEY')
   create(
     @CurrentUser() user: AuthUser,
     @Body() dto: CreatePayoutDto,
@@ -58,7 +58,7 @@ export class PayoutsController {
   }
 
   @Post('reconciliation/run')
-  @Roles('OWNER', 'ADMIN')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
   reconcile(@CurrentUser() user: AuthUser) {
     return this.payoutReconciliationService.reconcileStalePayouts(
       user.merchantId as string,
@@ -66,7 +66,7 @@ export class PayoutsController {
   }
 
   @Post(':id/execute')
-  @Roles('OWNER', 'ADMIN')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
   execute(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.payoutExecutionService.executePayout(user.merchantId as string, id);
   }
