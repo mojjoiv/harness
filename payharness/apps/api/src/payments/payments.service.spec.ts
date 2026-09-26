@@ -33,6 +33,7 @@ describe('PaymentsService', () => {
   const auditLogs = { create: jest.fn() } as any;
   const webhooks = { forwardToUrl: jest.fn() } as any;
   const providers = new ProviderRegistry();
+  const ledger = { postPaymentSettlement: jest.fn(), postPayoutSettlement: jest.fn() } as any;
   let service: PaymentsService;
 
   beforeEach(() => {
@@ -44,6 +45,7 @@ describe('PaymentsService', () => {
       webhookForwardingUrl: 'https://merchant.example/webhook',
     });
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
+    ledger.postPaymentSettlement.mockResolvedValue({ id: 'journal-1' });
     webhooks.forwardToUrl.mockResolvedValue({ delivered: true });
     jest.spyOn(providers, 'supportsEnvironment').mockReturnValue(true);
     jest.spyOn(providers, 'getAdapter').mockImplementation((provider: any) => {
@@ -84,6 +86,7 @@ describe('PaymentsService', () => {
       auditLogs,
       webhooks,
       providers,
+      ledger,
     );
     jest.spyOn(service as any, 'getActiveCredential').mockResolvedValue({
       id: 'credential-1',
@@ -319,6 +322,12 @@ describe('PaymentsService', () => {
     expect(prisma.payment.updateMany).toHaveBeenCalledWith({
       where: { id: 'payment-1', status: 'PENDING' },
       data: { status: 'SUCCEEDED' },
+    });
+    expect(ledger.postPaymentSettlement).toHaveBeenCalledWith({
+      merchantId: 'merchant-1',
+      paymentId: 'payment-1',
+      amountCents: 2500,
+      currency: 'KES',
     });
     expect(webhooks.forwardToUrl).toHaveBeenCalledWith(
       'https://merchant.example/webhook',
