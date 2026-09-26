@@ -238,5 +238,36 @@ export class AuthService {
       type: 'merchant',
     };
   }
+  async refresh(refreshToken: string) {
+    const { session, refreshToken: nextRefreshToken } = await this.sessions.rotate(refreshToken);
+    if (session.userId) {
+      const user = await this.prisma.user.findUnique({ where: { id: session.userId }, include: { merchantUsers: { include: { merchant: true } } } });
+      const merchantUser = user?.merchantUsers.find((entry) => entry.merchantId === session.merchantId && entry.status === 'ACTIVE');
+      if (!user || !merchantUser) throw new UnauthorizedException('Session is no longer valid');
+      this.assertMerchantActive(merchantUser.merchant.status);
+      const accessToken = await this.jwtService.signAsync({
+        sub: user.id, userId: user.id, email: user.email, merchantId: merchantUser.merchantId,
+        role: merchantUser.role, type: 'merchant', sid: session.id,
+      });
+      return { accessToken, refreshToken: nextRefreshToken, user: { id: user.id, email: user.email, name: user.name }, merchantId: merchantUser.merchantId, role: merchantUser.role, type: 'merchant' };
+    }
+
+    if (session.platformUserId) {
+      const platformUser = await this.prisma.platformUser.findUnique({ where: { id: session.platformUserId } });
+      if (!platformUser || platformUser.status !== PlatformUserStatus.ACTIVE) throw new UnauthorizedException('Session is no longer valid');
+      const accessToken = await this.jwtService.signAsync({
+        sub: platformUser.id, userId: platformUser.id, email: platformUser.email,
+        role: platformUser.role, type: 'platform', sid: session.id,
+      });
+      return { accessToken, refreshToken: nextRefreshToken, user: { id: platformUser.id, email: platformUser.email, name: platformUser.name }, role: platformUser.role, type: 'platform' };
+    }
+
+    throw new UnauthorizedException('Session is no longer valid');
+  }
+
+  async logout(sessionId: string) {
+    await this.sessions.revoke(sessionId);
+    return { success: true };
+  }
 }
 
