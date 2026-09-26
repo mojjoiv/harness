@@ -105,6 +105,7 @@ model User {
   updatedAt     DateTime       @updatedAt @map("updated_at")
   merchantUsers MerchantUser[]
   auditLogs     AuditLog[]
+  sessions      Session[]
 
   @@map("users")
 }
@@ -119,6 +120,7 @@ model PlatformUser {
   createdAt DateTime           @default(now()) @map("created_at")
   updatedAt DateTime           @updatedAt @map("updated_at")
   lastLogin DateTime?          @map("last_login")
+  sessions  Session[]
 
   @@map("platform_users")
 }
@@ -560,4 +562,25 @@ model TransactionalEmailEvent {
   @@index([merchantId, createdAt])
   @@index([transactionalEmailId, createdAt])
   @@map("transactional_email_events")
+}
+
+
+model Session {
+  id                  String        @id @default(uuid())
+  userId              String?       @map("user_id")
+  platformUserId      String?       @map("platform_user_id")
+  merchantId          String?       @map("merchant_id")
+  refreshTokenHash    String        @unique @map("refresh_token_hash")
+  familyId            String        @map("family_id")
+  expiresAt           DateTime      @map("expires_at")
+  revokedAt           DateTime?     @map("revoked_at")
+  replacedBySessionId String?       @map("replaced_by_session_id")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  user                User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platformUser        PlatformUser? @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([platformUserId, revokedAt])
+  @@index([familyId])
+  @@map("sessions")
 }
