@@ -13,12 +13,14 @@ import {
 } from './payout-provider.interface';
 import { PayoutProviderRegistry } from './payout-provider.registry';
 import { PayoutRecord } from './payouts.service';
+import { LedgerService } from '../ledger/ledger.service';
 
 @Injectable()
 export class PayoutExecutionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly providers: PayoutProviderRegistry,
+    private readonly ledger: LedgerService,
   ) {}
 
   async executePayout(merchantId: string, payoutId: string): Promise<PayoutRecord> {
@@ -96,6 +98,12 @@ export class PayoutExecutionService {
 
     const payout = await this.findPayout(merchantId, payoutId);
     if (!payout) throw new NotFoundException('Payout not found');
+    await this.ledger.postPayoutSettlement({
+      merchantId,
+      payoutId,
+      amountCents: payout.amountCents,
+      currency: payout.currency,
+    });
     return payout;
   }
 
