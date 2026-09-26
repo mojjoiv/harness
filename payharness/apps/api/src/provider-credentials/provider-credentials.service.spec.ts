@@ -1,4 +1,5 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { createHmac } from 'crypto';
 import { Environment, Provider } from '@prisma/client';
 import { ProviderCredentialsService } from './provider-credentials.service';
 
@@ -82,6 +83,69 @@ describe('ProviderCredentialsService', () => {
     prisma.providerCredential.update.mockResolvedValue(makeCredential());
     prisma.providerVerificationLog.create.mockResolvedValue({ id: 'log-1' });
     prisma.providerVerificationLog.findMany.mockResolvedValue([]);
+  });
+
+  it('accepts a valid Stripe webhook signature and rejects stale signatures', async () => {
+    const secret = 'whsec_test';
+    const rawBody = Buffer.from(JSON.stringify({ id: 'evt_123' }));
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signedPayload = Buffer.concat([Buffer.from(String(timestamp) + '.'), rawBody]);
+    const digest = createHmac('sha256', secret).update(signedPayload).digest('hex');
+
+    prisma.providerCredential.findMany.mockResolvedValue([
+      makeCredential({
+        encryptedSecretConfig: { ciphertext: 'encrypted' },
+      }),
+    ]);
+    crypto.decrypt.mockReturnValue({ webhookSecret: secret });
+
+    await expect(
+      service.verifyStripeWebhook(
+        'merchant-1',
+        `t=${timestamp},v1=${digest}`,
+        rawBody,
+      ),
+    ).resolves.toBe(true);
+
+    const staleTimestamp = timestamp - 301;
+    const staleDigest = createHmac('sha256', secret)
+      .update(Buffer.concat([Buffer.from(String(staleTimestamp) + '.'), rawBody]))
+      .digest('hex');
+
+    await expect(
+      service.verifyStripeWebhook(
+        'merchant-1',
+        `t=${staleTimestamp},v1=${staleDigest}`,
+        rawBody,
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it('verifies an M-Pesa success callback against Safaricom', async () => {
+    prisma.providerCredential.findMany.mockResolvedValue([
+      makeCredential({
+        provider: Provider.MPESA,
+        environment: Environment.SANDBOX,
+        publicConfig: { shortcode: '600000' },
+        encryptedSecretConfig: { ciphertext: 'encrypted' },
+      }),
+    ]);
+    crypto.decrypt.mockReturnValue({
+      consumerKey: 'key',
+      consumerSecret: 'secret',
+      passkey: 'pass',
+    });
+    (mpesaVerification as any).queryStkStatus = jest.fn().mockResolvedValue({
+      status: 'SUCCEEDED',
+    });
+
+    await expect(
+      service.verifyMpesaStkSuccess('merchant-1', Environment.SANDBOX, 'ws_CO_123'),
+    ).resolves.toBe(true);
+
+    expect((mpesaVerification as any).queryStkStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ checkoutRequestId: 'ws_CO_123', shortcode: '600000' }),
+    );
   });
 
   it('rejects a provider disabled platform-wide', async () => {

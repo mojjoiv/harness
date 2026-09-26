@@ -182,17 +182,27 @@ describe('AuthService', () => {
       prisma.user.findUnique.mockResolvedValue(null);
 
       await expect(service.login(dto as never)).rejects.toThrow(
-        new UnauthorizedException('No account exists with that email address.'),
+        new UnauthorizedException('Invalid email or password.'),
       );
     });
 
     it('identifies an incorrect merchant password', async () => {
       prisma.platformUser.findUnique.mockResolvedValue(null);
-      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.user.findUnique.mockResolvedValue({
+        ...baseUser,
+        merchantUsers: [
+          {
+            merchantId: 'merchant-1',
+            role: UserRole.OWNER,
+            status: 'ACTIVE',
+            merchant: { id: 'merchant-1', status: MerchantStatus.ACTIVE },
+          },
+        ],
+      });
       bcryptCompare.mockResolvedValue(false);
 
       await expect(service.login(dto as never)).rejects.toThrow(
-        new UnauthorizedException('The password you entered is incorrect.'),
+        new UnauthorizedException('Invalid email or password.'),
       );
     });
 

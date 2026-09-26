@@ -9,8 +9,11 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { MerchantAuthGuard } from '../common/guards/merchant-auth.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { RolesGuard } from '../common/guards/roles.guard';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 import { ListPayoutsDto } from './dto/list-payouts.dto';
 import { PayoutReportDto } from './dto/payout-report.dto';
@@ -18,7 +21,7 @@ import { PayoutExecutionService } from './payout-execution.service';
 import { PayoutReconciliationService } from './payout-reconciliation.service';
 import { PayoutsService } from './payouts.service';
 
-@UseGuards(MerchantAuthGuard)
+@UseGuards(MerchantAuthGuard, RolesGuard)
 @Controller('payouts')
 export class PayoutsController {
   constructor(
@@ -28,6 +31,7 @@ export class PayoutsController {
   ) {}
 
   @Post()
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER, 'API_KEY')
   create(
     @CurrentUser() user: AuthUser,
     @Body() dto: CreatePayoutDto,
@@ -55,6 +59,7 @@ export class PayoutsController {
   }
 
   @Post('reconciliation/run')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
   reconcile(@CurrentUser() user: AuthUser) {
     return this.payoutReconciliationService.reconcileStalePayouts(
       user.merchantId as string,
@@ -62,6 +67,7 @@ export class PayoutsController {
   }
 
   @Post(':id/execute')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
   execute(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.payoutExecutionService.executePayout(user.merchantId as string, id);
   }

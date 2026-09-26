@@ -89,17 +89,43 @@ export class WebhooksController {
   }
 
   @Post('stripe')
-  async stripe(@Body() payload: Record<string, unknown>) {
+  async stripe(
+    @Body() payload: Record<string, unknown>,
+    @Req() request: Request & { rawBody?: Buffer },
+  ) {
+    const signatureHeader = request.headers['stripe-signature'];
+    const signature =
+      typeof signatureHeader === 'string'
+        ? signatureHeader
+        : Array.isArray(signatureHeader)
+          ? signatureHeader[0]
+          : undefined;
+
+    if (!signature || !request.rawBody) {
+      throw new BadRequestException('Missing Stripe webhook signature');
+    }
+
+    throw new BadRequestException(
+      'Merchant-scoped Stripe webhook endpoint is required',
+    );
+
     const eventType = String(payload.type || payload.event || 'unknown');
     const eventId = typeof payload.id === 'string' ? payload.id : 'unknown';
-    const stripeObject = payload.data && typeof payload.data === 'object' ? payload.data : undefined;
-    const stripeObjectData = stripeObject && 'object' in stripeObject ? stripeObject.object : undefined;
+    const stripeObject =
+      payload.data && typeof payload.data === 'object'
+        ? (payload.data as Record<string, unknown>)
+        : undefined;
+    const stripeObjectValue = stripeObject?.object;
+    const stripeObjectData =
+      typeof stripeObjectValue === 'object' && stripeObjectValue !== null
+        ? (stripeObjectValue as Record<string, unknown>)
+        : undefined;
     const paymentIntentId =
       stripeObjectData &&
       typeof stripeObjectData === 'object' &&
       stripeObjectData !== null &&
       'id' in stripeObjectData
-        ? String(stripeObjectData.id)
+        ? String((stripeObjectData as Record<string, unknown>).id)
         : undefined;
 
     this.logger.log(
@@ -190,16 +216,35 @@ export class WebhooksController {
     }
 
     if (normalizedProvider === 'STRIPE') {
+      const signatureHeader = request.headers['stripe-signature'];
+      const signature =
+        typeof signatureHeader === 'string'
+          ? signatureHeader
+          : Array.isArray(signatureHeader)
+            ? signatureHeader[0]
+            : undefined;
+      const valid = await this.providerCredentialsService.verifyStripeWebhook(
+        merchantId,
+        signature,
+        request.rawBody || Buffer.alloc(0),
+      );
+      if (!valid) {
+        throw new BadRequestException('Invalid Stripe webhook signature');
+      }
+
       const eventType = String(payload.type || payload.event || 'unknown');
       const eventId = typeof payload.id === 'string' ? payload.id : 'unknown';
       const stripeObject = payload.data && typeof payload.data === 'object' ? payload.data : undefined;
-      const stripeObjectData = stripeObject && 'object' in stripeObject ? stripeObject.object : undefined;
+      const stripeObjectData =
+        stripeObject && 'object' in stripeObject
+          ? (stripeObject as Record<string, unknown>).object
+          : undefined;
       const paymentIntentId =
         stripeObjectData &&
         typeof stripeObjectData === 'object' &&
         stripeObjectData !== null &&
         'id' in stripeObjectData
-          ? String(stripeObjectData.id)
+          ? String((stripeObjectData as { id: unknown }).id)
           : undefined;
 
       this.logger.log(

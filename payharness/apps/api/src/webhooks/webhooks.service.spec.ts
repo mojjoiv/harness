@@ -26,11 +26,16 @@ describe('WebhooksService', () => {
       },
       auditLogs: { create: jest.fn() },
       deliveryService: { deliver: jest.fn(), deliverToUrl: jest.fn() },
+      providerCredentialsService: {
+        verifyStripeWebhook: jest.fn(),
+        verifyFlutterwaveWebhook: jest.fn(),
+        verifyMpesaStkSuccess: jest.fn(),
+      },
     };
   }
 
   it('creates an endpoint, audits it, and never returns the secret hash', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.webhookEndpoint.create.mockResolvedValue({
       id: 'endpoint-1',
       merchantId: 'merchant-1',
@@ -40,7 +45,12 @@ describe('WebhooksService', () => {
     });
     auditLogs.create.mockResolvedValue({});
 
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     const result = await service.createEndpoint('merchant-1', 'user-1', {
       url: 'https://merchant.example/webhook',
       events: ['payment.succeeded'],
@@ -52,7 +62,7 @@ describe('WebhooksService', () => {
   });
 
   it('rotates an endpoint secret and audits the rotation', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.webhookEndpoint.findFirst.mockResolvedValue({ id: 'endpoint-1', merchantId: 'merchant-1' });
     prisma.webhookEndpoint.update.mockResolvedValue({
       id: 'endpoint-1',
@@ -61,7 +71,12 @@ describe('WebhooksService', () => {
       secretHash: 'new-secret-hash',
     });
 
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     const result = await service.rotateEndpointSecret('merchant-1', 'user-1', 'endpoint-1');
 
     expect(result.secret).toMatch(/^whsec_/);
@@ -72,13 +87,18 @@ describe('WebhooksService', () => {
   });
 
   it('lists endpoints with pagination and removes secret hashes', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.webhookEndpoint.findMany.mockResolvedValue([
       { id: 'endpoint-1', url: 'https://merchant.example/1', secretHash: 'secret-1' },
     ]);
     prisma.webhookEndpoint.count.mockResolvedValue(3);
 
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     const result = await service.listEndpoints('merchant-1', {
       page: 1,
       limit: 2,
@@ -93,13 +113,18 @@ describe('WebhooksService', () => {
   });
 
   it('lists delivery history scoped to the merchant', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.webhookDelivery.findMany.mockResolvedValue([
       { id: 'delivery-1', eventType: 'payment.succeeded', status: 'SUCCEEDED', attempts: 1 },
     ]);
     prisma.webhookDelivery.count.mockResolvedValue(1);
 
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     const result = await service.listDeliveries('merchant-1', { page: 1, limit: 20 } as any);
 
     expect(result.items).toEqual([
@@ -111,11 +136,16 @@ describe('WebhooksService', () => {
   });
 
   it('disables an existing endpoint', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.webhookEndpoint.findFirst.mockResolvedValue({ id: 'endpoint-1', merchantId: 'merchant-1' });
     prisma.webhookEndpoint.update.mockResolvedValue({ id: 'endpoint-1', status: 'INACTIVE', secretHash: 'secret' });
 
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     await expect(service.disableEndpoint('merchant-1', 'endpoint-1')).resolves.toEqual({
       id: 'endpoint-1',
       status: 'INACTIVE',
@@ -123,20 +153,30 @@ describe('WebhooksService', () => {
   });
 
   it('rejects disabling an unknown endpoint', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.webhookEndpoint.findFirst.mockResolvedValue(null);
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     await expect(service.disableEndpoint('merchant-1', 'missing')).rejects.toThrow(
       'Webhook endpoint not found',
     );
   });
 
   it('creates and delivers a test webhook', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.webhookEndpoint.findFirst.mockResolvedValue({ id: 'endpoint-1' });
     prisma.webhookDelivery.create.mockResolvedValue({ id: 'delivery-1' });
     deliveryService.deliver.mockResolvedValue({ delivered: true, deliveryId: 'delivery-1' });
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     await expect(service.testEndpoint('merchant-1', 'endpoint-1')).resolves.toEqual(
       expect.objectContaining({
         delivered: true,
@@ -152,10 +192,15 @@ describe('WebhooksService', () => {
   });
 
   it('retries an existing delivery', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.webhookDelivery.findFirst.mockResolvedValue({ id: 'delivery-1' });
     deliveryService.deliver.mockResolvedValue({ delivered: true, deliveryId: 'delivery-1' });
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     await expect(service.retryDelivery('merchant-1', 'delivery-1')).resolves.toEqual({
       delivered: true,
       deliveryId: 'delivery-1',
@@ -163,9 +208,14 @@ describe('WebhooksService', () => {
   });
 
   it('forwards an event to a URL', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     deliveryService.deliverToUrl.mockResolvedValue({ delivered: true, deliveryId: 'delivery-1' });
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     await expect(
       service.forwardToUrl('https://merchant.example/webhook', 'payment.succeeded', {
         paymentId: 'payment-1',
@@ -174,9 +224,14 @@ describe('WebhooksService', () => {
   });
 
   it('records a provider webhook and derives a stable event id when the provider has no id', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     await expect(service.receive(Provider.MPESA, { type: 'payment.succeeded' })).resolves.toEqual({
       received: true,
       deliveryId: 'delivery-1',
@@ -185,9 +240,14 @@ describe('WebhooksService', () => {
   });
 
   it('returns the existing delivery for a duplicate provider event', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'delivery-1' }]);
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     await expect(
       service.receive(Provider.STRIPE, { id: 'evt_123', type: 'payment_intent.succeeded' }),
     ).resolves.toEqual({ received: true, deliveryId: 'delivery-1', duplicate: true });
@@ -195,20 +255,30 @@ describe('WebhooksService', () => {
   });
 
   it('settles a Stripe payment from a first-seen webhook event', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
     prisma.merchant.findUnique.mockResolvedValue({ id: 'merchant-1' });
     prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
     prisma.payment.findFirst.mockResolvedValue({
       id: 'payment-1',
+      merchantId: 'merchant-1',
+      provider: Provider.STRIPE,
+      providerReference: 'pi_123',
       status: PaymentStatus.PENDING,
+      amountCents: 1000,
+      currency: 'USD',
       checkoutSessionId: 'checkout-1',
     });
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     const result = await service.receiveForMerchant('stripe', 'merchant-1', {
       id: 'evt_123',
       type: 'payment_intent.succeeded',
-      data: { object: { id: 'pi_123' } },
+      data: { object: { id: 'pi_123', amount_received: 1000, currency: 'usd' } },
     });
 
     expect(result).toEqual({ received: true, deliveryId: 'delivery-1' });
@@ -219,21 +289,32 @@ describe('WebhooksService', () => {
   });
 
   it('does not overwrite a payment that became terminal before the webhook update', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.merchant.findUnique.mockResolvedValue({ id: 'merchant-1' });
     prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
     prisma.payment.findFirst.mockResolvedValue({
       id: 'payment-1',
+      merchantId: 'merchant-1',
+      provider: Provider.STRIPE,
+      providerReference: 'pi_123',
+      environment: 'SANDBOX',
       status: PaymentStatus.PENDING,
+      amountCents: 1000,
+      currency: 'USD',
       checkoutSessionId: 'checkout-1',
     });
     prisma.payment.updateMany.mockResolvedValue({ count: 0 });
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
 
     await expect(service.receiveForMerchant('stripe', 'merchant-1', {
       id: 'evt_late',
       type: 'payment_intent.succeeded',
-      data: { object: { id: 'pi_123' } },
+      data: { object: { id: 'pi_123', amount_received: 1000, currency: 'usd' } },
     })).resolves.toEqual({ received: true, deliveryId: 'delivery-1' });
 
     expect(prisma.transaction.updateMany).not.toHaveBeenCalled();
@@ -242,19 +323,29 @@ describe('WebhooksService', () => {
   });
 
   it('receives a merchant webhook after validating the merchant', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.merchant.findUnique.mockResolvedValue({ id: 'merchant-1' });
     prisma.$queryRaw.mockResolvedValueOnce([{ id: 'delivery-1' }]);
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     await expect(
       service.receiveForMerchant('stripe', 'merchant-1', { event: 'payment.succeeded' }),
     ).resolves.toEqual({ received: true, deliveryId: 'delivery-1' });
   });
 
   it('rejects a webhook for an unknown merchant', async () => {
-    const { prisma, auditLogs, deliveryService } = mocks();
+    const { prisma, auditLogs, deliveryService, providerCredentialsService } = mocks();
     prisma.merchant.findUnique.mockResolvedValue(null);
-    const service = new WebhooksService(prisma as any, auditLogs as any, deliveryService as any);
+    const service = new WebhooksService(
+      prisma as any,
+      auditLogs as any,
+      deliveryService as any,
+      providerCredentialsService as any,
+    );
     await expect(service.receiveForMerchant('stripe', 'missing', {})).rejects.toThrow(
       'Unknown merchant',
     );

@@ -24,6 +24,11 @@ describe('RolesGuard', () => {
     expect(guard.canActivate(context('ADMIN'))).toBe(true);
   });
 
+  it('allows API keys only when API_KEY is explicitly permitted', () => {
+    reflector.getAllAndOverride.mockReturnValue(['OWNER', 'ADMIN', 'API_KEY']);
+    expect(guard.canActivate(context('API_KEY'))).toBe(true);
+  });
+
   it('rejects a user without a required role', () => {
     reflector.getAllAndOverride.mockReturnValue(['ADMIN']);
     expect(() => guard.canActivate(context('MERCHANT'))).toThrow(ForbiddenException);
