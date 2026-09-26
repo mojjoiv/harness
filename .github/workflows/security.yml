@@ -164,4 +164,4 @@ jobs:
           target: ${{ steps.target.outputs.url }}
           fail_action: true
           allow_issue_writing: false
-          cmd_options: '-T 10'
+          cmd_options: '-T 10 -I'
