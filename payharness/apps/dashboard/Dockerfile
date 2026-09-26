@@ -18,6 +18,7 @@ COPY --from=build /app/apps/dashboard/package*.json ./apps/dashboard/
 COPY --from=build /app/apps/dashboard/.next ./apps/dashboard/.next
 
 WORKDIR /app/apps/dashboard
+USER node
 ENV PORT=3001
 EXPOSE 3001
 CMD ["npm", "run", "start"]
