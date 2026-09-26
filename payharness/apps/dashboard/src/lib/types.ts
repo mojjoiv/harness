@@ -313,3 +313,23 @@ export interface ProviderVerificationLogRecord {
   errors: string[];
   createdAt: string;
 }
+
+
+export interface MerchantOnboardingStep {
+  id: string;
+  title: string;
+  description: string;
+  complete: boolean;
+  href: string;
+  required: boolean;
+}
+
+export interface MerchantOnboardingStatus {
+  merchant: { id: string; name: string; status: MerchantStatus };
+  progress: { completed: number; total: number; percentage: number };
+  allProgress: { completed: number; total: number; percentage: number };
+  readyForSandbox: boolean;
+  readyForLive: boolean;
+  nextStep: MerchantOnboardingStep | null;
+  steps: MerchantOnboardingStep[];
+}
