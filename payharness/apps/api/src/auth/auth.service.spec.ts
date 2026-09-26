@@ -182,7 +182,7 @@ describe('AuthService', () => {
       prisma.user.findUnique.mockResolvedValue(null);
 
       await expect(service.login(dto as never)).rejects.toThrow(
-        new UnauthorizedException('No account exists with that email address.'),
+        new UnauthorizedException('Invalid email or password.'),
       );
     });
 
