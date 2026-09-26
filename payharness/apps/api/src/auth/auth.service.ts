@@ -10,6 +10,7 @@ import { slugify } from '../common/utils/slug.util';
 import { MailerService } from '../mailer/mailer.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { SessionService } from './session.service';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +19,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly auditLogs: AuditLogsService,
     private readonly mailer: MailerService,
+    private readonly sessions: SessionService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -174,16 +176,19 @@ export class AuthService {
       data: { lastLogin: new Date() },
     });
 
+    const { session, refreshToken } = await this.sessions.create({ platformUserId: platformUser.id });
     const accessToken = await this.jwtService.signAsync({
       sub: platformUser.id,
       userId: platformUser.id,
       email: platformUser.email,
       role: platformUser.role,
       type: 'platform',
+      sid: session.id,
     });
 
     return {
       accessToken,
+      refreshToken,
       user: {
         id: platformUser.id,
         email: platformUser.email,
@@ -210,6 +215,7 @@ export class AuthService {
   }
 
   private async authResponse(user: { id: string; email: string; name: string }, merchantId: string, role: string) {
+    const { session, refreshToken } = await this.sessions.create({ userId: user.id, merchantId });
     const accessToken = await this.jwtService.signAsync({
       sub: user.id,
       userId: user.id,
@@ -217,9 +223,11 @@ export class AuthService {
       merchantId,
       role,
       type: 'merchant',
+      sid: session.id,
     });
     return {
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -231,3 +239,4 @@ export class AuthService {
     };
   }
 }
+
