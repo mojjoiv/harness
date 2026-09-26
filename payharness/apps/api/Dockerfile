@@ -8,10 +8,17 @@ RUN npm install -g npm@11.19.1 && npm ci
 COPY apps/api ./apps/api
 RUN npm --workspace apps/api run build
 
-FROM node:22.23.3-bookworm-slim AS runtime
+FROM debian:bookworm-slim AS runtime
 ENV NODE_ENV=production
 
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 libstdc++6 openssl zlib1g \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /usr/local/bin/node /usr/local/bin/node
+RUN groupadd --gid 1000 node && useradd --uid 1000 --gid node --shell /bin/sh --create-home node
+
 WORKDIR /app
 
 COPY --from=build /app/node_modules ./node_modules
