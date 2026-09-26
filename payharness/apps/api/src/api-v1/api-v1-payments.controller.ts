@@ -12,6 +12,9 @@ import { RefundPaymentDto } from '../payments/dto/refund-payment.dto';
 import { PaymentIdempotencyInterceptor } from '../payments/payment-idempotency.interceptor';
 import { PaymentsService } from '../payments/payments.service';
 import { RefundService } from '../payments/refund.service';
+import { PrismaService } from '../common/prisma.service';
+import { CurrencyService } from '../currency/currency.service';
+import { NotFoundException } from '@nestjs/common';
 
 @ApiTags('api-v1-payments')
 @ApiBearerAuth()
@@ -21,13 +24,32 @@ export class ApiV1PaymentsController {
   constructor(
     private readonly paymentsService: PaymentsService,
     private readonly refundService: RefundService,
+    private readonly prisma: PrismaService,
+    private readonly currencyService: CurrencyService,
   ) {}
 
   @Post()
   @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER, 'API_KEY')
   @UseInterceptors(PaymentIdempotencyInterceptor)
   create(@CurrentUser() user: AuthUser, @Body() dto: CreatePaymentDto) {
-    return this.paymentsService.createPayment(user.merchantId as string, user.userId || undefined, dto);
+    return this.paymentsService.createPayment(
+      user.merchantId as string,
+      user.userId || undefined,
+      await this.preparePayment(user, dto),
+    );
+  }
+
+  private async preparePayment(user: AuthUser, dto: CreatePaymentDto): Promise<CreatePaymentDto> {
+    const lockedDto = user.type === 'api_key' && user.environment ? { ...dto, environment: user.environment } : dto;
+    if (!lockedDto.checkoutSessionId) return this.currencyService.normalizePayment(lockedDto, lockedDto.provider);
+    const session = await this.prisma.checkoutSession.findFirst({
+      where: { id: lockedDto.checkoutSessionId, merchantId: user.merchantId as string },
+    });
+    if (!session) throw new NotFoundException('Checkout session not found');
+    return this.currencyService.normalizePayment(
+      { ...lockedDto, amountCents: session.amountCents, currency: session.currency },
+      lockedDto.provider,
+    );
   }
 
   @Get(':id')
