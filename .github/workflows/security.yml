@@ -41,11 +41,16 @@ jobs:
           category: /language:${{ matrix.language }}
           upload: false
 
+      - name: Stage CodeQL SARIF
+        run: |
+          mkdir -p results
+          cp ../results/*.sarif results/
+
       - name: Upload CodeQL SARIF
         uses: actions/upload-artifact@v4
         with:
           name: codeql-sarif-${{ matrix.language }}
-          path: ../results/*.sarif
+          path: results/*.sarif
           if-no-files-found: error
 
   trivy:
