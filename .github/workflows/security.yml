@@ -57,6 +57,26 @@ jobs:
           exit-code: '1'
           format: table
 
+  container:
+    name: Container image security scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build API container
+        run: docker build -f payharness/apps/api/Dockerfile -t payharness:security payharness
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: payharness:security
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
   sbom:
     name: SBOM
     runs-on: ubuntu-latest
