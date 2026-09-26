@@ -292,6 +292,7 @@ describe('AuthService', () => {
 
       await expect(service.login(dto as never)).resolves.toEqual({
         accessToken: 'access-token',
+        refreshToken: 'refresh-token',
         user: { id: baseUser.id, email: baseUser.email, name: baseUser.name },
         merchantId: merchant.id,
         role: UserRole.OWNER,
