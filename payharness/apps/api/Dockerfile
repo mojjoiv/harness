@@ -1,15 +1,17 @@
-FROM node:20.11.1-bookworm-slim AS build
+FROM node:22.23.3-bookworm-slim AS build
 
 WORKDIR /app
 COPY package*.json ./
 COPY apps/api/package*.json ./apps/api/
-RUN npm ci
+RUN npm install -g npm@10.9.9 && npm ci
 
 COPY apps/api ./apps/api
 RUN npm --workspace apps/api run build
 
-FROM node:20.11.1-bookworm-slim AS runtime
+FROM node:22.23.3-bookworm-slim AS runtime
 ENV NODE_ENV=production
+
+RUN npm install -g npm@10.9.9
 WORKDIR /app
 
 COPY --from=build /app/node_modules ./node_modules
