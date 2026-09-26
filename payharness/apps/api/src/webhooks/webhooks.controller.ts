@@ -121,7 +121,7 @@ export class WebhooksController {
       typeof stripeObjectData === 'object' &&
       stripeObjectData !== null &&
       'id' in stripeObjectData
-        ? String(stripeObjectData.id)
+        ? String((stripeObjectData as Record<string, unknown>).id)
         : undefined;
 
     this.logger.log(
@@ -240,7 +240,7 @@ export class WebhooksController {
         typeof stripeObjectData === 'object' &&
         stripeObjectData !== null &&
         'id' in stripeObjectData
-          ? String(stripeObjectData.id)
+          ? String((stripeObjectData as Record<string, unknown>).id)
           : undefined;
 
       this.logger.log(
