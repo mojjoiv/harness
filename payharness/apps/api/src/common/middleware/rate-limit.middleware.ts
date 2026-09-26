@@ -1,7 +1,8 @@
 import { createHash } from 'crypto';
 import { Injectable } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { Request, Response, NextFunction } from 'express';
+import { RedisRateLimitStore } from '../services/redis-rate-limit.store';
 
 interface RateLimitBucket {
   count: number;
@@ -13,13 +14,30 @@ export class RateLimitMiddleware {
   private readonly buckets = new Map<string, RateLimitBucket>();
   private readonly windowMs: number;
   private readonly maxRequests: number;
+  private readonly redis?: RedisRateLimitStore;
 
   constructor(private readonly config: ConfigService) {
     this.windowMs = this.readPositiveInteger('RATE_LIMIT_WINDOW_MS', 60_000);
     this.maxRequests = this.readPositiveInteger('RATE_LIMIT_MAX_REQUESTS', 100);
+
+    const redisUrl = config.get<string>('UPSTASH_REDIS_REST_URL');
+    const redisToken = config.get<string>('UPSTASH_REDIS_REST_TOKEN');
+    const isProduction = config.get<string>('NODE_ENV') === 'production';
+
+    if (redisUrl && redisToken) {
+      this.redis = new RedisRateLimitStore(
+        redisUrl,
+        redisToken,
+        config.get<string>('RATE_LIMIT_REDIS_PREFIX') || 'payharness:ratelimit',
+      );
+    } else if (isProduction) {
+      throw new Error(
+        'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be configured in production',
+      );
+    }
   }
 
-  use(req: Request, res: Response, next: NextFunction): void {
+  async use(req: Request, res: Response, next: NextFunction): Promise<void> {
     if (this.isExempt(req.path)) {
       next();
       return;
@@ -27,22 +45,28 @@ export class RateLimitMiddleware {
 
     const now = Date.now();
     const key = this.getClientKey(req);
-    const existing = this.buckets.get(key);
-    const bucket = !existing || existing.resetAt <= now
-      ? { count: 0, resetAt: now + this.windowMs }
-      : existing;
 
-    bucket.count += 1;
-    this.buckets.set(key, bucket);
+    let count: number;
+    let resetAt: number;
 
-    const remaining = Math.max(this.maxRequests - bucket.count, 0);
-    const resetSeconds = Math.max(Math.ceil((bucket.resetAt - now) / 1000), 0);
+    if (this.redis) {
+      const result = await this.redis.increment(key, Math.ceil(this.windowMs / 1000), now);
+      count = result.count;
+      resetAt = result.resetAt;
+    } else {
+      const bucket = this.getMemoryBucket(key, now);
+      count = bucket.count;
+      resetAt = bucket.resetAt;
+    }
+
+    const remaining = Math.max(this.maxRequests - count, 0);
+    const resetSeconds = Math.max(Math.ceil((resetAt - now) / 1000), 0);
 
     res.setHeader('X-RateLimit-Limit', this.maxRequests.toString());
     res.setHeader('X-RateLimit-Remaining', remaining.toString());
-    res.setHeader('X-RateLimit-Reset', Math.ceil(bucket.resetAt / 1000).toString());
+    res.setHeader('X-RateLimit-Reset', Math.ceil(resetAt / 1000).toString());
 
-    if (bucket.count > this.maxRequests) {
+    if (count > this.maxRequests) {
       res.setHeader('Retry-After', resetSeconds.toString());
       res.status(429).json({
         statusCode: 429,
@@ -52,8 +76,20 @@ export class RateLimitMiddleware {
       return;
     }
 
-    this.pruneExpiredBuckets(now);
     next();
+  }
+
+  private getMemoryBucket(key: string, now: number): RateLimitBucket {
+    const existing = this.buckets.get(key);
+    const bucket =
+      !existing || existing.resetAt <= now
+        ? { count: 0, resetAt: now + this.windowMs }
+        : existing;
+
+    bucket.count += 1;
+    this.buckets.set(key, bucket);
+    this.pruneExpiredBuckets(now);
+    return bucket;
   }
 
   private isExempt(path: string): boolean {
