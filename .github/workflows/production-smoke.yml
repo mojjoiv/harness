@@ -1,0 +1,45 @@
+name: Production smoke check
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'PayHarness API base URL'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify production readiness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve target
+        id: target
+        env:
+          INPUT_TARGET: ${{ inputs.target }}
+        run: |
+          set -eu
+          target="\${INPUT_TARGET:-https://harness-m6qs.onrender.com}"
+          case "$target" in
+            http://*|https://*) ;;
+            *) echo "Target must be an http:// or https:// URL"; exit 1 ;;
+          esac
+          echo "url=$target" >> "$GITHUB_OUTPUT"
+
+      - name: Check liveness and readiness
+        env:
+          TARGET: ${{ steps.target.outputs.url }}
+        run: |
+          set -eu
+          for path in /health /health/readiness; do
+            status="$(curl --silent --show-error --output /tmp/response --write-out '%{http_code}' --connect-timeout 10 --max-time 45 "$TARGET$path" || true)"
+            echo "$path -> HTTP $status"
+            cat /tmp/response
+            echo
+            test "$status" = "200"
+          done

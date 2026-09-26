@@ -15,23 +15,25 @@ ENV NODE_ENV=production
 RUN apt-get update \
   && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 libstdc++6 openssl zlib1g \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd --gid 1000 node \
+  && useradd --uid 1000 --gid node --shell /bin/sh --create-home node
 
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
-RUN groupadd --gid 1000 node && useradd --uid 1000 --gid node --shell /bin/sh --create-home node
 
 WORKDIR /app
 
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package*.json ./
-COPY --from=build /app/apps/api/package*.json ./apps/api/
-COPY --from=build /app/apps/api/dist ./apps/api/dist
-COPY --from=build /app/apps/api/prisma ./apps/api/prisma
-COPY --from=build /app/apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
-
-RUN chmod +x /app/apps/api/docker-entrypoint.sh
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/package*.json ./
+COPY --from=build --chown=node:node /app/apps/api/package*.json ./apps/api/
+COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
+COPY --from=build --chown=node:node /app/apps/api/prisma ./apps/api/prisma
 
 WORKDIR /app/apps/api
 USER node
 EXPOSE 3000
-CMD ["./docker-entrypoint.sh"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/health/readiness').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+
+CMD ["node", "dist/main.js"]

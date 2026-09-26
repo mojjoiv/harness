@@ -4,7 +4,7 @@ services:
     runtime: node
     rootDir: payharness
     buildCommand: npm install && npm run build:api
-    preDeployCommand: npm run prisma:migrate:deploy
+    preDeployCommand: npm run db:setup
     startCommand: npm run start:prod
     envVars:
       - key: NODE_VERSION
