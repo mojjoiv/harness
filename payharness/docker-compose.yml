@@ -16,6 +16,20 @@ services:
       retries: 10
     restart: unless-stopped
 
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://payharness:payharness@postgres:5432/payharness}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["./node_modules/.bin/prisma", "migrate", "deploy"]
+    restart: "no"
+
   api:
     build:
       context: .
@@ -29,9 +43,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/readiness').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5
