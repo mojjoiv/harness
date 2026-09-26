@@ -10,6 +10,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
 import { AuthUser, CurrentUser } from '../common/decorators/current-user.decorator';
 import { EnvironmentIsolationGuard } from '../common/guards/environment-isolation.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -37,7 +38,7 @@ export class PaymentsController {
   ) {}
 
   @Post()
-  @Roles('OWNER', 'ADMIN', 'DEVELOPER', 'API_KEY')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER, 'API_KEY')
   @UseInterceptors(PaymentIdempotencyInterceptor)
   async create(@CurrentUser() user: AuthUser, @Body() dto: CreatePaymentDto) {
     const normalizedDto = await this.prepareProviderPayment(user, dto, dto.provider);
@@ -52,7 +53,7 @@ export class PaymentsController {
   }
 
   @Post('mpesa/stk')
-  @Roles('OWNER', 'ADMIN', 'DEVELOPER', 'API_KEY')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER, 'API_KEY')
   @UseInterceptors(PaymentIdempotencyInterceptor)
   async mpesaStk(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     const normalizedDto = await this.prepareProviderPayment(user, dto, 'MPESA');
@@ -64,7 +65,7 @@ export class PaymentsController {
   }
 
   @Post('stripe/intent')
-  @Roles('OWNER', 'ADMIN', 'DEVELOPER', 'API_KEY')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER, 'API_KEY')
   @UseInterceptors(PaymentIdempotencyInterceptor)
   async stripeIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     const normalizedDto = await this.prepareProviderPayment(user, dto, 'STRIPE');
@@ -76,7 +77,7 @@ export class PaymentsController {
   }
 
   @Post('paypal/order')
-  @Roles('OWNER', 'ADMIN', 'DEVELOPER', 'API_KEY')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER, 'API_KEY')
   @UseInterceptors(PaymentIdempotencyInterceptor)
   async paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     const normalizedDto = await this.prepareProviderPayment(user, dto, 'PAYPAL');
@@ -88,7 +89,7 @@ export class PaymentsController {
   }
 
   @Post('paypal/:id/capture')
-  @Roles('OWNER', 'ADMIN', 'DEVELOPER', 'API_KEY')
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DEVELOPER, 'API_KEY')
   @UseInterceptors(PaymentIdempotencyInterceptor)
   paypalCapture(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.paymentsService.capturePaypalOrder(
@@ -99,7 +100,7 @@ export class PaymentsController {
   }
 
   @Post(':id/refund')
-  @Roles('OWNER', 'ADMIN')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
   refund(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
