@@ -75,6 +75,9 @@ jobs:
       - name: Integration certification
         working-directory: payharness
         run: npm run verify:integrations
+      - name: Provider certification
+        working-directory: payharness
+        run: npm run verify:providers
       - name: API and dashboard tests with coverage
         working-directory: payharness
         run: npm run test:cov
