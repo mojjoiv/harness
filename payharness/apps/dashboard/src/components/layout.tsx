@@ -20,6 +20,7 @@ const sections: NavSection[] = [
     title: 'Main',
     items: [
       { label: 'Dashboard', href: '/dashboard', exact: true },
+      { label: 'Get Started', href: '/onboarding', exact: true },
       { label: 'Transactions', href: '/transactions' },
       { label: 'Checkout Sessions', href: '/checkout-sessions' },
       { label: 'Receipts', href: '/receipts' },
