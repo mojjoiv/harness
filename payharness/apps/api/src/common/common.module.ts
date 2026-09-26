@@ -26,7 +26,7 @@ import { PlatformJwtAuthGuard } from '../platform/common/platform-jwt-auth.guard
         return {
           secret,
           signOptions: {
-            expiresIn: (config.get<string>('JWT_EXPIRES_IN') || '30m') as `${number}${'s' | 'm' | 'h' | 'd' | 'w' | 'y'}`,
+            expiresIn: (config.get<string>('JWT_EXPIRES_IN') || '15m') as `${number}${'s' | 'm' | 'h' | 'd' | 'w' | 'y'}`,
           },
         };
       },

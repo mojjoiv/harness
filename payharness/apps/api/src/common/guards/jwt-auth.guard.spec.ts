@@ -3,7 +3,8 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 
 describe('JwtAuthGuard', () => {
   const jwtService = { verifyAsync: jest.fn() } as any;
-  const guard = new JwtAuthGuard(jwtService);
+  const prisma = { session: { findUnique: jest.fn() } } as any;
+  const guard = new JwtAuthGuard(jwtService, prisma);
   const requestContext = (authorization?: string) => {
     const request: any = { headers: authorization ? { authorization } : {} };
     return { request, context: { switchToHttp: () => ({ getRequest: () => request }) } as any };
@@ -27,9 +28,11 @@ describe('JwtAuthGuard', () => {
 
   it('authenticates a valid merchant token and populates request.user', async () => {
     const { request, context } = requestContext('Bearer token');
-    jwtService.verifyAsync.mockResolvedValue({ sub: 'u-1', email: 'merchant@example.com', merchantId: 'm-1', role: 'MERCHANT', type: 'merchant' });
+    jwtService.verifyAsync.mockResolvedValue({ sub: 'u-1', email: 'merchant@example.com', merchantId: 'm-1', role: 'MERCHANT', type: 'merchant', sid: 's-1' });
 
+    prisma.session.findUnique.mockResolvedValue({ id: 's-1', userId: 'u-1', merchantId: 'm-1', revokedAt: null, expiresAt: new Date(Date.now() + 60_000) });
+    jwtService.verifyAsync.mockResolvedValue({ sub: 'u-1', email: 'merchant@example.com', merchantId: 'm-1', role: 'MERCHANT', type: 'merchant', sid: 's-1' });
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(request.user).toEqual({ userId: 'u-1', email: 'merchant@example.com', merchantId: 'm-1', role: 'MERCHANT', type: 'merchant' });
+    expect(request.user).toEqual({ userId: 'u-1', email: 'merchant@example.com', merchantId: 'm-1', role: 'MERCHANT', type: 'merchant', sessionId: 's-1' });
   });
 });

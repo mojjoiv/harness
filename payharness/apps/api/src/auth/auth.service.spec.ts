@@ -20,11 +20,13 @@ describe('AuthService', () => {
   const jwtService = { signAsync: jest.fn() };
   const auditLogs = { create: jest.fn() };
   const mailer = { send: jest.fn() };
+  const sessions = { create: jest.fn(), rotate: jest.fn(), revoke: jest.fn() };
   const service = new AuthService(
     prisma as never,
     jwtService as never,
     auditLogs as never,
     mailer as never,
+    sessions as never,
   );
 
   beforeEach(() => {
@@ -35,6 +37,8 @@ describe('AuthService', () => {
     auditLogs.create.mockResolvedValue(undefined);
     mailer.send.mockResolvedValue(undefined);
     prisma.platformUser.update.mockResolvedValue(undefined);
+    sessions.create.mockResolvedValue({ session: { id: 'session-1' }, refreshToken: 'refresh-token' });
+    sessions.revoke.mockResolvedValue(undefined);
   });
 
   describe('register', () => {
@@ -136,6 +140,7 @@ describe('AuthService', () => {
 
       await expect(service.login(dto as never)).resolves.toEqual({
         accessToken: 'access-token',
+        refreshToken: 'refresh-token',
         user: { id: platformUser.id, email: platformUser.email, name: platformUser.name },
         role: platformUser.role,
         type: 'platform',
@@ -147,6 +152,7 @@ describe('AuthService', () => {
       });
       expect(jwtService.signAsync).toHaveBeenCalledWith(
         expect.objectContaining({
+          sid: 'session-1',
           userId: platformUser.id,
           role: platformUser.role,
           type: 'platform',
@@ -286,6 +292,7 @@ describe('AuthService', () => {
 
       await expect(service.login(dto as never)).resolves.toEqual({
         accessToken: 'access-token',
+        refreshToken: 'refresh-token',
         user: { id: baseUser.id, email: baseUser.email, name: baseUser.name },
         merchantId: merchant.id,
         role: UserRole.OWNER,
