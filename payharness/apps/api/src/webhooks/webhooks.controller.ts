@@ -111,13 +111,14 @@ export class WebhooksController {
 
     const eventType = String(payload.type || payload.event || 'unknown');
     const eventId = typeof payload.id === 'string' ? payload.id : 'unknown';
-    const stripeObject = payload.data && typeof payload.data === 'object' ? payload.data : undefined;
-    const stripeObjectData: Record<string, unknown> | undefined =
-      stripeObject &&
-      'object' in stripeObject &&
-      typeof (stripeObject as Record<string, unknown>).object === 'object' &&
-      (stripeObject as Record<string, unknown>).object !== null
-        ? ((stripeObject as Record<string, unknown>).object as Record<string, unknown>)
+    const stripeObject =
+      payload.data && typeof payload.data === 'object'
+        ? (payload.data as Record<string, unknown>)
+        : undefined;
+    const stripeObjectValue = stripeObject?.object;
+    const stripeObjectData =
+      typeof stripeObjectValue === 'object' && stripeObjectValue !== null
+        ? (stripeObjectValue as Record<string, unknown>)
         : undefined;
     const paymentIntentId =
       stripeObjectData &&
