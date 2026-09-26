@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma, Provider, ProviderVerificationStatus } from '@prisma/client';
 import * as http from 'http';
 import * as https from 'https';
-import { timingSafeEqual } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { CredentialCryptoService } from '../common/crypto/credential-crypto.service';
 import { PrismaService } from '../common/prisma.service';
@@ -209,6 +209,50 @@ export class ProviderCredentialsService {
         }
       } catch {
         // Ignore malformed credentials and continue checking other active keys.
+      }
+    }
+
+    return false;
+  }
+
+  async verifyStripeWebhook(merchantId: string, signatureHeader: string | undefined, rawBody: Buffer): Promise<boolean> {
+    if (!signatureHeader || !rawBody.length) return false;
+
+    const matchTimestamp = /(?:^|,)t=(\\d+)/.exec(signatureHeader);
+    const signatures = [...signatureHeader.matchAll(/(?:^|,)v1=([a-f0-9]+)/g)].map((match) => match[1]);
+    if (!matchTimestamp || signatures.length === 0) return false;
+
+    const timestamp = Number(matchTimestamp[1]);
+    const ageSeconds = Math.abs(Math.floor(Date.now() / 1000) - timestamp);
+    if (!Number.isFinite(timestamp) || ageSeconds > 300) return false;
+
+    const credentials = await this.prisma.providerCredential.findMany({
+      where: { merchantId, provider: 'STRIPE', status: 'ACTIVE' },
+      select: { encryptedSecretConfig: true },
+    });
+
+    const signedPayload = Buffer.concat([
+      Buffer.from(String(timestamp) + '.'),
+      rawBody,
+    ]);
+
+    for (const credential of credentials) {
+      try {
+        const secretConfig = this.crypto.decrypt(
+          credential.encryptedSecretConfig as any,
+        ) as Record<string, unknown>;
+        const webhookSecret = String(secretConfig.webhookSecret || '');
+        if (!webhookSecret) continue;
+
+        const expected = createHmac('sha256', webhookSecret).update(signedPayload).digest();
+        for (const signature of signatures) {
+          const actual = Buffer.from(signature, 'hex');
+          if (actual.length === expected.length && timingSafeEqual(expected, actual)) {
+            return true;
+          }
+        }
+      } catch {
+        // Ignore malformed credentials and continue checking active Stripe keys.
       }
     }
 
