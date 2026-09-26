@@ -21,7 +21,7 @@ jobs:
       - name: Resolve target
         id: target
         env:
-          INPUT_TARGET: \${{ inputs.target }}
+          INPUT_TARGET: ${{ inputs.target }}
         run: |
           set -eu
           target="\${INPUT_TARGET:-https://harness-m6qs.onrender.com}"
@@ -33,7 +33,7 @@ jobs:
 
       - name: Check liveness and readiness
         env:
-          TARGET: \${{ steps.target.outputs.url }}
+          TARGET: ${{ steps.target.outputs.url }}
         run: |
           set -eu
           for path in /health /health/readiness; do
