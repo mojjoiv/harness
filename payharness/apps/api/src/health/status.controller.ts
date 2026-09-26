@@ -23,8 +23,6 @@ export class StatusController {
       components: {
         api: 'operational',
         database,
-        checkoutApi: 'operational',
-        webhookIngress: 'operational',
       },
       supportedProviders: ['MPESA', 'STRIPE', 'PAYPAL', 'PESAPAL', 'FLUTTERWAVE'],
       note: 'Provider availability can depend on merchant configuration, provider account status, country, and external provider systems.',
