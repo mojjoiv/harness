@@ -11,9 +11,10 @@ import { PayoutProviderRegistry } from './payout-provider.registry';
 import { PayoutReconciliationService } from './payout-reconciliation.service';
 import { PayoutsController } from './payouts.controller';
 import { PayoutsService } from './payouts.service';
+import { LedgerModule } from '../ledger/ledger.module';
 
 @Module({
-  imports: [PaymentProvidersModule],
+  imports: [PaymentProvidersModule, LedgerModule],
   controllers: [PayoutsController, MpesaPayoutCallbackController],
   providers: [
     PayoutsService,
