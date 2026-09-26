@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PaymentStatus, Prisma, Provider } from '@prisma/client';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
@@ -241,6 +241,62 @@ export class WebhooksService {
     }
   }
 
+  private validateProviderPaymentAmount(
+    provider: Provider,
+    payload: Record<string, unknown>,
+    expectedAmountCents: number,
+    expectedCurrency: string,
+  ): { valid: boolean; reason?: string } {
+    if (provider === Provider.STRIPE) {
+      const data = payload.data as Record<string, unknown> | undefined;
+      const resource = data?.object as Record<string, unknown> | undefined;
+      const amount = Number(resource?.amount_received ?? resource?.amount);
+      const currency = String(resource?.currency || '').toUpperCase();
+      if (!Number.isFinite(amount) || !currency) {
+        return { valid: false, reason: 'Stripe webhook omitted amount or currency' };
+      }
+      if (Math.round(amount) !== expectedAmountCents || currency !== expectedCurrency.toUpperCase()) {
+        return { valid: false, reason: 'Stripe amount or currency mismatch' };
+      }
+    }
+
+    if (provider === Provider.FLUTTERWAVE) {
+      const data = payload.data as Record<string, unknown> | undefined;
+      const amount = Number(data?.amount);
+      const currency = String(data?.currency || '').toUpperCase();
+      if (!Number.isFinite(amount) || !currency) {
+        return { valid: false, reason: 'Flutterwave webhook omitted amount or currency' };
+      }
+      if (Math.round(amount * 100) !== expectedAmountCents || currency !== expectedCurrency.toUpperCase()) {
+        return { valid: false, reason: 'Flutterwave amount or currency mismatch' };
+      }
+    }
+
+    if (provider === Provider.MPESA) {
+      const body = payload.Body as Record<string, unknown> | undefined;
+      const callback = body?.stkCallback as Record<string, unknown> | undefined;
+      const metadata = callback?.CallbackMetadata as Record<string, unknown> | undefined;
+      const items = Array.isArray(metadata?.Item) ? metadata.Item : [];
+      const amountItem = items.find(
+        (item) =>
+          item &&
+          typeof item === 'object' &&
+          String((item as Record<string, unknown>).Name).toLowerCase() === 'amount',
+      ) as Record<string, unknown> | undefined;
+      if (Number(callback?.ResultCode) === 0) {
+        const amount = Number(amountItem?.Value);
+        if (!Number.isFinite(amount)) {
+          return { valid: false, reason: 'Successful M-Pesa callback omitted amount' };
+        }
+        if (Math.round(amount * 100) !== expectedAmountCents) {
+          return { valid: false, reason: 'M-Pesa amount mismatch' };
+        }
+      }
+    }
+
+    return { valid: true };
+  }
+
   private providerEventId(payload: Record<string, unknown>): string {
     if (typeof payload.id === 'string' && payload.id.trim()) return payload.id;
     return createHash('sha256').update(this.stableStringify(payload)).digest('hex');
@@ -325,8 +381,32 @@ export class WebhooksService {
     }
 
     if (!providerReference || !status) return;
-    const payment = await this.prisma.payment.findFirst({ where: { merchantId, provider, providerReference } });
+    const payment = await this.prisma.payment.findFirst({
+      where: { merchantId, provider, providerReference },
+    });
     if (!payment) return;
+
+    const amountValidation = this.validateProviderPaymentAmount(
+      provider,
+      payload,
+      payment.amountCents,
+      payment.currency,
+    );
+    if (!amountValidation.valid) {
+      await this.auditLogs.create({
+        merchantId,
+        action: 'payment.webhook_rejected',
+        entity: 'payment',
+        entityId: payment.id,
+        metadata: {
+          provider,
+          providerReference,
+          reason: amountValidation.reason,
+        },
+      });
+      throw new BadRequestException('Provider webhook payment details do not match the original payment');
+    }
+
     if (payment.status === PaymentStatus.SUCCEEDED || payment.status === PaymentStatus.FAILED || payment.status === status) return;
 
     const paymentResult = await this.prisma.payment.updateMany({
