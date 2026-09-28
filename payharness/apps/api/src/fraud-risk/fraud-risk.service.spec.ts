@@ -40,7 +40,7 @@ describe('FraudRiskService', () => {
 
   it('flags repeated customer failures for review', async () => {
     prisma.payment.findMany.mockResolvedValue(
-      Array.from({ length: 3 }, () => ({
+      Array.from({ length: 5 }, () => ({
         customerId: 'customer-1',
         status: 'FAILED',
         metadata: {},
@@ -57,8 +57,11 @@ describe('FraudRiskService', () => {
     ).resolves.toEqual(
       expect.objectContaining({
         decision: 'REVIEW',
-        score: 15,
-        reasons: ['Repeated recent customer payment failures'],
+        score: 40,
+        reasons: [
+          'High customer transaction velocity',
+          'Repeated recent customer payment failures',
+        ],
       }),
     );
   });
