@@ -306,7 +306,7 @@ Content-Type: application/json`}</pre>
           </section>
 
           <section id="sdks" className="scroll-mt-8">
-            <SectionHeading number="08" title="SDKs & integration resources" description="Use an SDK where it reduces boilerplate, but keep the same security and lifecycle rules as direct HTTP calls." />
+            <SectionHeading number="08" title="Official SDKs & integration resources" description="Use an SDK where it reduces boilerplate, but keep the same security and lifecycle rules as direct HTTP calls." />
             <Panel className="p-6">
               <div className="grid gap-3 md:grid-cols-2">
                 {[
