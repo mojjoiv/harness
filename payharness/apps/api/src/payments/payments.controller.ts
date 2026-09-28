@@ -57,10 +57,10 @@ export class PaymentsController {
   @UseInterceptors(PaymentIdempotencyInterceptor)
   async mpesaStk(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     const normalizedDto = await this.prepareProviderPayment(user, dto, 'MPESA');
-    return this.paymentsService.createMpesaStk(
+    return this.paymentsService.createPayment(
       user.merchantId as string,
       user.userId || undefined,
-      normalizedDto,
+      { ...normalizedDto, provider: 'MPESA' },
     );
   }
 
@@ -69,10 +69,10 @@ export class PaymentsController {
   @UseInterceptors(PaymentIdempotencyInterceptor)
   async stripeIntent(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     const normalizedDto = await this.prepareProviderPayment(user, dto, 'STRIPE');
-    return this.paymentsService.createStripeIntent(
+    return this.paymentsService.createPayment(
       user.merchantId as string,
       user.userId || undefined,
-      normalizedDto,
+      { ...normalizedDto, provider: 'STRIPE' },
     );
   }
 
@@ -81,10 +81,10 @@ export class PaymentsController {
   @UseInterceptors(PaymentIdempotencyInterceptor)
   async paypalOrder(@CurrentUser() user: AuthUser, @Body() dto: CreateProviderPaymentDto) {
     const normalizedDto = await this.prepareProviderPayment(user, dto, 'PAYPAL');
-    return this.paymentsService.createPaypalOrder(
+    return this.paymentsService.createPayment(
       user.merchantId as string,
       user.userId || undefined,
-      normalizedDto,
+      { ...normalizedDto, provider: 'PAYPAL' },
     );
   }
 
@@ -114,6 +114,12 @@ export class PaymentsController {
       idempotencyKey,
       dto.amountCents,
     );
+  }
+
+  @Get('risk-assessments')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  listRiskAssessments(@CurrentUser() user: AuthUser) {
+    return this.paymentsService.listRiskAssessments(user.merchantId as string);
   }
 
   @Get('paypal/:id/query')

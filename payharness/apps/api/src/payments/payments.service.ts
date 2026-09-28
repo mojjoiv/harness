@@ -13,6 +13,7 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { CreateProviderPaymentDto } from './dto/create-provider-payment.dto';
 import { LedgerService } from '../ledger/ledger.service';
+import { FraudRiskService } from '../fraud-risk/fraud-risk.service';
 
 
 type PaymentQueryResult = {
@@ -47,6 +48,7 @@ export class PaymentsService {
     private readonly webhooks: WebhooksService,
     private readonly providers: ProviderRegistry,
     private readonly ledger: LedgerService,
+    private readonly fraudRisk: FraudRiskService,
   ) {
     this.logStartupInfo();
   }
@@ -98,7 +100,25 @@ export class PaymentsService {
     if (!handler) {
       throw new BadRequestException(`No payment handler registered for provider: ${dto.provider}`);
     }
-    return handler(merchantId, userId, providerDto);
+
+    const riskAssessment = await this.fraudRisk.assess(merchantId, providerDto);
+    if (riskAssessment.decision === 'BLOCK') {
+      throw new BadRequestException(
+        `Payment blocked by PayHarness risk engine: ${riskAssessment.reasons.join('; ')}`,
+      );
+    }
+
+    const result = await handler(merchantId, userId, providerDto);
+    await this.fraudRisk.attachPayment(riskAssessment.id, result.paymentId);
+
+    return {
+      ...result,
+      fraudRisk: {
+        decision: riskAssessment.decision,
+        score: riskAssessment.score,
+        reasons: riskAssessment.reasons,
+      },
+    };
   }
 
   async createMpesaStk(merchantId: string, userId: string | undefined, dto: CreateProviderPaymentDto): Promise<PaymentCreateResult> {
@@ -353,6 +373,10 @@ export class PaymentsService {
 
   async capturePaypalOrder(merchantId: string, userId: string | undefined, paymentId: string) {
     return this.paypalPaymentService.captureOrder(merchantId, userId, paymentId);
+  }
+
+  async listRiskAssessments(merchantId: string) {
+    return this.fraudRisk.listAssessments(merchantId);
   }
 
   async queryPaypalOrder(merchantId: string, userId: string | undefined, paymentId: string): Promise<PaymentQueryResult> {
