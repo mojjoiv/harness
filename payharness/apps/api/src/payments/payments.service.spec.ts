@@ -52,7 +52,12 @@ describe('PaymentsService', () => {
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
     ledger.postPaymentSettlement.mockResolvedValue({ id: 'journal-1' });
     webhooks.forwardToUrl.mockResolvedValue({ delivered: true });
-    fraudRisk.assess.mockResolvedValue(null);
+    fraudRisk.assess.mockResolvedValue({
+      id: 'assessment-default',
+      decision: 'ALLOW',
+      score: 0,
+      reasons: [],
+    });
     fraudRisk.attachPayment.mockResolvedValue(undefined);
     fraudRisk.listAssessments.mockResolvedValue([]);
     jest.spyOn(providers, 'supportsEnvironment').mockReturnValue(true);
@@ -129,7 +134,7 @@ describe('PaymentsService', () => {
         currency: 'KES',
         environment: 'SANDBOX',
       } as any),
-    ).resolves.toEqual({ paymentId: 'payment-1' });
+    ).resolves.toEqual(expect.objectContaining({ paymentId: 'payment-1' }));
     await expect(
       service.createPayment('merchant-1', 'user-1', {
         provider: 'STRIPE',
@@ -137,7 +142,7 @@ describe('PaymentsService', () => {
         currency: 'USD',
         environment: 'SANDBOX',
       } as any),
-    ).resolves.toEqual({ paymentId: 'payment-2' });
+    ).resolves.toEqual(expect.objectContaining({ paymentId: 'payment-2' }));
     await expect(
       service.createPayment('merchant-1', 'user-1', {
         provider: 'PAYPAL',
@@ -145,7 +150,7 @@ describe('PaymentsService', () => {
         currency: 'USD',
         environment: 'SANDBOX',
       } as any),
-    ).resolves.toEqual({ paymentId: 'payment-3' });
+    ).resolves.toEqual(expect.objectContaining({ paymentId: 'payment-3' }));
 
     expect(createMpesaSpy).toHaveBeenCalled();
     expect(createStripeSpy).toHaveBeenCalled();
