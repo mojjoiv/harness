@@ -17,6 +17,7 @@ describe('PaymentsController environment safety and orchestration', () => {
       | 'queryPaypalOrder'
       | 'queryPayment'
       | 'getPayment'
+      | 'listRiskAssessments'
     >
   >;
   let refundService: jest.Mocked<Pick<RefundService, 'refund'>>;
@@ -37,6 +38,7 @@ describe('PaymentsController environment safety and orchestration', () => {
       queryPaypalOrder: jest.fn(),
       queryPayment: jest.fn(),
       getPayment: jest.fn(),
+      listRiskAssessments: jest.fn(),
     };
     refundService = {
       refund: jest.fn(),
@@ -169,10 +171,10 @@ describe('PaymentsController environment safety and orchestration', () => {
 
     await controller.mpesaStk(user, dto);
 
-    expect(paymentsService.createMpesaStk).toHaveBeenCalledWith(
+    expect(paymentsService.createPayment).toHaveBeenCalledWith(
       'merchant-1',
       'user-1',
-      expect.objectContaining({ environment: 'SANDBOX' }),
+      expect.objectContaining({ provider: 'MPESA', environment: 'SANDBOX' }),
     );
   });
 
@@ -191,10 +193,10 @@ describe('PaymentsController environment safety and orchestration', () => {
 
     await controller.stripeIntent(user, dto);
 
-    expect(paymentsService.createStripeIntent).toHaveBeenCalledWith(
+    expect(paymentsService.createPayment).toHaveBeenCalledWith(
       'merchant-1',
       'user-1',
-      expect.objectContaining({ environment: 'LIVE' }),
+      expect.objectContaining({ provider: 'STRIPE', environment: 'LIVE' }),
     );
   });
 
@@ -214,10 +216,10 @@ describe('PaymentsController environment safety and orchestration', () => {
 
     await controller.paypalOrder(user, dto);
 
-    expect(paymentsService.createPaypalOrder).toHaveBeenCalledWith(
+    expect(paymentsService.createPayment).toHaveBeenCalledWith(
       'merchant-2',
       'user-2',
-      expect.objectContaining({ environment: 'LIVE' }),
+      expect.objectContaining({ provider: 'PAYPAL', environment: 'LIVE' }),
     );
   });
 
@@ -255,6 +257,19 @@ describe('PaymentsController environment safety and orchestration', () => {
       'refund-key-7',
       300,
     );
+  });
+
+  it('lists merchant fraud risk assessments', () => {
+    const user = {
+      userId: 'user-risk',
+      merchantId: 'merchant-risk',
+      role: 'ADMIN',
+      type: 'merchant',
+    } as any;
+
+    controller.listRiskAssessments(user);
+
+    expect(paymentsService.listRiskAssessments).toHaveBeenCalledWith('merchant-risk');
   });
 
   it('delegates the canonical payment resource endpoint to the service', () => {

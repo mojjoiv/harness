@@ -169,7 +169,6 @@ export class FraudRiskService {
           ipAttempts,
           deviceAttempts,
           hasCustomerId: Boolean(dto.customerId),
-          provider: dto['provider'] ?? undefined,
           environment: dto.environment,
         } as Prisma.InputJsonValue,
       },
