@@ -15,6 +15,7 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
 import { RefundService } from './refund.service';
 import { PesapalPaymentService } from './pesapal-payment.service';
 import { LedgerModule } from '../ledger/ledger.module';
+import { FraudRiskService } from '../fraud-risk/fraud-risk.service';
 
 @Module({
   imports: [AuditLogsModule, CurrencyModule, PaymentProvidersModule, WebhooksModule, LedgerModule],
@@ -32,6 +33,7 @@ import { LedgerModule } from '../ledger/ledger.module';
     PaymentIdempotencyInterceptor,
     PaymentReconciliationService,
     RefundService,
+    FraudRiskService,
   ],
   exports: [PaymentsService],
 })

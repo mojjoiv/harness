@@ -34,6 +34,11 @@ describe('PaymentsService', () => {
   const webhooks = { forwardToUrl: jest.fn() } as any;
   const providers = new ProviderRegistry();
   const ledger = { postPaymentSettlement: jest.fn(), postPayoutSettlement: jest.fn() } as any;
+  const fraudRisk = {
+    assess: jest.fn(),
+    attachPayment: jest.fn(),
+    listAssessments: jest.fn(),
+  } as any;
   let service: PaymentsService;
 
   beforeEach(() => {
@@ -47,6 +52,14 @@ describe('PaymentsService', () => {
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
     ledger.postPaymentSettlement.mockResolvedValue({ id: 'journal-1' });
     webhooks.forwardToUrl.mockResolvedValue({ delivered: true });
+    fraudRisk.assess.mockResolvedValue({
+      id: 'assessment-default',
+      decision: 'ALLOW',
+      score: 0,
+      reasons: [],
+    });
+    fraudRisk.attachPayment.mockResolvedValue(undefined);
+    fraudRisk.listAssessments.mockResolvedValue([]);
     jest.spyOn(providers, 'supportsEnvironment').mockReturnValue(true);
     jest.spyOn(providers, 'getAdapter').mockImplementation((provider: any) => {
       if (provider === 'MPESA') {
@@ -87,6 +100,7 @@ describe('PaymentsService', () => {
       webhooks,
       providers,
       ledger,
+      fraudRisk,
     );
     jest.spyOn(service as any, 'getActiveCredential').mockResolvedValue({
       id: 'credential-1',
@@ -120,7 +134,7 @@ describe('PaymentsService', () => {
         currency: 'KES',
         environment: 'SANDBOX',
       } as any),
-    ).resolves.toEqual({ paymentId: 'payment-1' });
+    ).resolves.toEqual(expect.objectContaining({ paymentId: 'payment-1' }));
     await expect(
       service.createPayment('merchant-1', 'user-1', {
         provider: 'STRIPE',
@@ -128,7 +142,7 @@ describe('PaymentsService', () => {
         currency: 'USD',
         environment: 'SANDBOX',
       } as any),
-    ).resolves.toEqual({ paymentId: 'payment-2' });
+    ).resolves.toEqual(expect.objectContaining({ paymentId: 'payment-2' }));
     await expect(
       service.createPayment('merchant-1', 'user-1', {
         provider: 'PAYPAL',
@@ -136,11 +150,73 @@ describe('PaymentsService', () => {
         currency: 'USD',
         environment: 'SANDBOX',
       } as any),
-    ).resolves.toEqual({ paymentId: 'payment-3' });
+    ).resolves.toEqual(expect.objectContaining({ paymentId: 'payment-3' }));
 
     expect(createMpesaSpy).toHaveBeenCalled();
     expect(createStripeSpy).toHaveBeenCalled();
     expect(createPaypalSpy).toHaveBeenCalled();
+  });
+
+
+  it('blocks a payment before the provider handler when risk is high', async () => {
+    fraudRisk.assess.mockResolvedValue({
+      id: 'assessment-blocked',
+      decision: 'BLOCK',
+      score: 85,
+      reasons: ['Extreme IP transaction velocity'],
+    });
+
+    const createMpesaSpy = jest
+      .spyOn(service, 'createMpesaStk')
+      .mockResolvedValue({ paymentId: 'payment-never-created' } as any);
+
+    await expect(
+      service.createPayment('merchant-1', 'user-1', {
+        provider: 'MPESA',
+        amountCents: 1000,
+        currency: 'KES',
+        environment: 'SANDBOX',
+      } as any),
+    ).rejects.toThrow('Payment blocked by PayHarness risk engine');
+
+    expect(createMpesaSpy).not.toHaveBeenCalled();
+    expect(fraudRisk.attachPayment).not.toHaveBeenCalled();
+  });
+
+  it('returns the risk decision with an allowed payment', async () => {
+    fraudRisk.assess.mockResolvedValue({
+      id: 'assessment-allow',
+      decision: 'ALLOW',
+      score: 10,
+      reasons: ['High transaction amount'],
+    });
+
+    jest.spyOn(service, 'createStripeIntent').mockResolvedValue({
+      paymentId: 'payment-1',
+      provider: 'STRIPE',
+      environment: 'SANDBOX',
+      status: 'PENDING',
+    } as any);
+
+    await expect(
+      service.createPayment('merchant-1', 'user-1', {
+        provider: 'STRIPE',
+        amountCents: 1000,
+        currency: 'USD',
+        environment: 'SANDBOX',
+      } as any),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        paymentId: 'payment-1',
+        fraudRisk: {
+          decision: 'ALLOW',
+          score: 10,
+          reasons: ['High transaction amount'],
+        },
+      }),
+    );
+
+    expect(fraudRisk.attachPayment).toHaveBeenCalledWith('assessment-allow', 'payment-1');
   });
 
   it('rejects simulated PayPal outcomes', async () => {

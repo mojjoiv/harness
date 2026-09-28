@@ -89,6 +89,12 @@ enum PaymentStatus {
   CANCELED
 }
 
+enum FraudDecision {
+  ALLOW
+  REVIEW
+  BLOCK
+}
+
 enum TransactionType {
   PAYMENT
   REFUND
@@ -149,6 +155,7 @@ model Merchant {
   apiUsage            ApiUsage[]
   transactionalEmails TransactionalEmail[]
   ledgerJournals       LedgerJournal[]
+  fraudAssessments    FraudRiskAssessment[]
   transactionalEmailEvents TransactionalEmailEvent[]
 
   @@map("merchants")
@@ -416,8 +423,9 @@ model Payment {
   merchant          Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   customer          Customer?        @relation(fields: [customerId], references: [id])
   checkoutSession   CheckoutSession? @relation(fields: [checkoutSessionId], references: [id])
-  transactions      Transaction[]
+  transactions        Transaction[]
   transactionalEmails TransactionalEmail[]
+  fraudAssessments    FraudRiskAssessment[]
 
   @@map("payments")
 }
@@ -523,6 +531,24 @@ model ApiUsage {
   @@map("api_usage")
 }
 
+
+model FraudRiskAssessment {
+  id          String       @id @default(uuid())
+  merchantId  String       @map("merchant_id")
+  paymentId   String?      @map("payment_id")
+  decision    FraudDecision
+  score       Int
+  reasons     Json         @default("[]")
+  signals     Json         @default("{}")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  merchant    Merchant     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  payment     Payment?     @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([merchantId, createdAt])
+  @@index([merchantId, decision, createdAt])
+  @@index([paymentId])
+  @@map("fraud_risk_assessments")
+}
 
 model TransactionalEmail {
   id                String                    @id @default(uuid())
