@@ -411,4 +411,81 @@ describe('PaymentsService', () => {
       expect.objectContaining({ paymentId: 'payment-1', status: 'SUCCEEDED' }),
     );
   });
+
+  it('does not duplicate settlement side effects when another request wins the status transition', async () => {
+    const payment = {
+      id: 'payment-race',
+      merchantId: 'merchant-1',
+      provider: 'MPESA',
+      environment: 'SANDBOX',
+      amountCents: 2500,
+      currency: 'KES',
+      status: 'PENDING',
+      checkoutSessionId: 'session-race',
+    } as any;
+    prisma.payment.updateMany.mockResolvedValue({ count: 0 });
+
+    await (service as any).settlePendingPayment(
+      'merchant-1',
+      'user-1',
+      payment,
+      'SUCCEEDED',
+      undefined,
+      'corr-race',
+    );
+
+    expect(prisma.payment.updateMany).toHaveBeenCalledWith({
+      where: { id: 'payment-race', status: 'PENDING' },
+      data: { status: 'SUCCEEDED' },
+    });
+    expect(prisma.transaction.updateMany).not.toHaveBeenCalled();
+    expect(ledger.postPaymentSettlement).not.toHaveBeenCalled();
+    expect(auditLogs.create).not.toHaveBeenCalled();
+    expect(prisma.checkoutSession.update).not.toHaveBeenCalled();
+    expect(webhooks.forwardToUrl).not.toHaveBeenCalled();
+  });
+
+  it('records failed settlement without posting a success ledger entry', async () => {
+    const payment = {
+      id: 'payment-failed',
+      merchantId: 'merchant-1',
+      provider: 'MPESA',
+      environment: 'SANDBOX',
+      amountCents: 2500,
+      currency: 'KES',
+      status: 'PENDING',
+      checkoutSessionId: 'session-failed',
+    } as any;
+    prisma.checkoutSession.update.mockResolvedValue({ id: 'session-failed' });
+
+    await (service as any).settlePendingPayment(
+      'merchant-1',
+      'user-1',
+      payment,
+      'FAILED',
+      'Provider declined payment',
+      'corr-failed',
+    );
+
+    expect(prisma.transaction.updateMany).toHaveBeenCalledWith({
+      where: { paymentId: 'payment-failed', status: 'PENDING' },
+      data: { status: 'FAILED' },
+    });
+    expect(ledger.postPaymentSettlement).not.toHaveBeenCalled();
+    expect(auditLogs.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        merchantId: 'merchant-1',
+        userId: 'user-1',
+        action: 'payment.settled',
+        entityId: 'payment-failed',
+        metadata: { status: 'FAILED', reason: 'Provider declined payment' },
+      }),
+    );
+    expect(webhooks.forwardToUrl).toHaveBeenCalledWith(
+      'https://merchant.example/webhook',
+      'payment.failed',
+      expect.objectContaining({ paymentId: 'payment-failed', status: 'FAILED' }),
+    );
+  });
+
 });
